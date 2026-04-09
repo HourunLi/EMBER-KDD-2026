@@ -1,0 +1,48 @@
+bailA:
+  train_epochs: 500
+  lr: 0.006
+  lr2_reg: 0.001
+  dropout: 0.5
+  runs: 3
+  hidden_dim: 128
+  tau: 0.8
+  n_layers: 3
+  inter_encoder: GCN
+  lambda_fair: 1.0
+  lambda_align: 0.1
+german:
+  train_epochs: 500
+  lr: 0.005
+  lr2_reg: 0.001
+  dropout: 0.4
+  runs: 3
+  hidden_dim: 64
+  tau: 0.4
+  n_layers: 3
+  inter_encoder: vanilla
+  lambda_fair: 1.0
+  lambda_align: 0.1
+pokec:
+  train_epochs: 800
+  lr: 0.004
+  lr2_reg: 0.001
+  dropout: 0.4
+  runs: 3
+  hidden_dim: 128
+  tau: 0.6
+  n_layers: 3
+  inter_encoder: GCN
+  lambda_fair: 1.0
+  lambda_align: 0.1
+syn:
+  train_epochs: 500
+  lr: 0.005
+  lr2_reg: 0.001
+  dropout: 0.1
+  runs: 3
+  hidden_dim: 64
+  tau: 0.4
+  n_layers: 3
+  inter_encoder: vanilla
+  lambda_fair: 1.0
+  lambda_align: 0.1

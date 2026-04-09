@@ -1,0 +1,580 @@
+from tqdm import tqdm
+import numpy as np
+from models import *
+from config import mprint
+from utils import *
+from learn import *
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+# ── Fairness losses ────────────────────────────────────────────────────────────
+
+def fairness_loss_eo(prob, y, s):
+    """
+    Differentiable Equal Opportunity (EO) loss.
+    Minimises the squared gap in P(y_hat=1 | y=1) between sensitive groups.
+
+    Args:
+      prob: [N]  sigmoid probabilities
+      y:    [N]  binary ground-truth labels {0, 1}
+      s:    [N]  binary sensitive attribute  {0, 1}
+    Returns:
+      scalar loss (0.0 if either group is empty)
+    """
+    mask0 = (y == 1) & (s == 0)
+    mask1 = (y == 1) & (s == 1)
+    if mask0.sum() == 0 or mask1.sum() == 0:
+        return prob.new_tensor(0.0)
+    gap = prob[mask0].mean() - prob[mask1].mean()
+    return gap * gap
+
+
+
+def _init_fair_gnn(args):
+    """
+    Initialise FairGNN with Adam optimiser and a two-phase LR schedule:
+      Phase 1 — Linear warm-up over the first `warmup_epochs` epochs
+                 (lr ramps from lr/10 up to args.lr).
+      Phase 2 — Cosine annealing for the remaining epochs
+                 (lr decays smoothly from args.lr down to args.lr/100).
+    """
+    model     = FairGNN(args, encoder_type=args.inter_encoder).to(args.device)
+    # Optimizer starts at peak lr; LinearLR will scale it via start_factor
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.lr2_reg)
+
+    warmup_epochs  = max(1, int(args.train_epochs * 0.2))   # 10% of total epochs
+    cosine_epochs  = args.train_epochs - warmup_epochs
+
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer,
+        start_factor=0.1,          # begins at lr*0.1, ramps up to lr*1.0
+        end_factor=1.0,
+        total_iters=warmup_epochs,
+    )
+    cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=cosine_epochs,
+        eta_min=args.lr / 100,     # floor at 1% of peak lr
+    )
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[warmup_epochs],
+    )
+    return model, optimizer, scheduler
+
+
+# ── Source knowledge extraction ──────────────────────────────────────────────
+
+def extract_source_knowledge(args, data, model):
+    """
+    Export source knowledge from a trained model.  Nothing here touches raw
+    data after this call — everything downstream uses only the returned dict.
+
+    -------------------
+    p_y   : {0: [D], 1: [D]}
+        Class prototype — mean of L2-normalised embeddings for each class y,
+        computed over ALL nodes (not just train_mask) so the prototype is as
+        representative as possible.
+
+            p_y^S = (1 / |D_y|) * sum_{i: y_i=y}  Norm(h_i)
+
+    r_ys  : {(y,s): [D]}
+        Sensitive residual — difference between the joint (y,s) prototype
+        and the class prototype:
+
+            p_{y,s}^S = (1 / |D_{y,s}|) * sum_{i: y_i=y, s_i=s}  Norm(h_i)
+            r_{y,s}^S = p_{y,s}^S - p_y^S
+
+    pi_ys : {(y,s): float}
+        Empirical joint prior P(y,s) estimated from training nodes only.
+
+    Also saves model weights (backbone + cls_head) so the encoder can be
+    reloaded without the original source data.
+
+    Returns
+    -------
+    dict with keys: 'p_y', 'r_ys', 'pi_ys', 'model_state'
+    """
+    model.eval()
+    with torch.no_grad():
+        emb, _ = model(data.x, data.edge_index)          # [N, D]
+        emb_n  = F.normalize(emb, p=2, dim=1)            # L2-normalised
+
+    y  = data.y.cpu()
+    s  = data.sens_labels.cpu()
+    tm = data.train_mask.cpu()
+
+    # class prototypes p_y (all nodes)
+    p_y = {}
+    for yv in [0, 1]:
+        mask = (y == yv)
+        if mask.sum() == 0:
+            p_y[yv] = torch.zeros(emb_n.shape[1], device='cpu')
+        else:
+            p_y[yv] = emb_n[mask].mean(dim=0).cpu()
+
+    # joint prototypes p_ys and sensitive residuals r_ys (all nodes)
+    r_ys = {}
+    for yv in [0, 1]:
+        for sv in [0, 1]:
+            mask = (y == yv) & (s == sv)
+            if mask.sum() == 0:
+                p_ys = p_y[yv].clone()
+            else:
+                p_ys = emb_n[mask].mean(dim=0).cpu()
+            r_ys[(yv, sv)] = p_ys - p_y[yv]
+
+    # empirical joint prior pi_ys (training nodes only)
+    n_train = tm.sum().item()
+    pi_ys = {}
+    for yv in [0, 1]:
+        for sv in [0, 1]:
+            mask = tm & (y == yv) & (s == sv)
+            pi_ys[(yv, sv)] = mask.sum().item() / max(n_train, 1)
+
+    return {
+        'p_y':        p_y,
+        'r_ys':       r_ys,
+        'pi_ys':      pi_ys,
+        'model_state': {k: v.cpu() for k, v in model.state_dict().items()},
+    }
+
+
+def save_source_knowledge(knowledge, path):
+    """Persist the source knowledge dict to disk."""
+    import os
+    os.makedirs(os.path.dirname(path) if os.path.dirname(path) else '.', exist_ok=True)
+    torch.save(knowledge, path)
+    print(f'[Source knowledge] saved → {path}')
+
+
+# SFDA helpers
+
+class ResidualScaler(nn.Module):
+    """
+    Learnable per-dimension scale vector: Δ_{y,s}(h) = γ_{y,s} ⊙ h
+    Initialised to zero so adaptation starts from the identity residual.
+    """
+    def __init__(self, dim: int, device):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.zeros(dim, device=device))
+
+    def forward(self, h):
+        return self.gamma * h   # [N, D] or [D]
+
+
+# SFDA Target Adaptation
+
+def adapt_target(args, target_data, knowledge):
+    """
+    Full SFDA target adaptation — strict source-free.
+    """
+    dev = args.device
+    adapt_epochs = getattr(args, 'adapt_epochs', 400)
+    tau_c        = getattr(args, 'tau_c',        0.80)
+    lambda_pi    = getattr(args, 'lambda_pi',    1.0)
+    alpha_p      = getattr(args, 'alpha_p',      0.90)
+    alpha_r      = getattr(args, 'alpha_r',      0.99)
+    alpha_pi     = getattr(args, 'alpha_pi',     0.90)
+    lambda_s     = getattr(args, 'lambda_s',     1.0)
+    lambda_e     = getattr(args, 'lambda_e',     0.1)
+    lambda_res   = getattr(args, 'lambda_res',   0.01)
+    meta_lr      = getattr(args, 'meta_lr',      0.01)
+    adapt_lr     = getattr(args, 'adapt_lr',     1e-3)
+    keys         = [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+    # ── Stage 3.1: load model ──────────────────
+    model = FairGNN(args, encoder_type=args.inter_encoder).to(dev)
+    model.load_state_dict({k: v.to(dev) for k, v in knowledge['model_state'].items()})
+    # freeze the backbone
+    for p in model.backbone.parameters():
+        p.requires_grad_(False)
+    model.eval()
+
+    dim = knowledge['p_y'][0].shape[0]
+
+    # Source anchors (frozen, used for L_align^SF)
+    p_y_S  = {yv: knowledge['p_y'][yv].clone().to(dev)     for yv in [0, 1]}
+    r_ys_S = {k:  v.clone().to(dev) for k, v in knowledge['r_ys'].items()}
+
+    # Mutable target prototypes / residuals 
+    # prototype for y
+    p_y  = {yv: p_y_S[yv].clone()  for yv in [0, 1]}
+    # prototype for (y,s)
+    r_ys = {k:  v.clone()          for k, v in r_ys_S.items()}
+    # BCA prior
+    pi_ys  = {k: float(v)  for k, v in knowledge['pi_ys'].items()}
+
+    # Learnable residual scalers: Δ_{y,s}(h) = γ_{y,s} ⊙ h (init=0)
+    scalers = {k: ResidualScaler(dim, dev) for k in keys}
+    opt_res = torch.optim.Adam(
+        [p for sc in scalers.values() for p in sc.parameters()],
+        lr=adapt_lr,
+    )
+
+    target_data = target_data.to(dev)
+    print(f'[SFDA] adapt_epochs={adapt_epochs}  tau_c={tau_c}  alpha_p={alpha_p}  alpha_r={alpha_r}')
+    # Adaptation loop 
+    _adapt_loop(args, model, target_data,
+                p_y, r_ys, p_y_S, r_ys_S, pi_ys,
+                scalers, opt_res, keys,
+                adapt_epochs, tau_c, lambda_pi,
+                alpha_p, alpha_r, alpha_pi,
+                lambda_s, lambda_e, lambda_res, meta_lr)
+
+    state = {
+        'p_y':   {yv: p_y[yv].cpu()  for yv in [0, 1]},
+        'r_ys':  {k:  v.cpu()        for k, v in r_ys.items()},
+        'pi_ys': pi_ys,
+    }
+    return model, state
+
+
+def _adapt_loop(args, model, target_data,
+                p_y, r_ys, p_y_S, r_ys_S, pi_ys,
+                scalers, opt_res, keys,
+                adapt_epochs, tau_c, lambda_pi,
+                alpha_p, alpha_r, alpha_pi,
+                lambda_s, lambda_e, lambda_res, meta_lr):
+    for step in range(adapt_epochs):
+        n_hc = _adapt_step(
+            args, model, target_data,
+            p_y, r_ys, p_y_S, r_ys_S, pi_ys,
+            scalers, opt_res, keys,
+            tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
+            lambda_s, lambda_e, lambda_res, meta_lr,
+        )
+        if (step + 1) % 50 == 0:
+            N = target_data.x.shape[0]
+            print(f'  [Adapt {step+1:3d}]  high-conf={n_hc}/{N}  '
+                  + '  '.join(f'pi({yv},{sv})={pi_ys[(yv,sv)]:.3f}'
+                              for yv in [0,1] for sv in [0,1]))
+
+
+def _build_protos(p_y, r_ys, scalers, h_mean_y, keys):
+    """
+    Build 4 joint prototypes with learned residual correction.
+      p̃_{y,s} = Norm( p_y^T + r_{y,s}^T + γ_{y,s} ⊙ h_mean_y )
+    where h_mean_y is the class-wise mean of target embeddings for class y.
+    Returned tensors carry grad through γ.
+    """
+    protos = {}
+    for (yv, sv) in keys:
+        delta = scalers[(yv, sv)](h_mean_y[yv])               # [D], has grad
+        raw   = p_y[yv] + r_ys[(yv, sv)] + delta
+        protos[(yv, sv)] = F.normalize(raw, p=2, dim=0)
+    return protos
+
+
+def _compute_posterior(h, protos, pi_ys, lambda_pi, keys):
+    """
+    BCA-style joint posterior.
+      z_i(y,s) = cosine_sim(h_i, p̃_{y,s}) + λ_π · log π_{y,s}
+      q_i(y,s) = softmax_over_(y,s)( z_i )
+      q_i(y)   = Σ_s q_i(y,s)
+    Returns q_ys [N,4], q_y [N,2].
+    """
+    scores = []
+    for (yv, sv) in keys:
+        sim = (h * protos[(yv, sv)].unsqueeze(0)).sum(1)       # [N]
+        pi  = max(pi_ys[(yv, sv)], 1e-8)
+        scores.append(sim + lambda_pi * float(np.log(pi)))
+    scores = torch.stack(scores, dim=1)                        # [N,4]
+    q_ys   = torch.softmax(scores, dim=1)
+    q_y    = torch.stack([
+        q_ys[:, 0] + q_ys[:, 1],
+        q_ys[:, 2] + q_ys[:, 3],
+    ], dim=1)                                                  # [N,2]
+    return q_ys, q_y
+
+
+def _adapt_step(args, model, target_data,
+                p_y, r_ys, p_y_S, r_ys_S, pi_ys,
+                scalers, opt_res, keys,
+                tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
+                lambda_s, lambda_e, lambda_res, meta_lr):
+    """
+    One full adaptation step:
+      1. Encode target nodes (backbone frozen).
+      2. Compute joint posterior q_i(y,s) — two-pass: coarse (global mean) → refine h_mean_y → refined posterior.
+      3. p_y^T EMA update (momentum alpha_p).
+      4. r_{y,s}^T slow EMA update (momentum alpha_r).
+      5. BCA prior online EMA update.
+      6. MetaAlign meta-objective → optimise residual scalers γ.
+    Returns n_hc (number of high-confidence nodes).
+    """
+    dev = args.device
+
+    # 1. Encode 
+    with torch.no_grad():
+        emb_raw, _ = model(target_data.x, target_data.edge_index)   # [N, D]
+    h = F.normalize(emb_raw.detach(), p=2, dim=1)                   # [N, D]
+
+    # 2a. Coarse posterior — global mean placeholder → h_mean_y
+    with torch.no_grad():
+        protos_coarse = _build_protos(p_y, r_ys, scalers, {yv: h.mean(0) for yv in [0, 1]}, keys)
+        _, q_y_coarse = _compute_posterior(h, protos_coarse, pi_ys, lambda_pi, keys)
+
+    # 2b. Class-wise mean from coarse posterior (soft q_y weighted)
+    with torch.no_grad():
+        h_mean_y = {}
+        for yv in [0, 1]:
+            w = q_y_coarse[:, yv]
+            h_mean_y[yv] = (h * w.unsqueeze(1)).sum(0) / w.sum().clamp(min=1e-8)  # [D]
+
+    # 2c. Refined posterior — use class-wise h_mean_y for residual correction
+    with torch.no_grad():
+        protos_ng = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
+        q_ys, q_y = _compute_posterior(h, protos_ng, pi_ys, lambda_pi, keys)
+
+    conf, pseudo_y = q_y.max(dim=1)         # [N]
+    high_conf      = conf > tau_c
+    n_hc           = int(high_conf.sum().item())
+
+    if n_hc > 0:
+        hc_h    = h[high_conf].detach()      # [M, D]
+        hc_y    = pseudo_y[high_conf]        # [M]
+        hc_conf = conf[high_conf].detach()   # [M]  confidence scores
+        hc_qys  = q_ys[high_conf].detach()   # [M, 4]
+
+        # 3. p_y^T EMA update (confidence-weighted mean)
+        for yv in [0, 1]:
+            mask = (hc_y == yv)
+            if mask.sum() == 0:
+                continue
+            w = hc_conf[mask]
+            w = w / w.sum().clamp(min=1e-8)
+            p_new = (hc_h[mask] * w.unsqueeze(1)).sum(0)   # [D] conf-weighted
+            p_y[yv] = F.normalize(
+                alpha_p * p_y[yv] + (1.0 - alpha_p) * p_new, p=2, dim=0
+            )
+
+        # 4. r_{y,s}^T slow EMA update
+        #    r_new = Norm( soft q(y,s)-weighted mean ) - p_y
+        #    r_{y,s} = alpha_r * r_{y,s} + (1-alpha_r) * r_new
+        for ki, (yv, sv) in enumerate(keys):
+            mask = (hc_y == yv)
+            if mask.sum() == 0:
+                continue
+            w = hc_qys[mask, ki]            # [M_y]
+            if w.sum() < 1e-6:
+                continue
+            wm    = (hc_h[mask] * w.unsqueeze(1)).sum(0) / w.sum()  # [D]
+            r_new = F.normalize(wm, p=2, dim=0) - p_y[yv].detach()
+            r_ys[(yv, sv)] = (alpha_r * r_ys[(yv, sv)]
+                              + (1.0 - alpha_r) * r_new)
+
+        # 5. BCA prior EMA update (fixed momentum alpha_pi)
+        soft_mean = hc_qys.mean(0)           # [4]
+        soft_mean = soft_mean / soft_mean.sum().clamp(min=1e-8)
+        for ki, (yv, sv) in enumerate(keys):
+            pi_ys[(yv, sv)] = (
+                alpha_pi * pi_ys[(yv, sv)] + (1.0 - alpha_pi) * soft_mean[ki].item()
+            )
+        total_pi = sum(pi_ys.values())
+        for k in keys:
+            pi_ys[k] /= max(total_pi, 1e-8)
+
+    # ── 6. MetaAlign meta-objective for residual scalers ─────────────────
+    #
+    #  L_align^SF(ω)  = Σ_y ||p_y^T - p_y^S||²
+    #                 + λ_r_sf Σ_{y,s} ||r_{y,s}^T - r_{y,s}^S||²
+    #
+    #  Inner step:    ω' = ω - meta_lr · ∇_ω L_align^SF
+    #  Outer loss:    L_meta = L_align^SF(ω)
+    #                        + λ_s · L_self(ω')   [CE on high-conf pseudolabels]
+    #                        + λ_e · L_ent(ω')    [entropy on all nodes]
+    #                        + λ_res · L_res(ω)   [residual regularisation]
+    opt_res.zero_grad()
+
+    # L_align^SF — penalises deviation of protos_w from source protos (has grad via γ)
+    protos_w   = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
+    L_align_sf = sum(
+        (protos_w[(yv, sv)] - F.normalize(
+            p_y_S[yv] + r_ys_S[(yv, sv)], p=2, dim=0)
+        ).pow(2).sum()
+        for (yv, sv) in keys
+    )
+
+    # L_res — keep γ small
+    L_res = sum(sc.gamma.pow(2).sum() for sc in scalers.values())
+
+    # Virtual inner step on scaler params
+    scaler_params = [p for sc in scalers.values() for p in sc.parameters()]
+    grads = torch.autograd.grad(
+        L_align_sf, scaler_params,
+        create_graph=True, retain_graph=True, allow_unused=True
+    )
+    params_prime = [
+        (p - meta_lr * g) if g is not None else p
+        for p, g in zip(scaler_params, grads)
+    ]
+
+    # Re-evaluate protos with ω' using functional application
+    idx = 0
+    protos_prime = {}
+    for (yv, sv) in keys:
+        gamma_p = params_prime[idx]; idx += 1
+        delta_p = gamma_p * h_mean_y[yv]
+        raw_p   = p_y[yv].detach() + r_ys[(yv, sv)].detach() + delta_p
+        protos_prime[(yv, sv)] = F.normalize(raw_p, p=2, dim=0)
+
+    # Re-compute posterior with ω'
+    scores_p = []
+    for (yv, sv) in keys:
+        sim_p = (h * protos_prime[(yv, sv)].unsqueeze(0)).sum(1)
+        pi    = max(pi_ys[(yv, sv)], 1e-8)
+        scores_p.append(sim_p + lambda_pi * float(np.log(pi)))
+    scores_p = torch.stack(scores_p, dim=1)          # [N,4]
+    q_ys_p   = torch.softmax(scores_p, dim=1)        # [N,4]
+    q_y_p    = torch.stack([
+        q_ys_p[:, 0] + q_ys_p[:, 1],
+        q_ys_p[:, 2] + q_ys_p[:, 3],
+    ], dim=1)                                         # [N,2]
+
+    # L_self — CE on high-conf pseudo-labels with ω'
+    if n_hc > 0:
+        hc_q_y_p = q_y_p[high_conf]                  # [M,2]
+        # clamp for numerical safety
+        hc_q_y_p = hc_q_y_p.clamp(min=1e-8)
+        pseudo_oh = pseudo_y[high_conf].to(dev)       # [M]
+        L_self = F.nll_loss(hc_q_y_p.log(), pseudo_oh)
+    else:
+        L_self = q_y_p.new_tensor(0.0)
+
+    # L_ent — entropy on all nodes with ω'
+    q_y_p_c = q_y_p.clamp(min=1e-8)
+    L_ent   = -(q_y_p_c * q_y_p_c.log()).sum(1).mean()
+
+    L_meta = L_align_sf + lambda_s * L_self + lambda_e * L_ent + lambda_res * L_res
+    L_meta.backward()
+    opt_res.step()
+
+    return n_hc
+
+# Training + Adaptation
+
+def train_and_adapt(args, source_data, target_data):
+    """
+    For each run:
+      1. Train FairGNN on source domain.
+      2. Extract source knowledge.
+      3. SFDA adapt to target domain.
+      4. Evaluate source / target-before / target-after.
+    """
+    # Source metrics
+    src_acc      = np.zeros([args.runs, 1])
+    src_auc_roc  = np.zeros([args.runs, 1])
+    src_parity   = np.zeros([args.runs, 1])
+    src_equality = np.zeros([args.runs, 1])
+    # Target before adaptation
+    tgt_acc      = np.zeros([args.runs, 1])
+    tgt_auc_roc  = np.zeros([args.runs, 1])
+    tgt_parity   = np.zeros([args.runs, 1])
+    tgt_equality = np.zeros([args.runs, 1])
+    # Target after adaptation
+    ada_acc      = np.zeros([args.runs, 1])
+    ada_auc_roc  = np.zeros([args.runs, 1])
+    ada_parity   = np.zeros([args.runs, 1])
+    ada_equality = np.zeros([args.runs, 1])
+
+    source_data = source_data.to(args.device)
+    target_data = target_data.to(args.device)
+
+    cls_labels  = source_data.y.float().to(args.device)
+    sens_labels = source_data.sens_labels.to(args.device)
+    train_mask  = source_data.train_mask
+
+    criterion = nn.BCEWithLogitsLoss()
+
+    for run_idx in tqdm(range(args.runs), unit='run'):
+
+        # ── Phase 1: Source training ───────────────────────────────────────
+        model, optimizer, scheduler = _init_fair_gnn(args)
+
+        for epoch in tqdm(range(args.train_epochs), desc=f'Run {run_idx} [train]', leave=False):
+            model.train()
+
+            emb, cls_logit = model(source_data.x, source_data.edge_index)
+
+            # ── Classification loss ──────────────────────────────────────────
+            L_cls = criterion(cls_logit[train_mask].view(-1), cls_labels[train_mask])
+
+            # ── Fairness loss (EO) on training nodes ────────────────────────
+            prob_train = torch.sigmoid(cls_logit[train_mask].view(-1))
+            L_fair     = fairness_loss_eo(prob_train, cls_labels[train_mask], sens_labels[train_mask])
+
+            # ── Gradient alignment ────────────────────────────────────────────
+            backbone_params = list(model.backbone.parameters())
+            grad_cls  = torch.autograd.grad(
+                L_cls,  backbone_params, create_graph=True, retain_graph=True
+            )
+            grad_fair = torch.autograd.grad(
+                L_fair, backbone_params, create_graph=True, retain_graph=True
+            )
+            flat_cls  = torch.cat([g.reshape(-1) for g in grad_cls])
+            flat_fair = torch.cat([g.reshape(-1) for g in grad_fair])
+            L_align   = -F.cosine_similarity(flat_cls.unsqueeze(0), flat_fair.unsqueeze(0))
+
+            loss = L_cls + args.lambda_fair * L_fair + args.lambda_align * L_align
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+
+            if (epoch + 1) % 50 == 0:
+                print(f"[Run {run_idx} | Epoch {epoch+1:03d}] "
+                      f"L_cls={L_cls.item():.4f}  "
+                      f"L_eo={L_fair.item():.4f}  "
+                      f"L_align={L_align.item():.4f}  "
+                      f"Total={loss.item():.4f}")
+
+        # ── Evaluate on source ─────────────────────────────────────────────
+        accs, auc_rocs, tmp_parity, tmp_equality = evaluate_per_class(
+            args, source_data, model
+        )
+        print(f"[Run {run_idx}] Source | "
+              f"Acc={accs['all']:.2f}  AUC={auc_rocs['all']:.2f}  "
+              f"DP={tmp_parity['all']:.2f}  EO={tmp_equality['all']:.2f}")
+        src_acc[run_idx]      = accs['all']
+        src_auc_roc[run_idx]  = auc_rocs['all']
+        src_parity[run_idx]   = tmp_parity['all']
+        src_equality[run_idx] = tmp_equality['all']
+
+        # ── Evaluate on target (before adaptation) ─────────────────────────
+        t_accs, t_auc_rocs, t_parity, t_equality = evaluate_per_class(
+            args, target_data, model
+        )
+        print(f"[Run {run_idx}] Target (before adapt) | "
+              f"Acc={t_accs['all']:.2f}  AUC={t_auc_rocs['all']:.2f}  "
+              f"DP={t_parity['all']:.2f}  EO={t_equality['all']:.2f}")
+        tgt_acc[run_idx]      = t_accs['all']
+        tgt_auc_roc[run_idx]  = t_auc_rocs['all']
+        tgt_parity[run_idx]   = t_parity['all']
+        tgt_equality[run_idx] = t_equality['all']
+
+        # ── Phase 2: Extract source knowledge & SFDA adapt ────────────────
+        knowledge = extract_source_knowledge(args, source_data, model)
+        save_source_knowledge(
+            knowledge,
+            path=f'checkpoints/source_knowledge_run{run_idx}.pt',
+        )
+        adapted_model, _ = adapt_target(args, target_data, knowledge)
+
+        # ── Evaluate on target (after adaptation) ──────────────────────────
+        a_accs, a_aucs, a_par, a_eq = evaluate_per_class(args, target_data, adapted_model)
+        print(f"[Run {run_idx}] Target (after adapt) | "
+              f"Acc={a_accs['all']:.2f}  AUC={a_aucs['all']:.2f}  "
+              f"DP={a_par['all']:.2f}  EO={a_eq['all']:.2f}")
+        ada_acc[run_idx]      = a_accs['all']
+        ada_auc_roc[run_idx]  = a_aucs['all']
+        ada_parity[run_idx]   = a_par['all']
+        ada_equality[run_idx] = a_eq['all']
+
+    return (src_acc, src_auc_roc, src_parity, src_equality,
+            tgt_acc, tgt_auc_roc, tgt_parity, tgt_equality,
+            ada_acc, ada_auc_roc, ada_parity, ada_equality)
