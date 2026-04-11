@@ -7,6 +7,7 @@ from learn import *
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.func import functional_call
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
 
 # 1) 源域上的 FairGNN 训练；
@@ -20,24 +21,32 @@ from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
 
 # ── Fairness losses ────────────────────────────────────────────────────────────
 
-def fairness_loss_eo(prob, y, s):
+def mmd_loss(h, s, bandwidth=1.0):
     """
-    Differentiable Equal Opportunity (EO) loss.
-    Minimises the squared gap in P(y_hat=1 | y=1) between sensitive groups.
+    MMD (Maximum Mean Discrepancy) between embeddings of sensitive group 0 and 1.
+    Measures distributional fairness in the embedding space.
+
+    MMD²(P, Q) = E[k(x,x')] + E[k(y,y')] - 2·E[k(x,y)]
+    where k is an RBF kernel.
 
     Args:
-      prob: [N]  sigmoid probabilities
-      y:    [N]  binary ground-truth labels {0, 1}
-      s:    [N]  binary sensitive attribute  {0, 1}
+      h:         [N, D]  node embeddings
+      s:         [N]     binary sensitive attribute {0, 1}
+      bandwidth: float   RBF kernel bandwidth σ
     Returns:
-      scalar loss (0.0 if either group is empty)
+      scalar MMD² loss (0.0 if either group is empty)
     """
-    mask0 = (y == 1) & (s == 0)
-    mask1 = (y == 1) & (s == 1)
-    if mask0.sum() == 0 or mask1.sum() == 0:
-        return prob.new_tensor(0.0)
-    gap = prob[mask0].mean() - prob[mask1].mean()
-    return gap * gap
+    h0 = h[s == 0]   # [N0, D]
+    h1 = h[s == 1]   # [N1, D]
+    if h0.shape[0] == 0 or h1.shape[0] == 0:
+        return h.new_zeros(1).squeeze()
+
+    def rbf(x, y):
+        # x: [n, D], y: [m, D] → scalar mean kernel value
+        diff = x.unsqueeze(1) - y.unsqueeze(0)          # [n, m, D]
+        return torch.exp(-diff.pow(2).sum(-1) / (2 * bandwidth ** 2)).mean()
+
+    return rbf(h0, h0) + rbf(h1, h1) - 2.0 * rbf(h0, h1)
 
 
 
@@ -173,11 +182,14 @@ def save_source_knowledge(knowledge, path):
 class ResidualScaler(nn.Module):
     """
     Learnable per-dimension scale vector: Δ_{y,s}(h) = γ_{y,s} ⊙ h
-    Initialised to zero so adaptation starts from the identity residual.
+    init_weight > 0 gives minor-attribute groups a head-start so their
+    residuals are updated more aggressively at the start of adaptation.
     """
-    def __init__(self, dim: int, device):
+    def __init__(self, dim: int, device, init_weight: float = 0.0):
         super().__init__()
-        self.gamma = nn.Parameter(torch.zeros(dim, device=device))
+        self.gamma = nn.Parameter(
+            torch.full((dim,), init_weight, device=device)
+        )
 
     def forward(self, h):
         return self.gamma * h   # [N, D] or [D]
@@ -202,6 +214,7 @@ def adapt_target(args, target_data, knowledge):
     lambda_res   = getattr(args, 'lambda_res',   0.01)
     meta_lr      = getattr(args, 'meta_lr',      0.01)
     adapt_lr     = getattr(args, 'adapt_lr',     1e-3)
+    tau_adjust   = getattr(args, 'tau_adjust',   1.0)
     keys         = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
     # ── Stage 3.1: load model ──────────────────
@@ -228,27 +241,37 @@ def adapt_target(args, target_data, knowledge):
     # BCA prior
     pi_ys  = {k: float(v)  for k, v in knowledge['pi_ys'].items()}
 
-    # Learnable residual scalers: Δ_{y,s}(h) = γ_{y,s} ⊙ h (init=0)
-    scalers = {k: ResidualScaler(dim, dev) for k in keys}
+    # Learnable residual scalers: Δ_{y,s}(h) = γ_{y,s} ⊙ h
+    # Minor-attribute groups get a higher initial weight (inverse-frequency weighting)
+    # so their residuals are updated more aggressively at the start of adaptation.
+    total_pi = sum(pi_ys.values())
+    # inv-freq init: minor group (small π) → larger init_weight
+    def _minor_init(ys_key):
+        pi = max(pi_ys[ys_key], 1e-8)
+        # normalise so mean init across groups ≈ 0.01
+        return (total_pi / (len(keys) * pi)) * 0.01
+
+    scalers = {k: ResidualScaler(dim, dev, init_weight=_minor_init(k)) for k in keys}
     opt_res = torch.optim.Adam(
         [p for sc in scalers.values() for p in sc.parameters()],
         lr=adapt_lr,
     )
 
     target_data = target_data.to(dev)
-    print(f'[SFDA] adapt_epochs={adapt_epochs}  tau_c={tau_c}  alpha_p={alpha_p}  alpha_r={alpha_r}')
-    # Adaptation loop 
+    print(f'[SFDA] adapt_epochs={adapt_epochs}  tau_c={tau_c}  alpha_p={alpha_p}  alpha_r={alpha_r}  tau_adjust={tau_adjust}')
+    # Adaptation loop
     _adapt_loop(args, model, target_data,
                 p_y, r_ys, p_y_S, r_ys_S, pi_ys,
                 scalers, opt_res, keys,
                 adapt_epochs, tau_c, lambda_pi,
                 alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr)
+                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust)
 
     state = {
-        'p_y':   {yv: p_y[yv].cpu()  for yv in [0, 1]},
-        'r_ys':  {k:  v.cpu()        for k, v in r_ys.items()},
-        'pi_ys': pi_ys,
+        'p_y':    {yv: p_y[yv].cpu()  for yv in [0, 1]},
+        'r_ys':   {k:  v.cpu()        for k, v in r_ys.items()},
+        'pi_ys':  pi_ys,
+        'tau_adjust': tau_adjust,
     }
     return model, state
 
@@ -258,14 +281,14 @@ def _adapt_loop(args, model, target_data,
                 scalers, opt_res, keys,
                 adapt_epochs, tau_c, lambda_pi,
                 alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr):
+                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust):
     for step in range(adapt_epochs):
         n_hc = _adapt_step(
             args, model, target_data,
             p_y, r_ys, p_y_S, r_ys_S, pi_ys,
             scalers, opt_res, keys,
             tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
-            lambda_s, lambda_e, lambda_res, meta_lr,
+            lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust,
         )
         if (step + 1) % 50 == 0:
             N = target_data.x.shape[0]
@@ -289,22 +312,29 @@ def _build_protos(p_y, r_ys, scalers, h_mean_y, keys):
     return protos
 
 
-def _compute_posterior(h, protos, pi_ys, lambda_pi, keys):
+def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0):
     """
-    BCA-style joint posterior.
-      z_i(y,s) = cosine_sim(h_i, p̃_{y,s}) + λ_π · log π_{y,s}
+    BCA-style joint posterior with count-based Bayesian logit adjustment.
+
+      z_i(y,s) = cosine_sim(h_i, p̃_{y,s}) + τ · log π_{y,s}
       q_i(y,s) = softmax_over_(y,s)( z_i )
       q_i(y)   = Σ_s q_i(y,s)
+
+    τ (tau_adjust) controls the strength of the prior correction:
+      τ=1.0  → standard Bayesian posterior (P(h|y,s)·P(y,s))
+      τ>1.0  → amplify prior, penalise majority groups more
+      τ<1.0  → weaken prior, rely more on likelihood
+
+    This is equivalent to the logit-adjusted softmax from Menon et al. 2021,
+    applied here to give minor (y,s) groups a fairer chance at test time.
+
     Returns q_ys [N,4], q_y [N,2].
     """
-    # 每个节点 h_i 会和 4 个 joint prototype 比相似度， 再加上一个联合先验 log π(y,s) 做偏置修正。
-    # - q_ys 给出节点属于每个 (y,s) 组合的概率；
-    # - q_y  再把敏感组维度边缘化掉，得到最终类别概率。
     scores = []
     for (yv, sv) in keys:
         sim = (h * protos[(yv, sv)].unsqueeze(0)).sum(1)       # [N]
         pi  = max(pi_ys[(yv, sv)], 1e-8)
-        scores.append(sim + lambda_pi * float(np.log(pi)))
+        scores.append(sim + tau_adjust * lambda_pi * float(np.log(pi)))
     scores = torch.stack(scores, dim=1)                        # [N,4]
     q_ys   = torch.softmax(scores, dim=1)
     q_y    = torch.stack([
@@ -318,7 +348,7 @@ def _adapt_step(args, model, target_data,
                 p_y, r_ys, p_y_S, r_ys_S, pi_ys,
                 scalers, opt_res, keys,
                 tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr):
+                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust=1.0):
     """
     One full adaptation step:
       1. Encode target nodes (backbone frozen).
@@ -339,7 +369,7 @@ def _adapt_step(args, model, target_data,
     # 2a. Coarse posterior — global mean placeholder → h_mean_y
     with torch.no_grad():
         protos_coarse = _build_protos(p_y, r_ys, scalers, {yv: h.mean(0) for yv in [0, 1]}, keys)
-        _, q_y_coarse = _compute_posterior(h, protos_coarse, pi_ys, lambda_pi, keys)
+        _, q_y_coarse = _compute_posterior(h, protos_coarse, pi_ys, lambda_pi, keys, tau_adjust)
 
     # 2b. Class-wise mean from coarse posterior (soft q_y weighted)
     with torch.no_grad():
@@ -351,7 +381,7 @@ def _adapt_step(args, model, target_data,
     # 2c. Refined posterior — use class-wise h_mean_y for residual correction
     with torch.no_grad():
         protos_ng = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
-        q_ys, q_y = _compute_posterior(h, protos_ng, pi_ys, lambda_pi, keys)
+        q_ys, q_y = _compute_posterior(h, protos_ng, pi_ys, lambda_pi, keys, tau_adjust)
 
     conf, pseudo_y = q_y.max(dim=1)         # [N]
     high_conf      = conf > tau_c
@@ -445,12 +475,12 @@ def _adapt_step(args, model, target_data,
         raw_p   = p_y[yv].detach() + r_ys[(yv, sv)].detach() + delta_p
         protos_prime[(yv, sv)] = F.normalize(raw_p, p=2, dim=0)
 
-    # Re-compute posterior with ω'
+    # Re-compute posterior with ω' (apply tau_adjust for Bayesian logit correction)
     scores_p = []
     for (yv, sv) in keys:
         sim_p = (h * protos_prime[(yv, sv)].unsqueeze(0)).sum(1)
         pi    = max(pi_ys[(yv, sv)], 1e-8)
-        scores_p.append(sim_p + lambda_pi * float(np.log(pi)))
+        scores_p.append(sim_p + tau_adjust * lambda_pi * float(np.log(pi)))
     scores_p = torch.stack(scores_p, dim=1)          # [N,4]
     q_ys_p   = torch.softmax(scores_p, dim=1)        # [N,4]
     q_y_p    = torch.stack([
@@ -518,34 +548,48 @@ def train_and_adapt(args, source_data, target_data):
         # ── Phase 1: Source training ───────────────────────────────────────
         model, optimizer, scheduler = _init_fair_gnn(args)
 
+        meta_lr_src = getattr(args, 'meta_lr_src', 0.01)
+
         for epoch in tqdm(range(args.train_epochs), desc=f'Run {run_idx} [train]', leave=False):
             model.train()
 
-            emb, cls_logit = model(source_data.x, source_data.edge_index)
+            _, cls_logit = model(source_data.x, source_data.edge_index)
 
-            # ── Classification loss ──────────────────────────────────────────
+            # ── Classification loss (inner task) ────────────────────────────
             L_cls = criterion(cls_logit[train_mask].view(-1), cls_labels[train_mask])
 
-            # ── Fairness loss (EO) on training nodes ────────────────────────
-            prob_train = torch.sigmoid(cls_logit[train_mask].view(-1))
-            L_fair     = fairness_loss_eo(prob_train, cls_labels[train_mask], sens_labels[train_mask])
-
-            # ── Gradient alignment ────────────────────────────────────────────
+            # ── Meta-learning: cls as inner task, MMD fairness as outer task ─
+            #
+            # Inner step: θ' = θ - meta_lr · ∇_θ L_cls
+            # Outer loss: L_mmd(θ') — MMD on embeddings from updated params
+            #
+            # This ensures cls updates stay compatible with fairness alignment:
+            # the model learns to classify in a way that doesn't hurt MMD.
             backbone_params = list(model.backbone.parameters())
-            grad_cls  = torch.autograd.grad(
-                L_cls,  backbone_params, create_graph=True, retain_graph=True
+            grad_cls = torch.autograd.grad(
+                L_cls, backbone_params, create_graph=True, retain_graph=True
             )
-            grad_fair = torch.autograd.grad(
-                L_fair, backbone_params, create_graph=True, retain_graph=True
+            # Virtual inner step (functional, no in-place update)
+            params_prime = [
+                p - meta_lr_src * g
+                for p, g in zip(backbone_params, grad_cls)
+            ]
+
+            # Forward with θ' using functional_call
+            param_dict = dict(zip(
+                [n for n, _ in model.backbone.named_parameters()],
+                params_prime
+            ))
+            emb_prime = functional_call(
+                model.backbone, param_dict,
+                (source_data.x, source_data.edge_index)
             )
-            flat_cls  = torch.cat([g.reshape(-1) for g in grad_cls])
-            flat_fair = torch.cat([g.reshape(-1) for g in grad_fair])
-            L_align   = -F.cosine_similarity(flat_cls.unsqueeze(0), flat_fair.unsqueeze(0))
-            
-            # 这里是用metaalign去对齐fair和cls，原文是用来做domain align的，但是我们是sfda，所以没办法用这个方法做domain align
-            # 现在这个地方直接拉近两个模型的梯度其实是不符合metaalign的核心要义的。
-            # 这里实现有点偷懒了，不过可以初步验证效果，后面如果效果还行再进一步优化就行，但我觉得不会提点了。
-            loss = L_cls + args.lambda_fair * L_fair + args.lambda_align * L_align
+            emb_prime_train = emb_prime[train_mask]
+
+            # Outer fairness loss: MMD between sensitive groups in θ' embedding space
+            L_mmd = mmd_loss(emb_prime_train, sens_labels[train_mask].long())
+
+            loss = L_cls + args.lambda_fair * L_mmd
 
             optimizer.zero_grad()
             loss.backward()
@@ -555,8 +599,7 @@ def train_and_adapt(args, source_data, target_data):
             if (epoch + 1) % 50 == 0:
                 print(f"[Run {run_idx} | Epoch {epoch+1:03d}] "
                       f"L_cls={L_cls.item():.4f}  "
-                      f"L_eo={L_fair.item():.4f}  "
-                      f"L_align={L_align.item():.4f}  "
+                      f"L_mmd={L_mmd.item():.4f}  "
                       f"Total={loss.item():.4f}")
 
         # ── Evaluate on source ─────────────────────────────────────────────
@@ -632,6 +675,7 @@ def evaluate_after(args, data, encoder, state):
         p_y = {k: v.to(args.device) for k, v in state['p_y'].items()}
         r_ys = {k: v.to(args.device) for k, v in state['r_ys'].items()}
         pi_ys = state['pi_ys']
+        tau_adjust = state.get('tau_adjust', 1.0)
         keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
         # final prototype = base prototype + residual
@@ -640,8 +684,8 @@ def evaluate_after(args, data, encoder, state):
             raw = p_y[yv] + r_ys[(yv, sv)]
             final_protos[(yv, sv)] = F.normalize(raw, p=2, dim=0)
 
-        # compute posterior
-        _, q_y = _compute_posterior(feat, final_protos, pi_ys, args.lambda_pi, keys)
+        # compute posterior with Bayesian logit adjustment
+        _, q_y = _compute_posterior(feat, final_protos, pi_ys, args.lambda_pi, keys, tau_adjust)
         
         # extract positive probability
         probs = q_y[:, 1].cpu().numpy()
