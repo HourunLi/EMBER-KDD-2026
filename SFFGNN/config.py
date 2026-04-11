@@ -50,7 +50,7 @@ parser.add_argument('--device_id',     type=str, default='2')
 
 # fairness loss weights
 parser.add_argument('--lambda_fair',  type=float, default=1)
-parser.add_argument('--lambda_align', type=float, default=0.1)
+parser.add_argument('--meta_lr_src',  type=float, default=0.01)  # inner-loop lr for source meta-learning
 
 # SFDA target adaptation
 parser.add_argument('--adapt_epochs', type=int,   default=200)
@@ -64,6 +64,7 @@ parser.add_argument('--lambda_e',     type=float, default=0.1)
 parser.add_argument('--lambda_res',   type=float, default=0.01)
 parser.add_argument('--meta_lr',      type=float, default=0.01)
 parser.add_argument('--adapt_lr',     type=float, default=1e-3)
+parser.add_argument('--tau_adjust',   type=float, default=1.0)   # Bayesian logit adjustment temperature
 
 # misc
 parser.add_argument('--log_path', type=str, default='logs/log.txt')
