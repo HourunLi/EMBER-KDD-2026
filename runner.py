@@ -7,6 +7,15 @@ from learn import *
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
+
+# 1) 源域上的 FairGNN 训练；
+# 2) 从源模型中提取“可迁移知识”（prototype / residual / prior）；
+# 3) 在不访问源域原始数据的前提下，对目标域做 SFDA 适配；
+# 4) 对适配前后结果做评估。
+#
+# “先在 source 学到一个兼顾分类与公平性的表示空间，再把这个空间中的统计知识
+#  迁移到 target，用 prototype 对齐 + 伪标签自训练的方式继续适配。”
 
 
 # ── Fairness losses ────────────────────────────────────────────────────────────
@@ -98,6 +107,14 @@ def extract_source_knowledge(args, data, model):
     -------
     dict with keys: 'p_y', 'r_ys', 'pi_ys', 'model_state'
     """
+    # 不把源数据本身带到目标域，而是把源域中已经学到的统计结构导出来：
+    #
+    # - p_y:   类别原型，描述“某个类别大概在表示空间的什么位置”
+    # - r_ys:  敏感属性残差，描述“同一类别里不同敏感组的偏移”
+    # - pi_ys: 联合先验，描述 (y,s) 组合在源域里出现的频率
+    #
+    # 这样后续 target 适配阶段就不需要再访问 source 原始样本，
+    # 满足 source-free domain adaptation 的设定。
     model.eval()
     with torch.no_grad():
         emb, _ = model(data.x, data.edge_index)          # [N, D]
@@ -107,7 +124,6 @@ def extract_source_knowledge(args, data, model):
     s  = data.sens_labels.cpu()
     tm = data.train_mask.cpu()
 
-    # class prototypes p_y (all nodes)
     p_y = {}
     for yv in [0, 1]:
         mask = (y == yv)
@@ -117,6 +133,8 @@ def extract_source_knowledge(args, data, model):
             p_y[yv] = emb_n[mask].mean(dim=0).cpu()
 
     # joint prototypes p_ys and sensitive residuals r_ys (all nodes)
+    # r_ys：在固定类别 y 下，敏感组 s 会让表示产生怎样的偏移。
+    # 后面在 target 域中，模型会在 class prototype 基础上再加这个 residual，形成更细粒度的 joint prototype。
     r_ys = {}
     for yv in [0, 1]:
         for sv in [0, 1]:
@@ -152,7 +170,6 @@ def save_source_knowledge(knowledge, path):
 
 
 # SFDA helpers
-
 class ResidualScaler(nn.Module):
     """
     Learnable per-dimension scale vector: Δ_{y,s}(h) = γ_{y,s} ⊙ h
@@ -167,11 +184,12 @@ class ResidualScaler(nn.Module):
 
 
 # SFDA Target Adaptation
-
 def adapt_target(args, target_data, knowledge):
     """
     Full SFDA target adaptation — strict source-free.
     """
+    # 不使用source_data，只依赖导出的knowledge。
+    # 用source学到的统计先验，在target域重新校准prototype，并通过高置信伪标签慢慢让目标域分布贴合这个结构。”
     dev = args.device
     adapt_epochs = getattr(args, 'adapt_epochs', 400)
     tau_c        = getattr(args, 'tau_c',        0.80)
@@ -189,6 +207,7 @@ def adapt_target(args, target_data, knowledge):
     # ── Stage 3.1: load model ──────────────────
     model = FairGNN(args, encoder_type=args.inter_encoder).to(dev)
     model.load_state_dict({k: v.to(dev) for k, v in knowledge['model_state'].items()})
+    # 冻结骨干参数，防止大范围飘逸，保持基本性能不要掉太多。
     # freeze the backbone
     for p in model.backbone.parameters():
         p.requires_grad_(False)
@@ -198,6 +217,7 @@ def adapt_target(args, target_data, knowledge):
 
     # Source anchors (frozen, used for L_align^SF)
     p_y_S  = {yv: knowledge['p_y'][yv].clone().to(dev)     for yv in [0, 1]}
+    # sensitive 是residual的
     r_ys_S = {k:  v.clone().to(dev) for k, v in knowledge['r_ys'].items()}
 
     # Mutable target prototypes / residuals 
@@ -277,6 +297,9 @@ def _compute_posterior(h, protos, pi_ys, lambda_pi, keys):
       q_i(y)   = Σ_s q_i(y,s)
     Returns q_ys [N,4], q_y [N,2].
     """
+    # 每个节点 h_i 会和 4 个 joint prototype 比相似度， 再加上一个联合先验 log π(y,s) 做偏置修正。
+    # - q_ys 给出节点属于每个 (y,s) 组合的概率；
+    # - q_y  再把敏感组维度边缘化掉，得到最终类别概率。
     scores = []
     for (yv, sv) in keys:
         sim = (h * protos[(yv, sv)].unsqueeze(0)).sum(1)       # [N]
@@ -518,7 +541,10 @@ def train_and_adapt(args, source_data, target_data):
             flat_cls  = torch.cat([g.reshape(-1) for g in grad_cls])
             flat_fair = torch.cat([g.reshape(-1) for g in grad_fair])
             L_align   = -F.cosine_similarity(flat_cls.unsqueeze(0), flat_fair.unsqueeze(0))
-
+            
+            # 这里是用metaalign去对齐fair和cls，原文是用来做domain align的，但是我们是sfda，所以没办法用这个方法做domain align
+            # 现在这个地方直接拉近两个模型的梯度其实是不符合metaalign的核心要义的。
+            # 这里实现有点偷懒了，不过可以初步验证效果，后面如果效果还行再进一步优化就行，但我觉得不会提点了。
             loss = L_cls + args.lambda_fair * L_fair + args.lambda_align * L_align
 
             optimizer.zero_grad()
@@ -563,10 +589,10 @@ def train_and_adapt(args, source_data, target_data):
             knowledge,
             path=f'checkpoints/source_knowledge_run{run_idx}.pt',
         )
-        adapted_model, _ = adapt_target(args, target_data, knowledge)
+        adapted_model, state = adapt_target(args, target_data, knowledge)
 
         # ── Evaluate on target (after adaptation) ──────────────────────────
-        a_accs, a_aucs, a_par, a_eq = evaluate_per_class(args, target_data, adapted_model)
+        a_accs, a_aucs, a_par, a_eq = evaluate_after(args, target_data, adapted_model, state)
         print(f"[Run {run_idx}] Target (after adapt) | "
               f"Acc={a_accs['all']:.2f}  AUC={a_aucs['all']:.2f}  "
               f"DP={a_par['all']:.2f}  EO={a_eq['all']:.2f}")
@@ -578,3 +604,119 @@ def train_and_adapt(args, source_data, target_data):
     return (src_acc, src_auc_roc, src_parity, src_equality,
             tgt_acc, tgt_auc_roc, tgt_parity, tgt_equality,
             ada_acc, ada_auc_roc, ada_parity, ada_equality)
+
+
+def evaluate_after(args, data, encoder, state):
+    """
+    Evaluate on target (after adaptation)
+    Returns:
+      accs, auc_rocs, paritys, equalitys  — each a dict keyed by split name
+    """
+    sens_labels = data.sens_labels
+    test_labels = data.y[data.test_mask]
+
+    t_idx_s0 = sens_labels[data.test_mask] == 0
+    t_idx_s1 = sens_labels[data.test_mask] == 1
+    t_idx_s0_y1 = torch.logical_and(t_idx_s0, test_labels == 1)
+    t_idx_s1_y1 = torch.logical_and(t_idx_s1, test_labels == 1)
+    t_idx_s0_y0 = torch.logical_and(t_idx_s0, test_labels == 0)
+    t_idx_s1_y0 = torch.logical_and(t_idx_s1, test_labels == 0)
+
+    accs, auc_rocs, f1s, paritys, equalitys = {}, {}, {}, {}, {}
+
+    encoder.eval()
+    with torch.no_grad():
+        emb_raw, _ = encoder(data.x, data.edge_index)
+        feat = F.normalize(emb_raw, p=2, dim=1) # [N, D]
+
+        p_y = {k: v.to(args.device) for k, v in state['p_y'].items()}
+        r_ys = {k: v.to(args.device) for k, v in state['r_ys'].items()}
+        pi_ys = state['pi_ys']
+        keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+        # final prototype = base prototype + residual
+        final_protos = {}
+        for (yv, sv) in keys:
+            raw = p_y[yv] + r_ys[(yv, sv)]
+            final_protos[(yv, sv)] = F.normalize(raw, p=2, dim=0)
+
+        # compute posterior
+        _, q_y = _compute_posterior(feat, final_protos, pi_ys, args.lambda_pi, keys)
+        
+        # extract positive probability
+        probs = q_y[:, 1].cpu().numpy()
+
+        y_all   = data.y.cpu().numpy()
+        sens_all = data.sens_labels.cpu().numpy()
+        all_mask = data.train_mask | data.val_mask | data.test_mask
+
+        splits = {
+            'all':   all_mask.cpu().numpy(),
+            'train': data.train_mask.cpu().numpy(),
+            'val':   data.val_mask.cpu().numpy(),
+            'test':  data.test_mask.cpu().numpy(),
+        }
+
+        # Save embeddings for analysis
+        labels = torch.full((test_labels.shape[0],), -1, dtype=torch.int64)
+        labels[t_idx_s0_y1] = 0
+        labels[t_idx_s1_y1] = 1
+        labels[t_idx_s0_y0] = 2
+        labels[t_idx_s1_y0] = 3
+        np.savez(f"{args.dataset}_feat.npz",
+                 representations=feat[data.test_mask].cpu().numpy())
+        np.savez(f"{args.dataset}_labels.npz",
+                 labels=labels.cpu().numpy())
+
+        result = {}
+        for split_name, mask in splits.items():
+            y_true = y_all[mask]
+            sens   = sens_all[mask]
+            prob   = probs[mask]
+            pred   = (prob > 0.5).astype(int)
+
+            acc_total = accuracy_score(y_true, pred) * 100
+            auc_total = roc_auc_score(y_true, prob) * 100 if len(set(y_true)) == 2 else float('nan')
+            f1_total  = f1_score(y_true, pred, zero_division=0) * 100
+
+            # Per sensitive group
+            sens_metrics = {}
+            for s in np.unique(sens):
+                idx = sens == s
+                sens_metrics[int(s)] = {
+                    'acc': accuracy_score(y_true[idx], pred[idx]) * 100,
+                    'auc': roc_auc_score(y_true[idx], prob[idx]) * 100
+                          if len(np.unique(y_true[idx])) == 2 else float('nan'),
+                    'f1':  f1_score(y_true[idx], pred[idx], zero_division=0) * 100,
+                }
+
+            # Per target class
+            y_metrics = {}
+            for yval in np.unique(y_true):
+                idx = y_true == yval
+                y_metrics[int(yval)] = {
+                    'acc': accuracy_score(y_true[idx], pred[idx]) * 100,
+                    'auc': roc_auc_score((y_true == yval).astype(int),
+                                         prob if yval == 1 else 1 - prob) * 100
+                          if len(set(y_true)) == 2 else float('nan'),
+                    'f1':  f1_score((y_true == yval).astype(int),
+                                    (pred == yval).astype(int), zero_division=0) * 100,
+                }
+
+            dp, eo = fair_metric(pred, y_true, sens)
+            result[split_name] = {
+                'overall':      {'acc': acc_total, 'auc': auc_total, 'f1': f1_total},
+                'sens_group':   sens_metrics,
+                'target_group': y_metrics,
+                'fairness':     {'dp': dp * 100, 'eo': eo * 100},
+            }
+
+    for split_name in splits:
+        target_vals = result[split_name]['target_group'].values()
+        accs[split_name]     = np.nanmean([v['acc'] for v in target_vals])
+        auc_rocs[split_name] = np.nanmean([v['auc'] for v in target_vals])
+        f1s[split_name]      = np.nanmean([v['f1']  for v in target_vals])
+        paritys[split_name]  = result[split_name]['fairness']['dp']
+        equalitys[split_name]= result[split_name]['fairness']['eo']
+
+    return accs, auc_rocs, paritys, equalitys
