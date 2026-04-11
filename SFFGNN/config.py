@@ -31,7 +31,12 @@ parser = argparse.ArgumentParser(description='mine Arguments.')
 parser.add_argument('--dataset', type=str, default='pokec')
 parser.add_argument('--inid',    type=str, default='_z')
 parser.add_argument('--outid',   type=str, default='_n')
-
+# parser.add_argument('--dataset', type=str, default='bailA')
+# parser.add_argument('--inid',    type=str, default='_2')
+# parser.add_argument('--outid',   type=str, default='_1')
+# parser.add_argument('--dataset', type=str, default='german')
+# parser.add_argument('--inid',    type=str, default='_2')
+# parser.add_argument('--outid',   type=str, default='_1')
 # optimisation
 parser.add_argument('--lr',           type=float, default=0.004)
 parser.add_argument('--lr2_reg',      type=float, default=0.001)
@@ -46,7 +51,7 @@ parser.add_argument('--inter_encoder', type=str,
                     choices=['GCN', 'GAT', 'SAGE', 'MLP', 'vanilla'],
                     default='GCN')
 parser.add_argument('--hidden_dim',    type=int, default=32)
-parser.add_argument('--device_id',     type=str, default='2')
+parser.add_argument('--device_id',     type=str, default='0')
 
 # fairness loss weights
 parser.add_argument('--lambda_fair',  type=float, default=1)
@@ -65,6 +70,7 @@ parser.add_argument('--lambda_res',   type=float, default=0.01)
 parser.add_argument('--meta_lr',      type=float, default=0.01)
 parser.add_argument('--adapt_lr',     type=float, default=1e-3)
 parser.add_argument('--tau_adjust',   type=float, default=1.0)   # Bayesian logit adjustment temperature
+parser.add_argument('--mmd_chunk_size', type=int, default=1024)
 
 # misc
 parser.add_argument('--log_path', type=str, default='logs/log.txt')

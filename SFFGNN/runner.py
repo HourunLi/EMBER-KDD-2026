@@ -21,7 +21,7 @@ from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
 
 # ── Fairness losses ────────────────────────────────────────────────────────────
 
-def mmd_loss(h, s, bandwidth=1.0):
+def mmd_loss(h, s, bandwidth=1.0, chunk_size=1024):
     """
     MMD (Maximum Mean Discrepancy) between embeddings of sensitive group 0 and 1.
     Measures distributional fairness in the embedding space.
@@ -29,10 +29,14 @@ def mmd_loss(h, s, bandwidth=1.0):
     MMD²(P, Q) = E[k(x,x')] + E[k(y,y')] - 2·E[k(x,y)]
     where k is an RBF kernel.
 
+    This implementation is chunked to avoid materialising a full [n, m, D]
+    tensor, which can easily OOM on larger datasets.
+
     Args:
-      h:         [N, D]  node embeddings
-      s:         [N]     binary sensitive attribute {0, 1}
-      bandwidth: float   RBF kernel bandwidth σ
+      h:          [N, D]  node embeddings
+      s:          [N]     binary sensitive attribute {0, 1}
+      bandwidth:  float   RBF kernel bandwidth σ
+      chunk_size: int     block size for pairwise kernel computation
     Returns:
       scalar MMD² loss (0.0 if either group is empty)
     """
@@ -41,12 +45,27 @@ def mmd_loss(h, s, bandwidth=1.0):
     if h0.shape[0] == 0 or h1.shape[0] == 0:
         return h.new_zeros(1).squeeze()
 
-    def rbf(x, y):
-        # x: [n, D], y: [m, D] → scalar mean kernel value
-        diff = x.unsqueeze(1) - y.unsqueeze(0)          # [n, m, D]
-        return torch.exp(-diff.pow(2).sum(-1) / (2 * bandwidth ** 2)).mean()
+    def rbf_mean_chunked(x, y):
+        # 精确计算 mean_{i,j} exp(-||x_i-y_j||^2 / (2σ^2))，
+        # 但按块处理，避免构造完整的 [n, m, D] 张量。
+        total = x.new_zeros(())
+        count = 0
+        denom = 2 * (bandwidth ** 2)
 
-    return rbf(h0, h0) + rbf(h1, h1) - 2.0 * rbf(h0, h1)
+        for i in range(0, x.shape[0], chunk_size):
+            xb = x[i:i + chunk_size]                                # [bx, D]
+            x_sq = xb.pow(2).sum(dim=1, keepdim=True)               # [bx, 1]
+
+            for j in range(0, y.shape[0], chunk_size):
+                yb = y[j:j + chunk_size]                            # [by, D]
+                y_sq = yb.pow(2).sum(dim=1).unsqueeze(0)            # [1, by]
+                dist2 = (x_sq + y_sq - 2.0 * xb @ yb.t()).clamp_min(0.0)
+                total = total + torch.exp(-dist2 / denom).sum()
+                count += xb.shape[0] * yb.shape[0]
+
+        return total / max(count, 1)
+
+    return rbf_mean_chunked(h0, h0) + rbf_mean_chunked(h1, h1) - 2.0 * rbf_mean_chunked(h0, h1)
 
 
 
@@ -587,7 +606,11 @@ def train_and_adapt(args, source_data, target_data):
             emb_prime_train = emb_prime[train_mask]
 
             # Outer fairness loss: MMD between sensitive groups in θ' embedding space
-            L_mmd = mmd_loss(emb_prime_train, sens_labels[train_mask].long())
+            L_mmd = mmd_loss(
+                emb_prime_train,
+                sens_labels[train_mask].long(),
+                chunk_size=getattr(args, 'mmd_chunk_size', 1024),
+            )
 
             loss = L_cls + args.lambda_fair * L_mmd
 
