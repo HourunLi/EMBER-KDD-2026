@@ -13,17 +13,19 @@ bailA:
   proto_temp: 3
   lambda_pi: 0.02
 german:
-  train_epochs: 500
+  train_epochs: 800
   lr: 0.005
   lr2_reg: 0.001
   dropout: 0.4
   runs: 1
-  hidden_dim: 64
+  hidden_dim: 128
   n_layers: 3
-  tau_c: 0.6
+  tau_c: 0.5
   use_checkpoint: true
   inter_encoder: GCN
-  lambda_fair: 1.0
+  lambda_fair: 2
+  proto_temp: 2
+  lambda_pi: 0.02
 pokec:
   train_epochs: 800
   lr: 0.004
