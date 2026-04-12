@@ -27,14 +27,14 @@ pokec:
   lr: 0.004
   lr2_reg: 0.001
   dropout: 0.4
-  runs: 3
+  runs: 1
   hidden_dim: 128
   tau: 0.6
   n_layers: 3
+  tau_c: 0.5
   inter_encoder: GCN
   lambda_fair: 1.0
   lambda_align: 0.1
-  tau_c: 0.5
 syn:
   train_epochs: 500
   lr: 0.005

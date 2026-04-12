@@ -362,7 +362,7 @@ def _adapt_loop(args, model, target_data,
                 alpha_p, alpha_r, alpha_pi,
                 lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp):
     for step in range(adapt_epochs):
-        n_hc = _adapt_step(
+        n_hc, debug_stats = _adapt_step(
             args, model, target_data,
             p_y, r_ys, p_y_S, r_ys_S, pi_ys,
             scalers, opt_res, keys,
@@ -372,6 +372,9 @@ def _adapt_loop(args, model, target_data,
         if (step + 1) % 50 == 0:
             N = target_data.x.shape[0]
             print(f'  [Adapt {step+1:3d}]  high-conf={n_hc}/{N}  '
+                  f"conf[min/max/mean]={debug_stats['conf_min']:.6f}/{debug_stats['conf_max']:.6f}/{debug_stats['conf_mean']:.6f}  "
+                  f"threshold={debug_stats['threshold']:.6f}  "
+                  f"unique(6dp)={debug_stats['conf_unique_6dp']}  "
                   + '  '.join(f'pi({yv},{sv})={pi_ys[(yv,sv)]:.3f}'
                               for yv in [0,1] for sv in [0,1]))
 
@@ -431,7 +434,7 @@ def _adapt_step(args, model, target_data,
       4. r_{y,s}^T slow EMA update (momentum alpha_r).
       5. BCA prior online EMA update.
       6. MetaAlign meta-objective → optimise residual scalers γ.
-    Returns n_hc (number of high-confidence nodes).
+    Returns n_hc (number of high-confidence nodes) and debug stats.
     """
     dev = args.device
 
@@ -466,6 +469,13 @@ def _adapt_step(args, model, target_data,
     threshold  = torch.quantile(conf, 1.0 - tau_c)
     high_conf  = conf >= threshold
     n_hc       = int(high_conf.sum().item())
+    debug_stats = {
+        'conf_min': conf.min().item(),
+        'conf_max': conf.max().item(),
+        'conf_mean': conf.mean().item(),
+        'threshold': threshold.item(),
+        'conf_unique_6dp': int(torch.unique(conf.detach().cpu().round(decimals=6)).numel()),
+    }
 
     if n_hc > 0:
         hc_h    = h[high_conf].detach()      # [M, D]
@@ -586,7 +596,7 @@ def _adapt_step(args, model, target_data,
     L_meta.backward()
     opt_res.step()
 
-    return n_hc
+    return n_hc, debug_stats
 
 # Training + Adaptation
 

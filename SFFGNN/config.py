@@ -59,7 +59,7 @@ parser.add_argument('--meta_lr_src',  type=float, default=0.01)  # inner-loop lr
 
 # SFDA target adaptation
 parser.add_argument('--adapt_epochs', type=int,   default=200)
-parser.add_argument('--tau_c',        type=float, default=0.5)   # top-tau_c fraction of nodes kept as high-confidence
+parser.add_argument('--tau_c',        type=float, default=0.8)   # top-tau_c fraction of nodes kept as high-confidence
 parser.add_argument('--lambda_pi',    type=float, default=1.0)
 parser.add_argument('--alpha_p',      type=float, default=0.90)
 parser.add_argument('--alpha_r',      type=float, default=0.99)
