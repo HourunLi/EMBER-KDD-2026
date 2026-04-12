@@ -42,7 +42,6 @@ parser.add_argument('--lr',           type=float, default=0.004)
 parser.add_argument('--lr2_reg',      type=float, default=0.001)
 parser.add_argument('--train_epochs', type=int,   default=800)
 parser.add_argument('--dropout',      type=float, default=0.5)
-parser.add_argument('--tau',          type=float, default=1.0)
 parser.add_argument('--runs',         type=int,   default=5)
 
 # network
@@ -55,7 +54,6 @@ parser.add_argument('--device_id',     type=str, default='0')
 
 # fairness loss weights
 parser.add_argument('--lambda_fair',  type=float, default=1)
-parser.add_argument('--meta_lr_src',  type=float, default=0.01)  # inner-loop lr for source meta-learning
 
 # SFDA target adaptation
 parser.add_argument('--adapt_epochs', type=int,   default=200)

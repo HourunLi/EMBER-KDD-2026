@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.func import functional_call
-from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
 
 # 1) 源域上的 FairGNN 训练；
 # 2) 从源模型中提取“可迁移知识”（prototype / residual / prior）；
@@ -292,7 +291,7 @@ def adapt_target(args, target_data, knowledge):
     meta_lr      = getattr(args, 'meta_lr',      0.01)
     adapt_lr     = getattr(args, 'adapt_lr',     1e-3)
     tau_adjust   = getattr(args, 'tau_adjust',   1.0)
-    temp         = getattr(args, 'proto_temp',   0.1)   # softmax temperature for posterior sharpening
+    temp         = getattr(args, 'proto_temp',   0.5)   # softmax temperature for posterior sharpening
     keys         = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
     # ── Stage 3.1: load model ──────────────────
@@ -369,9 +368,9 @@ def _adapt_loop(args, model, target_data,
             tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
             lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp,
         )
-        if (step + 1) % 50 == 0:
+        if (step) % 50 == 0:
             N = target_data.x.shape[0]
-            print(f'  [Adapt {step+1:3d}]  high-conf={n_hc}/{N}  '
+            print(f'  [Adapt {step:3d}]  high-conf={n_hc}/{N}  '
                   f"conf[min/max/mean]={debug_stats['conf_min']:.6f}/{debug_stats['conf_max']:.6f}/{debug_stats['conf_mean']:.6f}  "
                   f"threshold={debug_stats['threshold']:.6f}  "
                   f"unique(6dp)={debug_stats['conf_unique_6dp']}  "
@@ -790,7 +789,7 @@ def evaluate_after(args, data, encoder, state):
         r_ys = {k: v.to(args.device) for k, v in state['r_ys'].items()}
         pi_ys = state['pi_ys']
         tau_adjust = state.get('tau_adjust', 1.0)
-        temp       = state.get('proto_temp', 0.1)
+        temp       = state.get('proto_temp', 1)
         keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
         # final prototype = base prototype + residual
