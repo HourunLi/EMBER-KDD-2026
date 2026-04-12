@@ -234,6 +234,7 @@ def adapt_target(args, target_data, knowledge):
     meta_lr      = getattr(args, 'meta_lr',      0.01)
     adapt_lr     = getattr(args, 'adapt_lr',     1e-3)
     tau_adjust   = getattr(args, 'tau_adjust',   1.0)
+    temp         = getattr(args, 'proto_temp',   0.1)   # softmax temperature for posterior sharpening
     keys         = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
     # ── Stage 3.1: load model ──────────────────
@@ -277,20 +278,21 @@ def adapt_target(args, target_data, knowledge):
     )
 
     target_data = target_data.to(dev)
-    print(f'[SFDA] adapt_epochs={adapt_epochs}  tau_c={tau_c}  alpha_p={alpha_p}  alpha_r={alpha_r}  tau_adjust={tau_adjust}')
+    print(f'[SFDA] adapt_epochs={adapt_epochs}  tau_c={tau_c}  alpha_p={alpha_p}  alpha_r={alpha_r}  tau_adjust={tau_adjust}  proto_temp={temp}')
     # Adaptation loop
     _adapt_loop(args, model, target_data,
                 p_y, r_ys, p_y_S, r_ys_S, pi_ys,
                 scalers, opt_res, keys,
                 adapt_epochs, tau_c, lambda_pi,
                 alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust)
+                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp)
 
     state = {
-        'p_y':    {yv: p_y[yv].cpu()  for yv in [0, 1]},
-        'r_ys':   {k:  v.cpu()        for k, v in r_ys.items()},
-        'pi_ys':  pi_ys,
+        'p_y':        {yv: p_y[yv].cpu()  for yv in [0, 1]},
+        'r_ys':       {k:  v.cpu()        for k, v in r_ys.items()},
+        'pi_ys':      pi_ys,
         'tau_adjust': tau_adjust,
+        'proto_temp': temp,
     }
     return model, state
 
@@ -300,14 +302,14 @@ def _adapt_loop(args, model, target_data,
                 scalers, opt_res, keys,
                 adapt_epochs, tau_c, lambda_pi,
                 alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust):
+                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp):
     for step in range(adapt_epochs):
         n_hc = _adapt_step(
             args, model, target_data,
             p_y, r_ys, p_y_S, r_ys_S, pi_ys,
             scalers, opt_res, keys,
             tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
-            lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust,
+            lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp,
         )
         if (step + 1) % 50 == 0:
             N = target_data.x.shape[0]
@@ -331,21 +333,16 @@ def _build_protos(p_y, r_ys, scalers, h_mean_y, keys):
     return protos
 
 
-def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0):
+def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0, temp=0.1):
     """
     BCA-style joint posterior with count-based Bayesian logit adjustment.
 
       z_i(y,s) = cosine_sim(h_i, p̃_{y,s}) + τ · log π_{y,s}
-      q_i(y,s) = softmax_over_(y,s)( z_i )
+      q_i(y,s) = softmax_over_(y,s)( z_i / temp )
       q_i(y)   = Σ_s q_i(y,s)
 
-    τ (tau_adjust) controls the strength of the prior correction:
-      τ=1.0  → standard Bayesian posterior (P(h|y,s)·P(y,s))
-      τ>1.0  → amplify prior, penalise majority groups more
-      τ<1.0  → weaken prior, rely more on likelihood
-
-    This is equivalent to the logit-adjusted softmax from Menon et al. 2021,
-    applied here to give minor (y,s) groups a fairer chance at test time.
+    temp: softmax temperature. Lower → sharper distribution → better conf discrimination.
+          Default 0.1 works well when cosine similarities are close (large domain shift).
 
     Returns q_ys [N,4], q_y [N,2].
     """
@@ -355,7 +352,7 @@ def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0):
         pi  = max(pi_ys[(yv, sv)], 1e-8)
         scores.append(sim + tau_adjust * lambda_pi * float(np.log(pi)))
     scores = torch.stack(scores, dim=1)                        # [N,4]
-    q_ys   = torch.softmax(scores, dim=1)
+    q_ys   = torch.softmax(scores / temp, dim=1)
     q_y    = torch.stack([
         q_ys[:, 0] + q_ys[:, 1],
         q_ys[:, 2] + q_ys[:, 3],
@@ -367,7 +364,7 @@ def _adapt_step(args, model, target_data,
                 p_y, r_ys, p_y_S, r_ys_S, pi_ys,
                 scalers, opt_res, keys,
                 tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust=1.0):
+                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust=1.0, temp=0.1):
     """
     One full adaptation step:
       1. Encode target nodes (backbone frozen).
@@ -388,7 +385,7 @@ def _adapt_step(args, model, target_data,
     # 2a. Coarse posterior — global mean placeholder → h_mean_y
     with torch.no_grad():
         protos_coarse = _build_protos(p_y, r_ys, scalers, {yv: h.mean(0) for yv in [0, 1]}, keys)
-        _, q_y_coarse = _compute_posterior(h, protos_coarse, pi_ys, lambda_pi, keys, tau_adjust)
+        _, q_y_coarse = _compute_posterior(h, protos_coarse, pi_ys, lambda_pi, keys, tau_adjust, temp)
 
     # 2b. Class-wise mean from coarse posterior (soft q_y weighted)
     with torch.no_grad():
@@ -400,11 +397,17 @@ def _adapt_step(args, model, target_data,
     # 2c. Refined posterior — use class-wise h_mean_y for residual correction
     with torch.no_grad():
         protos_ng = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
-        q_ys, q_y = _compute_posterior(h, protos_ng, pi_ys, lambda_pi, keys, tau_adjust)
+        q_ys, q_y = _compute_posterior(h, protos_ng, pi_ys, lambda_pi, keys, tau_adjust, temp)
 
-    conf, pseudo_y = q_y.max(dim=1)         # [N]
-    high_conf      = conf > tau_c
-    n_hc           = int(high_conf.sum().item())
+    conf, pseudo_y = q_y.max(dim=1)         # [N], range [0.5, 1.0] for binary softmax
+
+    # Use a percentile-based threshold instead of a fixed absolute value.
+    # tau_c is reinterpreted as the fraction of nodes to keep (top-tau_c%).
+    # e.g. tau_c=0.5 → keep the top 50% most confident nodes.
+    # This avoids the [0.5,1.0] compression problem of binary softmax.
+    threshold  = torch.quantile(conf, 1.0 - tau_c)
+    high_conf  = conf >= threshold
+    n_hc       = int(high_conf.sum().item())
 
     if n_hc > 0:
         hc_h    = h[high_conf].detach()      # [M, D]
@@ -494,14 +497,14 @@ def _adapt_step(args, model, target_data,
         raw_p   = p_y[yv].detach() + r_ys[(yv, sv)].detach() + delta_p
         protos_prime[(yv, sv)] = F.normalize(raw_p, p=2, dim=0)
 
-    # Re-compute posterior with ω' (apply tau_adjust for Bayesian logit correction)
+    # Re-compute posterior with ω' (apply tau_adjust and temp)
     scores_p = []
     for (yv, sv) in keys:
         sim_p = (h * protos_prime[(yv, sv)].unsqueeze(0)).sum(1)
         pi    = max(pi_ys[(yv, sv)], 1e-8)
         scores_p.append(sim_p + tau_adjust * lambda_pi * float(np.log(pi)))
     scores_p = torch.stack(scores_p, dim=1)          # [N,4]
-    q_ys_p   = torch.softmax(scores_p, dim=1)        # [N,4]
+    q_ys_p   = torch.softmax(scores_p / temp, dim=1) # [N,4]
     q_y_p    = torch.stack([
         q_ys_p[:, 0] + q_ys_p[:, 1],
         q_ys_p[:, 2] + q_ys_p[:, 3],
@@ -699,6 +702,7 @@ def evaluate_after(args, data, encoder, state):
         r_ys = {k: v.to(args.device) for k, v in state['r_ys'].items()}
         pi_ys = state['pi_ys']
         tau_adjust = state.get('tau_adjust', 1.0)
+        temp       = state.get('proto_temp', 0.1)
         keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
         # final prototype = base prototype + residual
@@ -708,7 +712,7 @@ def evaluate_after(args, data, encoder, state):
             final_protos[(yv, sv)] = F.normalize(raw, p=2, dim=0)
 
         # compute posterior with Bayesian logit adjustment
-        _, q_y = _compute_posterior(feat, final_protos, pi_ys, args.lambda_pi, keys, tau_adjust)
+        _, q_y = _compute_posterior(feat, final_protos, pi_ys, args.lambda_pi, keys, tau_adjust, temp)
         
         # extract positive probability
         probs = q_y[:, 1].cpu().numpy()

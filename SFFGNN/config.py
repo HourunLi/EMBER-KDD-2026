@@ -59,7 +59,7 @@ parser.add_argument('--meta_lr_src',  type=float, default=0.01)  # inner-loop lr
 
 # SFDA target adaptation
 parser.add_argument('--adapt_epochs', type=int,   default=200)
-parser.add_argument('--tau_c',        type=float, default=0.8)
+parser.add_argument('--tau_c',        type=float, default=0.5)   # top-tau_c fraction of nodes kept as high-confidence
 parser.add_argument('--lambda_pi',    type=float, default=1.0)
 parser.add_argument('--alpha_p',      type=float, default=0.90)
 parser.add_argument('--alpha_r',      type=float, default=0.99)
@@ -71,6 +71,7 @@ parser.add_argument('--meta_lr',      type=float, default=0.01)
 parser.add_argument('--adapt_lr',     type=float, default=1e-3)
 parser.add_argument('--tau_adjust',   type=float, default=1.0)   # Bayesian logit adjustment temperature
 parser.add_argument('--mmd_chunk_size', type=int, default=1024)
+parser.add_argument('--proto_temp',   type=float, default=0.1)   # softmax temperature for posterior sharpening
 
 # misc
 parser.add_argument('--log_path', type=str, default='logs/log.txt')
