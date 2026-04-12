@@ -513,12 +513,17 @@ def _adapt_step(args, model, target_data,
                               + (1.0 - alpha_r) * r_new)
 
         # 5. BCA prior EMA update (fixed momentum alpha_pi)
+        # Add a floor to prevent any group's prior from collapsing to zero
+        pi_floor = 0.01  # minimum prior for any (y,s) group
         soft_mean = hc_qys.mean(0)           # [4]
         soft_mean = soft_mean / soft_mean.sum().clamp(min=1e-8)
         for ki, (yv, sv) in enumerate(keys):
             pi_ys[(yv, sv)] = (
                 alpha_pi * pi_ys[(yv, sv)] + (1.0 - alpha_pi) * soft_mean[ki].item()
             )
+        # Apply floor and renormalize
+        for k in keys:
+            pi_ys[k] = max(pi_ys[k], pi_floor)
         total_pi = sum(pi_ys.values())
         for k in keys:
             pi_ys[k] /= max(total_pi, 1e-8)
