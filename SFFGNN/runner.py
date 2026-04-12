@@ -197,6 +197,64 @@ def save_source_knowledge(knowledge, path):
     print(f'[Source knowledge] saved → {path}')
 
 
+def _get_checkpoint_name(args, run_idx):
+    """
+    Generate a unique checkpoint name based on model/training config.
+    This ensures different configs don't overwrite each other.
+    """
+    name_parts = [
+        f"ds={args.dataset}",
+        f"src={args.inid}",
+        f"enc={args.inter_encoder}",
+        f"hid={args.hidden_dim}",
+        f"lay={args.n_layers}",
+        f"ep={args.train_epochs}",
+        f"lr={args.lr}",
+        f"drop={args.dropout}",
+        f"lfair={args.lambda_fair}",
+        f"run={run_idx}",
+        f"seed={args.seed}",
+    ]
+    return "_".join(name_parts)
+
+
+def _checkpoint_path(args, run_idx):
+    """Return the full path for a checkpoint."""
+    import os
+    ckpt_dir = "checkpoints"
+    os.makedirs(ckpt_dir, exist_ok=True)
+    name = _get_checkpoint_name(args, run_idx)
+    return os.path.join(ckpt_dir, f"{name}.pt")
+
+
+def _save_checkpoint(args, run_idx, model, knowledge):
+    """Save model state and source knowledge to a checkpoint file."""
+    path = _checkpoint_path(args, run_idx)
+    ckpt = {
+        'model_state': {k: v.cpu() for k, v in model.state_dict().items()},
+        'knowledge': knowledge,
+    }
+    torch.save(ckpt, path)
+    print(f'[Checkpoint] saved → {path}')
+
+
+def _load_checkpoint(args, run_idx):
+    """
+    Load checkpoint if it exists.
+    Returns (model, knowledge) if found, else (None, None).
+    """
+    import os
+    path = _checkpoint_path(args, run_idx)
+    if not os.path.exists(path):
+        return None, None
+    print(f'[Checkpoint] loading ← {path}')
+    ckpt = torch.load(path, map_location=args.device)
+    # Reconstruct model
+    model = FairGNN(args, encoder_type=args.inter_encoder).to(args.device)
+    model.load_state_dict({k: v.to(args.device) for k, v in ckpt['model_state'].items()})
+    return model, ckpt['knowledge']
+
+
 # SFDA helpers
 class ResidualScaler(nn.Module):
     """
@@ -567,66 +625,77 @@ def train_and_adapt(args, source_data, target_data):
 
     for run_idx in tqdm(range(args.runs), unit='run'):
 
-        # ── Phase 1: Source training ───────────────────────────────────────
-        model, optimizer, scheduler = _init_fair_gnn(args)
+        # ── Try to load existing checkpoint ────────────────────────────────
+        model, knowledge = _load_checkpoint(args, run_idx)
+        skip_training = (model is not None and knowledge is not None)
 
-        meta_lr_src = getattr(args, 'meta_lr_src', 0.01)
+        if skip_training:
+            print(f"[Run {run_idx}] Loaded checkpoint, skipping training.")
+        else:
+            # ── Phase 1: Source training ───────────────────────────────────────
+            model, optimizer, scheduler = _init_fair_gnn(args)
 
-        for epoch in tqdm(range(args.train_epochs), desc=f'Run {run_idx} [train]', leave=False):
-            model.train()
+            meta_lr_src = getattr(args, 'meta_lr_src', 0.01)
 
-            _, cls_logit = model(source_data.x, source_data.edge_index)
+            for epoch in tqdm(range(args.train_epochs), desc=f'Run {run_idx} [train]', leave=False):
+                model.train()
 
-            # ── Classification loss (inner task) ────────────────────────────
-            L_cls = criterion(cls_logit[train_mask].view(-1), cls_labels[train_mask])
+                _, cls_logit = model(source_data.x, source_data.edge_index)
 
-            # ── Meta-learning: cls as inner task, MMD fairness as outer task ─
-            #
-            # Inner step: θ' = θ - meta_lr · ∇_θ L_cls
-            # Outer loss: L_mmd(θ') — MMD on embeddings from updated params
-            #
-            # This ensures cls updates stay compatible with fairness alignment:
-            # the model learns to classify in a way that doesn't hurt MMD.
-            backbone_params = list(model.backbone.parameters())
-            grad_cls = torch.autograd.grad(
-                L_cls, backbone_params, create_graph=True, retain_graph=True
-            )
-            # Virtual inner step (functional, no in-place update)
-            params_prime = [
-                p - meta_lr_src * g
-                for p, g in zip(backbone_params, grad_cls)
-            ]
+                # ── Classification loss (inner task) ────────────────────────────
+                L_cls = criterion(cls_logit[train_mask].view(-1), cls_labels[train_mask])
 
-            # Forward with θ' using functional_call
-            param_dict = dict(zip(
-                [n for n, _ in model.backbone.named_parameters()],
-                params_prime
-            ))
-            emb_prime = functional_call(
-                model.backbone, param_dict,
-                (source_data.x, source_data.edge_index)
-            )
-            emb_prime_train = emb_prime[train_mask]
+                # ── Meta-learning: cls as inner task, MMD fairness as outer task ─
+                #
+                # Inner step: θ' = θ - meta_lr · ∇_θ L_cls
+                # Outer loss: L_mmd(θ') — MMD on embeddings from updated params
+                #
+                # This ensures cls updates stay compatible with fairness alignment:
+                # the model learns to classify in a way that doesn't hurt MMD.
+                backbone_params = list(model.backbone.parameters())
+                grad_cls = torch.autograd.grad(
+                    L_cls, backbone_params, create_graph=True, retain_graph=True
+                )
+                # Virtual inner step (functional, no in-place update)
+                params_prime = [
+                    p - meta_lr_src * g
+                    for p, g in zip(backbone_params, grad_cls)
+                ]
+
+                # Forward with θ' using functional_call
+                param_dict = dict(zip(
+                    [n for n, _ in model.backbone.named_parameters()],
+                    params_prime
+                ))
+                emb_prime = functional_call(
+                    model.backbone, param_dict,
+                    (source_data.x, source_data.edge_index)
+                )
+                emb_prime_train = emb_prime[train_mask]
 
             # Outer fairness loss: MMD between sensitive groups in θ' embedding space
-            L_mmd = mmd_loss(
-                emb_prime_train,
-                sens_labels[train_mask].long(),
-                chunk_size=getattr(args, 'mmd_chunk_size', 1024),
-            )
+                L_mmd = mmd_loss(
+                    emb_prime_train,
+                    sens_labels[train_mask].long(),
+                    chunk_size=getattr(args, 'mmd_chunk_size', 1024),
+                )
 
-            loss = L_cls + args.lambda_fair * L_mmd
+                loss = L_cls + args.lambda_fair * L_mmd
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
 
-            if (epoch + 1) % 50 == 0:
-                print(f"[Run {run_idx} | Epoch {epoch+1:03d}] "
-                      f"L_cls={L_cls.item():.4f}  "
-                      f"L_mmd={L_mmd.item():.4f}  "
-                      f"Total={loss.item():.4f}")
+                if (epoch + 1) % 50 == 0:
+                    print(f"[Run {run_idx} | Epoch {epoch+1:03d}] "
+                          f"L_cls={L_cls.item():.4f}  "
+                          f"L_mmd={L_mmd.item():.4f}  "
+                          f"Total={loss.item():.4f}")
+
+            # ── Extract and save source knowledge ──────────────────────────────
+            knowledge = extract_source_knowledge(args, source_data, model)
+            _save_checkpoint(args, run_idx, model, knowledge)
 
         # ── Evaluate on source ─────────────────────────────────────────────
         accs, auc_rocs, tmp_parity, tmp_equality = evaluate_per_class(
@@ -652,12 +721,8 @@ def train_and_adapt(args, source_data, target_data):
         tgt_parity[run_idx]   = t_parity['all']
         tgt_equality[run_idx] = t_equality['all']
 
-        # ── Phase 2: Extract source knowledge & SFDA adapt ────────────────
-        knowledge = extract_source_knowledge(args, source_data, model)
-        save_source_knowledge(
-            knowledge,
-            path=f'checkpoints/source_knowledge_run{run_idx}.pt',
-        )
+        # ── Phase 2: SFDA adapt ────────────────────────────────────────────
+        # knowledge was either loaded from checkpoint or extracted above
         adapted_model, state = adapt_target(args, target_data, knowledge)
 
         # ── Evaluate on target (after adaptation) ──────────────────────────
