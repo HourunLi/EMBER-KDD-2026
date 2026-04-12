@@ -34,6 +34,7 @@ pokec:
   inter_encoder: GCN
   lambda_fair: 1.0
   lambda_align: 0.1
+  tau_c: 0.5
 syn:
   train_epochs: 500
   lr: 0.005
