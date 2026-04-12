@@ -398,12 +398,13 @@ def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0, temp=0
     """
     BCA-style joint posterior with count-based Bayesian logit adjustment.
 
-      z_i(y,s) = cosine_sim(h_i, p̃_{y,s}) + τ · log π_{y,s}
-      q_i(y,s) = softmax_over_(y,s)( z_i / temp )
+      z_i(y,s) = cosine_sim(h_i, p̃_{y,s}) / temp + τ · λ_π · log π_{y,s}
+      q_i(y,s) = softmax_over_(y,s)( z_i )
       q_i(y)   = Σ_s q_i(y,s)
 
-    temp: softmax temperature. Lower → sharper distribution → better conf discrimination.
-          Default 0.1 works well when cosine similarities are close (large domain shift).
+    temp: softmax temperature applied ONLY to the likelihood (cosine sim).
+          Lower temp → sharper distribution based on similarity.
+          The prior term is NOT scaled by temp to avoid prior domination.
 
     Returns q_ys [N,4], q_y [N,2].
     """
@@ -411,9 +412,10 @@ def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0, temp=0
     for (yv, sv) in keys:
         sim = (h * protos[(yv, sv)].unsqueeze(0)).sum(1)       # [N]
         pi  = max(pi_ys[(yv, sv)], 1e-8)
-        scores.append(sim + tau_adjust * lambda_pi * float(np.log(pi)))
+        # temp only scales the likelihood (sim), not the prior
+        scores.append(sim / temp + tau_adjust * lambda_pi * float(np.log(pi)))
     scores = torch.stack(scores, dim=1)                        # [N,4]
-    q_ys   = torch.softmax(scores / temp, dim=1)
+    q_ys   = torch.softmax(scores, dim=1)
     q_y    = torch.stack([
         q_ys[:, 0] + q_ys[:, 1],
         q_ys[:, 2] + q_ys[:, 3],
@@ -565,14 +567,14 @@ def _adapt_step(args, model, target_data,
         raw_p   = p_y[yv].detach() + r_ys[(yv, sv)].detach() + delta_p
         protos_prime[(yv, sv)] = F.normalize(raw_p, p=2, dim=0)
 
-    # Re-compute posterior with ω' (apply tau_adjust and temp)
+    # Re-compute posterior with ω' (temp only scales likelihood, not prior)
     scores_p = []
     for (yv, sv) in keys:
         sim_p = (h * protos_prime[(yv, sv)].unsqueeze(0)).sum(1)
         pi    = max(pi_ys[(yv, sv)], 1e-8)
-        scores_p.append(sim_p + tau_adjust * lambda_pi * float(np.log(pi)))
+        scores_p.append(sim_p / temp + tau_adjust * lambda_pi * float(np.log(pi)))
     scores_p = torch.stack(scores_p, dim=1)          # [N,4]
-    q_ys_p   = torch.softmax(scores_p / temp, dim=1) # [N,4]
+    q_ys_p   = torch.softmax(scores_p, dim=1)        # [N,4]
     q_y_p    = torch.stack([
         q_ys_p[:, 0] + q_ys_p[:, 1],
         q_ys_p[:, 2] + q_ys_p[:, 3],
