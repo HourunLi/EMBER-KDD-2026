@@ -28,12 +28,12 @@ parser = argparse.ArgumentParser(description='mine Arguments.')
 # parser.add_argument('--dataset', type=str, default='syn')
 # parser.add_argument('--inid',    type=str, default='-2')
 # parser.add_argument('--outid',   type=str, default='-1')
-parser.add_argument('--dataset', type=str, default='pokec')
-parser.add_argument('--inid',    type=str, default='_z')
-parser.add_argument('--outid',   type=str, default='_n')
-# parser.add_argument('--dataset', type=str, default='bailA')
-# parser.add_argument('--inid',    type=str, default='_2')
-# parser.add_argument('--outid',   type=str, default='_1')
+# parser.add_argument('--dataset', type=str, default='pokec')
+# parser.add_argument('--inid',    type=str, default='_z')
+# parser.add_argument('--outid',   type=str, default='_n')
+parser.add_argument('--dataset', type=str, default='bailA')
+parser.add_argument('--inid',    type=str, default='_2')
+parser.add_argument('--outid',   type=str, default='_1')
 # parser.add_argument('--dataset', type=str, default='german')
 # parser.add_argument('--inid',    type=str, default='_2')
 # parser.add_argument('--outid',   type=str, default='_1')
@@ -59,7 +59,7 @@ parser.add_argument('--meta_lr_src',  type=float, default=0.01)  # inner-loop lr
 
 # SFDA target adaptation
 parser.add_argument('--adapt_epochs', type=int,   default=200)
-parser.add_argument('--tau_c',        type=float, default=0.8)   # top-tau_c fraction of nodes kept as high-confidence
+parser.add_argument('--tau_c',        type=float, default=0.2)   # top-tau_c fraction of nodes kept as high-confidence
 parser.add_argument('--lambda_pi',    type=float, default=1.0)
 parser.add_argument('--alpha_p',      type=float, default=0.90)
 parser.add_argument('--alpha_r',      type=float, default=0.99)
@@ -76,6 +76,9 @@ parser.add_argument('--proto_temp',   type=float, default=0.1)   # softmax tempe
 # misc
 parser.add_argument('--log_path', type=str, default='logs/log.txt')
 parser.add_argument('--seed',     type=int, default=1111)
+parser.add_argument('--use_checkpoint',    dest='use_checkpoint', action='store_true',
+                    help='load checkpoint and skip source training when available')
+parser.set_defaults(use_checkpoint=False)
 parser.add_argument('--tune',     action='store_true')
 parser.set_defaults(tune=True)
 parser.add_argument('--verbose',  action='store_true')

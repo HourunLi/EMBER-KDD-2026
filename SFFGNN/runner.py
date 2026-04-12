@@ -638,12 +638,18 @@ def train_and_adapt(args, source_data, target_data):
     for run_idx in tqdm(range(args.runs), unit='run'):
 
         # ── Try to load existing checkpoint ────────────────────────────────
-        model, knowledge = _load_checkpoint(args, run_idx)
+        model, knowledge = (None, None)
+        if getattr(args, 'use_checkpoint', True):
+            model, knowledge = _load_checkpoint(args, run_idx)
         skip_training = (model is not None and knowledge is not None)
 
         if skip_training:
             print(f"[Run {run_idx}] Loaded checkpoint, skipping training.")
         else:
+            if getattr(args, 'use_checkpoint', True):
+                print(f"[Run {run_idx}] No checkpoint found, training from scratch.")
+            else:
+                print(f"[Run {run_idx}] Checkpoint loading disabled, training from scratch.")
             # ── Phase 1: Source training ───────────────────────────────────────
             model, optimizer, scheduler = _init_fair_gnn(args)
 
