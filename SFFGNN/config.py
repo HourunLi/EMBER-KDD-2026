@@ -72,7 +72,7 @@ parser.add_argument('--mmd_chunk_size', type=int, default=1024)
 parser.add_argument('--proto_temp',   type=float, default=0.1)   # softmax temperature for posterior sharpening
 
 # misc
-parser.add_argument('--log_path', type=str, default='logs/log.txt')
+parser.add_argument('--log_path', type=str, default=None)
 parser.add_argument('--seed',     type=int, default=1111)
 parser.add_argument('--use_checkpoint',    dest='use_checkpoint', action='store_true',
                     help='load checkpoint and skip source training when available')
@@ -82,6 +82,8 @@ parser.set_defaults(tune=True)
 parser.add_argument('--verbose',  action='store_true')
 
 args = parser.parse_args()
+if args.log_path is None:
+    args.log_path = os.path.join('logs', '{}.log'.format(args.dataset))
 sys.stdout = Logger(args.log_path)
 
 VERBOSE = args.verbose
