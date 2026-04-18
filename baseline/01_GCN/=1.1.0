@@ -1,0 +1,6 @@
+Collecting scipy
+  Downloading scipy-1.7.3-cp37-cp37m-manylinux_2_12_x86_64.manylinux2010_x86_64.whl (38.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 38.1/38.1 MB 5.6 MB/s eta 0:00:00
+Requirement already satisfied: numpy<1.23.0,>=1.16.5 in /home/disk2/lhr/anaconda3/envs/gcn/lib/python3.7/site-packages (from scipy) (1.18.5)
+Installing collected packages: scipy
+Successfully installed scipy-1.7.3
