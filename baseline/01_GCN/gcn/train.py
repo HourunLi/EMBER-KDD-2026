@@ -1,3 +1,6 @@
+# https://github.com/tkipf/gcn?tab=readme-ov-file
+# 用gcn环境能跑通，用的tensorflow
+
 from __future__ import division
 from __future__ import print_function
 
