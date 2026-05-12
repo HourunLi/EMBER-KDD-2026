@@ -149,19 +149,15 @@ def extract_source_knowledge(args, data, model):
 
     y  = data.y.cpu()
     s  = data.sens_labels.cpu()
-    tm = data.train_mask.cpu().bool()
-
-    emb_stats = emb_n[tm].cpu()
-    y_stats   = y[tm]
-    s_stats   = s[tm]
+    tm = data.train_mask.cpu()
 
     p_y = {}
     for yv in [0, 1]:
-        mask = (y_stats == yv)
+        mask = (y == yv)
         if mask.sum() == 0:
             p_y[yv] = torch.zeros(emb_n.shape[1], device='cpu')
         else:
-            p_y[yv] = emb_stats[mask].mean(dim=0)
+            p_y[yv] = emb_n[mask].mean(dim=0).cpu()
 
     # joint prototypes p_ys and sensitive residuals r_ys (all nodes)
     # r_ys：在固定类别 y 下，敏感组 s 会让表示产生怎样的偏移。
@@ -169,19 +165,19 @@ def extract_source_knowledge(args, data, model):
     r_ys = {}
     for yv in [0, 1]:
         for sv in [0, 1]:
-            mask = (y_stats == yv) & (s_stats == sv)
+            mask = (y == yv) & (s == sv)
             if mask.sum() == 0:
                 p_ys = p_y[yv].clone()
             else:
-                p_ys = emb_stats[mask].mean(dim=0)
+                p_ys = emb_n[mask].mean(dim=0).cpu()
             r_ys[(yv, sv)] = p_ys - p_y[yv]
 
     # empirical joint prior pi_ys (training nodes only)
-    n_train = y_stats.shape[0]
+    n_train = tm.sum().item()
     pi_ys = {}
     for yv in [0, 1]:
         for sv in [0, 1]:
-            mask = (y_stats == yv) & (s_stats == sv)
+            mask = tm & (y == yv) & (s == sv)
             pi_ys[(yv, sv)] = mask.sum().item() / max(n_train, 1)
 
     return {
@@ -275,6 +271,82 @@ class ResidualScaler(nn.Module):
         return self.gamma * h   # [N, D] or [D]
 
 
+def _init_residual_scalers(dim, dev, pi_ys, keys):
+    """
+    根据联合先验初始化 residual scaler。
+    小群体的初始权重更大，便于冷启动时更快校正其 residual。
+    """
+    total_pi = sum(pi_ys.values())
+
+    def _minor_init(ys_key):
+        pi = max(pi_ys[ys_key], 1e-8)
+        # normalise so mean init across groups ≈ 0.01
+        return (total_pi / (len(keys) * pi)) * 0.01
+
+    return {k: ResidualScaler(dim, dev, init_weight=_minor_init(k)) for k in keys}
+
+
+def _build_sfda_state(args, model, target_data, p_y, r_ys, pi_ys, tau_adjust, temp, keys, scalers=None):
+    """
+    构造用于 SFDA 推断/评估的状态。
+    若提供 scalers，则使用与适配阶段一致的原型构造方式生成 final_protos。
+    """
+    state = {
+        'p_y':        {yv: p_y[yv].cpu() for yv in [0, 1]},
+        'r_ys':       {k:  v.cpu()       for k, v in r_ys.items()},
+        'pi_ys':      pi_ys,
+        'tau_adjust': tau_adjust,
+        'proto_temp': temp,
+    }
+
+    with torch.no_grad():
+        if scalers is None:
+            final_protos = {}
+            for (yv, sv) in keys:
+                raw = p_y[yv] + r_ys[(yv, sv)]
+                final_protos[(yv, sv)] = F.normalize(raw, p=2, dim=0)
+        else:
+            emb_raw, _ = model(target_data.x, target_data.edge_index)
+            h = F.normalize(emb_raw, p=2, dim=1)
+
+            coarse_mean = {yv: h.mean(0) for yv in [0, 1]}
+            protos_coarse = _build_protos(p_y, r_ys, scalers, coarse_mean, keys)
+            _, q_y_coarse = _compute_posterior(
+                h, protos_coarse, pi_ys, args.lambda_pi, keys, tau_adjust, temp
+            )
+
+            h_mean_y = {}
+            for yv in [0, 1]:
+                w = q_y_coarse[:, yv]
+                h_mean_y[yv] = (h * w.unsqueeze(1)).sum(0) / w.sum().clamp(min=1e-8)
+
+            final_protos = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
+
+    state['final_protos'] = {k: v.cpu() for k, v in final_protos.items()}
+    return state
+
+
+def _build_source_free_eval_state(args, model, target_data, knowledge):
+    """
+    构造适配前的冷启动评估状态，和 SFDA 第一次前向的口径保持一致。
+    """
+    dev = args.device
+    tau_adjust = getattr(args, 'tau_adjust', 1.0)
+    temp       = getattr(args, 'proto_temp', 0.5)
+    keys       = [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+    p_y = {yv: knowledge['p_y'][yv].clone().to(dev) for yv in [0, 1]}
+    r_ys = {k: v.clone().to(dev) for k, v in knowledge['r_ys'].items()}
+    pi_ys = {k: float(v) for k, v in knowledge['pi_ys'].items()}
+
+    dim = knowledge['p_y'][0].shape[0]
+    scalers = _init_residual_scalers(dim, dev, pi_ys, keys)
+
+    return _build_sfda_state(
+        args, model, target_data, p_y, r_ys, pi_ys, tau_adjust, temp, keys, scalers=scalers
+    )
+
+
 # SFDA Target Adaptation
 def adapt_target(args, target_data, knowledge):
     """
@@ -325,14 +397,7 @@ def adapt_target(args, target_data, knowledge):
     # Learnable residual scalers: Δ_{y,s}(h) = γ_{y,s} ⊙ h
     # Minor-attribute groups get a higher initial weight (inverse-frequency weighting)
     # so their residuals are updated more aggressively at the start of adaptation.
-    total_pi = sum(pi_ys.values())
-    # inv-freq init: minor group (small π) → larger init_weight
-    def _minor_init(ys_key):
-        pi = max(pi_ys[ys_key], 1e-8)
-        # normalise so mean init across groups ≈ 0.01
-        return (total_pi / (len(keys) * pi)) * 0.01
-
-    scalers = {k: ResidualScaler(dim, dev, init_weight=_minor_init(k)) for k in keys}
+    scalers = _init_residual_scalers(dim, dev, pi_ys, keys)
     opt_res = torch.optim.Adam(
         [p for sc in scalers.values() for p in sc.parameters()],
         lr=adapt_lr,
@@ -348,28 +413,9 @@ def adapt_target(args, target_data, knowledge):
                 alpha_p, alpha_r, alpha_pi,
                 lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp)
 
-    with torch.no_grad():
-        emb_raw, _ = model(target_data.x, target_data.edge_index)
-        h = F.normalize(emb_raw, p=2, dim=1)
-        coarse_mean = {yv: h.mean(0) for yv in [0, 1]}
-        protos_coarse = _build_protos(p_y, r_ys, scalers, coarse_mean, keys)
-        _, q_y_coarse = _compute_posterior(h, protos_coarse, pi_ys, lambda_pi, keys, tau_adjust, temp)
-
-        h_mean_y = {}
-        for yv in [0, 1]:
-            w = q_y_coarse[:, yv]
-            h_mean_y[yv] = (h * w.unsqueeze(1)).sum(0) / w.sum().clamp(min=1e-8)
-
-        final_protos = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
-
-    state = {
-        'p_y':        {yv: p_y[yv].cpu()  for yv in [0, 1]},
-        'r_ys':       {k:  v.cpu()        for k, v in r_ys.items()},
-        'pi_ys':      pi_ys,
-        'tau_adjust': tau_adjust,
-        'proto_temp': temp,
-        'final_protos': {k: v.cpu() for k, v in final_protos.items()},
-    }
+    state = _build_sfda_state(
+        args, model, target_data, p_y, r_ys, pi_ys, tau_adjust, temp, keys, scalers=scalers
+    )
     return model, state
 
 
@@ -751,8 +797,9 @@ def train_and_adapt(args, source_data, target_data):
         src_equality[run_idx] = tmp_equality['all']
 
         # ── Evaluate on target (before adaptation) ─────────────────────────
-        t_accs, t_auc_rocs, t_parity, t_equality = evaluate_per_class(
-            args, target_data, model
+        cold_state = _build_source_free_eval_state(args, model, target_data, knowledge)
+        t_accs, t_auc_rocs, t_parity, t_equality = evaluate_after(
+            args, target_data, model, cold_state
         )
         print(f"[Run {run_idx}] Target (before adapt) | "
               f"Acc={t_accs['all']:.2f}  AUC={t_auc_rocs['all']:.2f}  "
