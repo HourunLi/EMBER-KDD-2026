@@ -112,16 +112,16 @@ def extract_source_knowledge(args, data, model):
     -------------------
     p_y   : {0: [D], 1: [D]}
         Class prototype — mean of L2-normalised embeddings for each class y,
-        computed over ALL nodes (not just train_mask) so the prototype is as
-        representative as possible.
+        computed over TRAINING nodes only to stay consistent with the source
+        supervision used to train the model.
 
-            p_y^S = (1 / |D_y|) * sum_{i: y_i=y}  Norm(h_i)
+            p_y^S = (1 / |D_y^{train}|) * sum_{i: i in train, y_i=y}  Norm(h_i)
 
     r_ys  : {(y,s): [D]}
         Sensitive residual — difference between the joint (y,s) prototype
         and the class prototype:
 
-            p_{y,s}^S = (1 / |D_{y,s}|) * sum_{i: y_i=y, s_i=s}  Norm(h_i)
+            p_{y,s}^S = (1 / |D_{y,s}^{train}|) * sum_{i: i in train, y_i=y, s_i=s}  Norm(h_i)
             r_{y,s}^S = p_{y,s}^S - p_y^S
 
     pi_ys : {(y,s): float}
@@ -151,25 +151,31 @@ def extract_source_knowledge(args, data, model):
     s  = data.sens_labels.cpu()
     tm = data.train_mask.cpu()
 
+    # source model 的监督来自 train_mask，因此知识抽取也只统计训练节点，
+    # 避免把 source 保留集标签再次注入到可迁移知识中。
+    emb_stats = emb_n[tm]
+    y_stats   = y[tm]
+    s_stats   = s[tm]
+
     p_y = {}
     for yv in [0, 1]:
-        mask = (y == yv)
+        mask = (y_stats == yv)
         if mask.sum() == 0:
             p_y[yv] = torch.zeros(emb_n.shape[1], device='cpu')
         else:
-            p_y[yv] = emb_n[mask].mean(dim=0).cpu()
+            p_y[yv] = emb_stats[mask].mean(dim=0).cpu()
 
-    # joint prototypes p_ys and sensitive residuals r_ys (all nodes)
+    # joint prototypes p_ys and sensitive residuals r_ys (training nodes only)
     # r_ys：在固定类别 y 下，敏感组 s 会让表示产生怎样的偏移。
     # 后面在 target 域中，模型会在 class prototype 基础上再加这个 residual，形成更细粒度的 joint prototype。
     r_ys = {}
     for yv in [0, 1]:
         for sv in [0, 1]:
-            mask = (y == yv) & (s == sv)
+            mask = (y_stats == yv) & (s_stats == sv)
             if mask.sum() == 0:
                 p_ys = p_y[yv].clone()
             else:
-                p_ys = emb_n[mask].mean(dim=0).cpu()
+                p_ys = emb_stats[mask].mean(dim=0).cpu()
             r_ys[(yv, sv)] = p_ys - p_y[yv]
 
     # empirical joint prior pi_ys (training nodes only)
