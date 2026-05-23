@@ -10,14 +10,30 @@ from config import args
 from utils import seed_everything
 
 
-# 为空时，行为与 main.py 一致，只跑当前 args。
-# 非空时，按笛卡尔积依次覆盖参数做微调搜索。
+# Leave empty to mirror main.py and run the current args once.
+# Fill with lists of candidate values to perform grid search.
 SEARCH_TRIALS = {
 }
 
 
+def compute_joint_metric(result):
+    """
+    Joint score on the adapted target domain.
+
+    Higher Acc/AUC are rewarded, while higher DP/EO are penalized.
+    All four metrics are already on a 0-100 scale, so a weighted linear
+    combination keeps the ranking simple and easy to inspect.
+    """
+    return float(
+        0.35 * result['ada_acc']
+        + 0.35 * result['ada_auc']
+        - 0.15 * result['ada_dp']
+        - 0.15 * result['ada_eo']
+    )
+
+
 def run_once(run_args):
-    # 这里完全复用 main.py 的主流程，避免 tune.py 和正式实验逻辑漂移。
+    # Reuse the same main training/evaluation pipeline as main.py.
     seed_everything(run_args.seed)
 
     source_data = get_dataset(run_args, run_args.inid)
@@ -87,7 +103,6 @@ if __name__ == '__main__':
             for key, value in overrides.items():
                 setattr(trial_args, key, value)
 
-            # 若调 device_id，则同步刷新 device，避免仍沿用旧设备。
             if int(trial_args.device_id) >= 0 and torch.cuda.is_available():
                 trial_args.device = torch.device('cuda:{}'.format(trial_args.device_id))
             else:
@@ -98,15 +113,17 @@ if __name__ == '__main__':
             print("=" * 72)
 
             result = run_once(trial_args)
+            joint_metric = compute_joint_metric(result)
+            print(f"Joint score (Target after adapt): {joint_metric:.4f}")
 
-            # 默认按目标域适配后 AUC 选最优 trial。
-            if result['ada_auc'] > best_metric:
-                best_metric = result['ada_auc']
+            if joint_metric > best_metric:
+                best_metric = joint_metric
                 best_overrides = overrides
                 best_result = result
 
         print("\n" + "=" * 72)
-        print("Best trial (by Target after adapt AUC-ROC):")
+        print("Best trial (by Target after adapt joint metric):")
+        print(f"Best joint score: {best_metric:.4f}")
         print(best_overrides)
         print(best_result)
         print("=" * 72)
