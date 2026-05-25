@@ -6,4 +6,5 @@ checkpoints/
 .csv
 .zip
 .pdf
-
+__pycache__/
+*.pyc
