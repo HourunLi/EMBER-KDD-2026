@@ -1,0 +1,9 @@
+原文用了python3.8.10，torch 1.10.0+cu113，torch-geometric，和nifty一样，但其它包差很多
+同样先：pip install torch==1.10.0+cu111 torchvision==0.11.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
+然后：pip install -r requirements.txt
+nbclient==0.5.9，原文0.5.8标记了yanked
+装PyG：
+pip install --no-index torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-1.10.0+cu111.html
+pip install torch-geometric==2.0.4
+记得解压dataset/*.zip，然后bash run_german.sh
+能跑，但太慢了，直接ctrl+C =）
