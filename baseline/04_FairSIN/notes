@@ -1,0 +1,15 @@
+试图在torch2环境里加两个包直接跑，但根本跑不了，重新配吧
+torch2版本：2.4.1
+torchvision版本：0.11.2+cu111
+
+用torch 2.4.1+cu118，torchvision 0.19.0+cu118试一下:
+pip install torch==2.4.1 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu118
+
+全干掉重来=）
+python3.8，torch 2.0.0，和官方提供的requirements一致
+执行：pip install torch==2.0.0 torchvision==0.15.1 --index-url https://download.pytorch.org/whl/cu118 --no-cache-dir
+装PyG：（环境中torch的cuda版本要低于nvidia-smi显示的版本）
+pip install --no-index torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-2.0.0+cu118.html
+pip install torch_geometric==2.2.0
+不要装pyg_lib=）
+

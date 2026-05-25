@@ -1,0 +1,7 @@
+dataset/
+*.pth
+*.pt
+logs/
+checkpoints/
+.csv
+.zip
