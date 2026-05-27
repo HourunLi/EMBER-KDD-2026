@@ -44,12 +44,14 @@ pokec:
   lambda_fair: 1.0
 syn:
   train_epochs: 800
-  lr: 0.005
-  lr2_reg: 0.001
+  lr: 0.0005
+  lr2_reg: 0.0015
   dropout: 0.1
-  runs: 3
+  runs: 1
   hidden_dim: 64
   n_layers: 3
   # use_checkpoint: true
-  inter_encoder: vanilla
+  inter_encoder: MLP
   lambda_fair: 1.0
+  proto_temp: 0.1
+  lambda_pi: 1.0
