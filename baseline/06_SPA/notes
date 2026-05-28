@@ -1,0 +1,42 @@
+用fairVGNN跑一下，试试
+-- 并不行，会报错，老老实实配环境=）
+
+安装pytorch：（走代理快一些）
+pip install torch==1.10.1+cu111 torchvision==0.11.2+cu111 torchaudio==0.10.1 -f https://download.pytorch.org/whl/cu111/torch_stable.html
+
+sklearn==1.0.2 numpy==1.12.6 pypi压根就没这俩版本啊？？？质疑一下造假？？？
+sklearn==1.0.2 这是 scikit-learn 的版本=）
+用 numpy1.21.6 试一下
+
+这个报错是何意味：
+Traceback (most recent call last):
+  File "train_uda.py", line 388, in <module>
+    label = train(args)
+  File "train_uda.py", line 117, in train
+    netG = utils.ResBase50().cuda()  
+  File "/home/disk2/lhr/sfda/code/baseline/baseline/06_SPA/utils.py", line 62, in __init__
+    model_resnet50 = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
+AttributeError: module 'torchvision.models' has no attribute 'ResNet50_Weights'
+这玩意需要torchvision >= 0.13
+
+用fairsin试一下，
+Traceback (most recent call last):
+  File "train_uda.py", line 158, in train
+    inputs_source, labels_source = source_loader_iter.next()
+AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute 'next'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "train_uda.py", line 388, in <module>
+    label = train(args)
+  File "train_uda.py", line 161, in train
+    inputs_source, labels_source = source_loader_iter.next()
+AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute 'next'
+这个又太新了
+
+先搞下一个=）
+
+
+
+

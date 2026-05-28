@@ -1,10 +1,13 @@
 baseline/*/dataset/
+baseline/*/__pycache__/
 *.pth
 *.pt
 logs/
 checkpoints/
-.csv
-.zip
-.pdf
+*.csv
+*.zip
+*.pdf
 __pycache__/
 *.pyc
+*.rar
+
