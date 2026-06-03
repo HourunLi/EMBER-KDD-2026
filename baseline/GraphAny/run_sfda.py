@@ -1,86 +1,54 @@
-"""
-run_sfda.py
-===========
-GraphAny SFDA benchmark runner.
+# -*- coding: utf-8 -*-
+"""GraphAny-SF 在四个公平迁移数据集上的运行入口。
 
-Trains on source dataset, evaluates zero-shot on target dataset.
-
-Dataset pairs
--------------
-  pokec   : pokec_z   -> pokec_n
-  bailA   : bailA_2   -> bailA_1
-  german  : german_2  -> german_1
-  syn     : syn-2     -> syn-1
-
-GPU layout (--dataset all)
---------------------------
-  pokec  : 3 seeds launch first on cuda:0, cuda:1, cuda:3
-  others : bailA / german / syn runs (3 seeds each) fill cuda:4/5/7
-           and reuse any GPU as soon as it becomes idle
-
-Checkpoint (aligned with SFFGNN)
---------------------------------
-  Save once after the final training epoch (no best-val selection).
-  Optional --use_checkpoint skips source training when a matching file exists.
-
-Usage
------
-  python run_sfda.py                  # all four pairs
-  python run_sfda.py --dataset pokec  # pokec only (3 GPUs)
-  python run_sfda.py --dataset bailA
-  python run_sfda.py --dataset german
-  python run_sfda.py --dataset syn
-
-Results
--------
-  Per dataset (written as soon as 3 runs finish):
-    results/graphany_final_{ds_key}.txt
-  All four combined (written when --dataset all completes):
-    results/graphany_final_all.txt
+协议：
+1. 在 source 图上训练 GraphAny。
+2. 保存模型参数和 source 上拟合得到的各 channel LinearGNN 权重。
+3. target 阶段只加载这些 source-derived artifact，并用 target 无标签传播
+   特征做测试；target 标签只用于最终指标计算，不参与输入构造。
 """
 
-import os
-import sys
-import random
 import argparse
-import queue
-from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
 
 import numpy as np
 import torch
-from omegaconf import OmegaConf
+import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, roc_auc_score
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from graphany.sfda_data import FairGraphDataset
 from graphany.model import GraphAny
-from graphany.sfda_data import SFDAGraphDataset
 
-# ---------------------------------------------------------------------------
-# Dataset pair definitions
-# ---------------------------------------------------------------------------
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+
 
 DATASET_PAIRS = {
-    "pokec":  ("pokec_z",  "pokec_n"),
-    "bailA":  ("bailA_2",  "bailA_1"),
+    "bailA": ("bailA_2", "bailA_1"),
     "german": ("german_2", "german_1"),
-    "syn":    ("syn-2",    "syn-1"),
+    "pokec": ("pokec_z", "pokec_n"),
+    "syn": ("syn-2", "syn-1"),
 }
 
-RESULTS_FILE = "results/graphany_final_all.txt"
 N_RUNS = 3
+RESULT_DIR = SCRIPT_DIR / "results"
+RUN_DIR = RESULT_DIR / "runs"
+CHECKPOINT_DIR = RESULT_DIR / "checkpoints"
+LOG_DIR = RESULT_DIR / "logs"
+SUMMARY_FILE = RESULT_DIR / "graphany_sf_summary.md"
 
-POKEC_RUN_GPUS = ["cuda:0", "cuda:1", "cuda:3"]
-OTHER_GPUS = ["cuda:4", "cuda:5"]
-ALL_GPUS = POKEC_RUN_GPUS + OTHER_GPUS
 
+def set_seed(seed):
+    """固定随机性，保证 3 次运行只由 run seed 区分。"""
+    import random
 
-# ---------------------------------------------------------------------------
-# Reproducibility
-# ---------------------------------------------------------------------------
-
-def set_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -90,518 +58,513 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-# ---------------------------------------------------------------------------
-# Fairness metric
-# ---------------------------------------------------------------------------
-
-def fair_metric(pred, labels, sens):
-    idx_s0    = sens == 0
-    idx_s1    = sens == 1
-    idx_s0_y1 = np.bitwise_and(idx_s0, labels == 1)
-    idx_s1_y1 = np.bitwise_and(idx_s1, labels == 1)
-    parity    = abs(pred[idx_s0].mean() - pred[idx_s1].mean())
-    equality  = abs(pred[idx_s0_y1].mean() - pred[idx_s1_y1].mean())
-    return float(parity), float(equality)
-
-
-# ---------------------------------------------------------------------------
-# Checkpoint helpers (SFFGNN-style: config hash + final epoch)
-# ---------------------------------------------------------------------------
-
-def _get_checkpoint_name(args, src_name: str) -> str:
-    name_parts = [
-        f"src={src_name}",
-        f"hid={args.n_hidden}",
-        f"mlay={args.n_mlp_layer}",
-        f"ep={args.epochs}",
-        f"lr={args.lr}",
-        f"wd={args.weight_decay}",
-        f"ent={args.entropy}",
-        f"attn={args.attn_temp}",
-        f"feat={args.feat_chn}",
-        f"pred={args.pred_chn}",
-        f"hops={args.n_hops}",
-        f"run={args.run_idx}",
-        f"seed={args.seed}",
-    ]
-    return "_".join(name_parts)
+def build_cfg(args):
+    """构造 GraphAny 原实验需要的数据配置。"""
+    feat_channels = args.feat_chn.split("+")
+    pred_channels = args.pred_chn.split("+")
+    return argparse.Namespace(
+        add_self_loop=args.add_self_loop,
+        to_bidirected=args.to_bidirected,
+        n_hops=args.n_hops,
+        feat_chn=args.feat_chn,
+        pred_chn=args.pred_chn,
+        feat_channels=feat_channels,
+        pred_channels=pred_channels,
+        entropy=args.entropy,
+        n_per_label_examples=args.n_per_label_examples,
+    )
 
 
-def _checkpoint_path(args, src_name: str) -> str:
-    ckpt_dir = os.path.join(args.output_dir, "checkpoints")
-    os.makedirs(ckpt_dir, exist_ok=True)
-    return os.path.join(ckpt_dir, f"{_get_checkpoint_name(args, src_name)}.pt")
+def resolve_run_path(path):
+    """相对路径统一解释为 GraphAny 目录下的路径。"""
+    path = Path(path)
+    return path if path.is_absolute() else SCRIPT_DIR / path
 
 
-def _save_checkpoint(path: str, model) -> None:
-    torch.save({"state_dict": model.state_dict()}, path)
-    print(f"[Checkpoint] saved → {path}")
+def build_model(cfg, args, device):
+    return GraphAny(
+        n_hidden=args.n_hidden,
+        feat_channels=cfg.feat_channels,
+        pred_channels=cfg.pred_channels,
+        att_temperature=args.attn_temp,
+        entropy=args.entropy,
+        n_mlp_layer=args.n_mlp_layer,
+    ).to(device)
 
 
-def _load_checkpoint(path: str, model, device) -> bool:
-    if not os.path.exists(path):
-        return False
-    print(f"[Checkpoint] loading ← {path}")
-    ckpt = torch.load(path, map_location=device)
-    model.load_state_dict(ckpt["state_dict"])
-    return True
+def get_device(cuda_id):
+    if cuda_id >= 0 and torch.cuda.is_available():
+        torch.cuda.set_device(cuda_id)
+        return torch.device(f"cuda:{cuda_id}")
+    return torch.device("cpu")
 
-
-# ---------------------------------------------------------------------------
-# Training utilities
-# ---------------------------------------------------------------------------
 
 def sample_visible_nodes(train_indices, batch_nodes):
-    """Exclude batch nodes from visible reference set (same semantics as GraphAny)."""
-    if batch_nodes.device != train_indices.device:
-        batch_nodes = batch_nodes.to(train_indices.device)
+    """当前 batch 节点不可见，沿用 GraphAny 原训练协议。"""
     return train_indices[~torch.isin(train_indices, batch_nodes)]
 
 
-def train_one_epoch(model, optimizer, criterion, ds, batch_size, device, n_per_label):
+def train_one_epoch(model, optimizer, criterion, ds, batch_size, device):
     model.train()
-    train_idx  = ds.train_indices
-    perm       = torch.randperm(len(train_idx))
-    train_idx  = train_idx[perm]
+    train_idx = ds.train_indices[torch.randperm(len(ds.train_indices))]
     total_loss = 0.0
-    n_batches  = 0
+    n_batches = 0
 
     for start in range(0, len(train_idx), batch_size):
-        batch_nodes = train_idx[start: start + batch_size].to(device)
-
-        visible = sample_visible_nodes(ds.train_indices, batch_nodes)
-        if len(visible) < len(batch_nodes):
-            visible = torch.cat([visible, batch_nodes[: len(batch_nodes) // 2]])
-        visible = visible.to(device)
+        batch_cpu = train_idx[start : start + batch_size]
+        visible = sample_visible_nodes(ds.train_indices, batch_cpu)
+        if len(visible) < len(batch_cpu):
+            visible = torch.cat([visible, batch_cpu[: len(batch_cpu) // 2]])
 
         input_logits = ds.compute_channel_logits(
-            ds.features, visible, sample=True, device=device
+            ds.features,
+            visible,
+            sample=True,
+            device=device,
         )
+        batch = batch_cpu.to(device)
         preds, _ = model(
-            {c: v[batch_nodes] for c, v in input_logits.items()},
+            {channel: logits[batch] for channel, logits in input_logits.items()},
             dist=None,
         )
-        loss = criterion(preds, ds.label[batch_nodes].to(device))
+        loss = criterion(preds, ds.label[batch_cpu].to(device))
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         total_loss += loss.item()
-        n_batches  += 1
+        n_batches += 1
 
     return total_loss / max(n_batches, 1)
 
 
+def safe_mean(values):
+    values = np.asarray(values)
+    return float(values.mean()) if values.size else float("nan")
+
+
+def fair_metric(pred, labels, sens):
+    """计算 DP/EO，返回百分制数值。"""
+    pred = np.asarray(pred)
+    labels = np.asarray(labels)
+    sens = np.asarray(sens)
+
+    idx_s0 = sens == 0
+    idx_s1 = sens == 1
+    idx_s0_y1 = np.bitwise_and(idx_s0, labels == 1)
+    idx_s1_y1 = np.bitwise_and(idx_s1, labels == 1)
+
+    dp = abs(safe_mean(pred[idx_s0]) - safe_mean(pred[idx_s1]))
+    eo = abs(safe_mean(pred[idx_s0_y1]) - safe_mean(pred[idx_s1_y1]))
+    return dp * 100.0, eo * 100.0
+
+
+def eval_indices(ds, split):
+    if split == "train":
+        return ds.train_mask.nonzero().view(-1)
+    if split == "val":
+        return ds.val_mask.nonzero().view(-1)
+    if split == "test":
+        return ds.test_mask.nonzero().view(-1)
+    if split == "all":
+        # 与 SFFGNN 对齐：all 指所有有监督划分覆盖的节点。
+        # Pokec 中 label=-1 的节点不会进入 train/val/test，因此这里会被排除。
+        return (ds.train_mask | ds.val_mask | ds.test_mask).nonzero().view(-1)
+    raise ValueError(f"Unknown eval split: {split}")
+
+
 @torch.no_grad()
-def evaluate(model, ds, split: str, batch_size: int, device: str):
+def evaluate_target(model, ds, channel_weights, cfg, args, device):
+    """用 source-derived channel 权重评估 target，不使用 target 训练标签。"""
     model.eval()
-    eval_mask = ds.val_mask if split == "val" else ds.test_mask
-    eval_idx  = eval_mask.nonzero().view(-1)
+    idx = eval_indices(ds, args.eval_split)
 
-    all_preds, all_probs, all_labels, all_sens = [], [], [], []
+    all_pred, all_prob, all_label, all_sens = [], [], [], []
+    channels = set(cfg.feat_channels + cfg.pred_channels)
+    weights = {channel: channel_weights[channel].to(device) for channel in channels}
 
-    for start in range(0, len(eval_idx), batch_size):
-        batch     = eval_idx[start: start + batch_size].to(device)
-        batch_cpu = batch.cpu()
+    for start in range(0, len(idx), args.eval_batch):
+        batch_cpu = idx[start : start + args.eval_batch]
+        logit_slice = {
+            channel: ds.features[channel][batch_cpu].to(device) @ weights[channel]
+            for channel in channels
+        }
+        preds, _ = model(logit_slice, dist=None)
+        all_pred.append(preds.argmax(dim=-1).cpu())
+        all_prob.append(F.softmax(preds, dim=-1)[:, 1].cpu())
+        all_label.append(ds.label[batch_cpu].cpu())
+        all_sens.append(ds.sens_labels[batch_cpu].cpu())
 
-        logit_slice = {c: v[batch] for c, v in ds.unmasked_pred.items()}
-        dist_slice  = ds.dist[batch].to(device)
-        preds, _    = model(logit_slice, dist=dist_slice)
-
-        all_preds.append(preds.argmax(-1).cpu())
-        all_probs.append(torch.softmax(preds, dim=-1)[:, 1].cpu())
-        all_labels.append(ds.label[batch].cpu())
-        all_sens.append(ds.sens_labels[batch_cpu])
-
-    y_pred = torch.cat(all_preds).numpy()
-    y_prob = torch.cat(all_probs).numpy()
-    y_true = torch.cat(all_labels).numpy()
+    y_pred = torch.cat(all_pred).numpy()
+    y_prob = torch.cat(all_prob).numpy()
+    y_true = torch.cat(all_label).numpy()
     s_true = torch.cat(all_sens).numpy().astype(int)
 
-    acc = accuracy_score(y_true, y_pred) * 100
-    try:
-        auc = roc_auc_score(y_true, y_prob) * 100
-    except ValueError:
-        auc = float("nan")
+    acc = accuracy_score(y_true, y_pred) * 100.0
+    auc = roc_auc_score(y_true, y_prob) * 100.0 if len(set(y_true)) == 2 else float("nan")
     dp, eo = fair_metric(y_pred, y_true, s_true)
+    return {"Acc": acc, "AUC": auc, "DP": dp, "EO": eo}
 
-    return {"acc": acc, "auc": auc, "dp": dp * 100, "eo": eo * 100}
+
+def checkpoint_path(dataset, run_idx):
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    return CHECKPOINT_DIR / f"GraphAny-SF_{dataset}_run{run_idx}.pt"
 
 
-# ---------------------------------------------------------------------------
-# Single pair runner
-# ---------------------------------------------------------------------------
+def run_result_path(dataset, run_idx):
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    return RUN_DIR / f"{dataset}_run{run_idx}.json"
 
-def run_pair(src_name: str, tgt_name: str, args) -> dict:
-    device = torch.device(args.device)
-    feat_channels = args.feat_chn.split("+")
-    pred_channels = args.pred_chn.split("+")
 
-    cfg = OmegaConf.create({
-        "add_self_loop":         False,
-        "to_bidirected":         True,
-        "n_hops":                args.n_hops,
-        "feat_chn":              args.feat_chn,
-        "pred_chn":              args.pred_chn,
-        "feat_channels":         feat_channels,
-        "pred_channels":         pred_channels,
-        "entropy":               args.entropy,
-        "n_per_label_examples":  5,
-        "seed":                  args.seed,
-    })
+def dataset_result_path(dataset):
+    RESULT_DIR.mkdir(parents=True, exist_ok=True)
+    return RESULT_DIR / f"{dataset}.txt"
 
-    cache_dir  = os.path.join(args.cache_dir,  src_name.split("_")[0].replace("-", ""))
-    output_dir = os.path.join(args.output_dir, src_name.split("_")[0].replace("-", ""))
-    os.makedirs(cache_dir,  exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
 
-    print(f"\n{'='*60}")
-    print(f"Loading source dataset: {src_name}")
-    src_ds = SFDAGraphDataset(
-        src_name, cfg, cache_dir,
+def save_source_artifact(path, model, channel_weights, cfg, args, dataset, run_idx):
+    torch.save(
+        {
+            "model_state": {k: v.detach().cpu() for k, v in model.state_dict().items()},
+            "channel_weights": {
+                k: v.detach().cpu() for k, v in channel_weights.items()
+            },
+            "cfg": vars(cfg),
+            "model_args": {
+                "n_hidden": args.n_hidden,
+                "attn_temp": args.attn_temp,
+                "entropy": args.entropy,
+                "n_mlp_layer": args.n_mlp_layer,
+            },
+            "dataset": dataset,
+            "run_idx": run_idx,
+            "seed": args.seed + run_idx,
+        },
+        path,
+    )
+
+
+def write_run_result(dataset, run_idx, metrics, args):
+    path = run_result_path(dataset, run_idx)
+    payload = {
+        "method": "GraphAny-SF",
+        "dataset": dataset,
+        "run_idx": run_idx,
+        "seed": args.seed + run_idx,
+        "eval_split": args.eval_split,
+        "metrics": metrics,
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    return path
+
+
+def run_single(args):
+    source_name, target_name = DATASET_PAIRS[args.dataset]
+    set_seed(args.seed + args.run_idx)
+    cfg = build_cfg(args)
+    device = get_device(args.cuda)
+
+    cache_dir = resolve_run_path(args.cache_dir) / args.dataset / f"run{args.run_idx}"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    print(
+        f"[GraphAny-SF] dataset={args.dataset} run={args.run_idx} "
+        f"source={source_name} target={target_name} device={device}"
+    )
+
+    source_ds = FairGraphDataset(
+        source_name,
+        cfg,
+        str(cache_dir),
         train_batch_size=args.train_batch,
         val_test_batch_size=args.eval_batch,
         preprocess_device=device,
-        seed=args.seed,
     )
-
-    print(f"Loading target dataset: {tgt_name}")
-    tgt_ds = SFDAGraphDataset(
-        tgt_name, cfg, cache_dir,
-        train_batch_size=args.train_batch,
-        val_test_batch_size=args.eval_batch,
-        preprocess_device=device,
-        seed=args.seed,
+    model = build_model(cfg, args, device)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=args.weight_decay,
     )
+    criterion = torch.nn.CrossEntropyLoss()
 
-    src_ds.to(device)
-    tgt_ds.to(device)
-
-    model = GraphAny(
-        n_hidden=args.n_hidden,
-        feat_channels=feat_channels,
-        pred_channels=pred_channels,
-        att_temperature=args.attn_temp,
-        entropy=args.entropy,
-        n_mlp_layer=args.n_mlp_layer,
-    ).to(device)
-
-    ckpt_path = _checkpoint_path(args, src_name)
-    skip_training = False
-    if getattr(args, "use_checkpoint", False):
-        skip_training = _load_checkpoint(ckpt_path, model, device)
-        if skip_training:
-            print(f"[{device}] Loaded checkpoint, skipping source training.")
-        else:
-            print(f"[{device}] No checkpoint found, training from scratch.")
-
-    if not skip_training:
-        optimizer = torch.optim.AdamW(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    for epoch in range(args.epochs):
+        loss = train_one_epoch(
+            model,
+            optimizer,
+            criterion,
+            source_ds,
+            args.train_batch,
+            device,
         )
-        criterion = torch.nn.CrossEntropyLoss()
-
-        print(f"Training GraphAny on {src_name} for {args.epochs} epochs  [{device}]")
-        print(f"feat_channels: {feat_channels}  pred_channels: {pred_channels}")
-        print("=" * 60)
-
-        for epoch in range(1, args.epochs + 1):
-            loss = train_one_epoch(
-                model, optimizer, criterion, src_ds,
-                args.train_batch, device, cfg.n_per_label_examples,
+        if args.verbose and (epoch + 1) % args.print_every == 0:
+            print(
+                f"[{args.dataset} run{args.run_idx}] "
+                f"epoch={epoch + 1}/{args.epochs} loss={loss:.6f}"
             )
 
-            if epoch % args.eval_freq == 0 or epoch == args.epochs:
-                src_val  = evaluate(model, src_ds, "val",  args.eval_batch, device)
-                tgt_test = evaluate(model, tgt_ds, "test", args.eval_batch, device)
-                print(
-                    f"[{device}] Epoch {epoch:4d}/{args.epochs}  loss={loss:.4f}  "
-                    f"src_val_acc={src_val['acc']:.2f}%  "
-                    f"tgt_test_acc={tgt_test['acc']:.2f}%  "
-                    f"tgt_test_auc={tgt_test['auc']:.2f}%"
+    # 只保存 source 训练得到的参数和 source-derived channel 权重。
+    channel_weights = source_ds.fit_channel_weights(
+        source_ds.features,
+        source_ds.train_indices,
+        bootstrap=False,
+    )
+    ckpt_path = checkpoint_path(args.dataset, args.run_idx)
+    save_source_artifact(
+        ckpt_path,
+        model,
+        channel_weights,
+        cfg,
+        args,
+        args.dataset,
+        args.run_idx,
+    )
+
+    del source_ds
+    del model
+    torch.cuda.empty_cache()
+
+    artifact = torch.load(ckpt_path, map_location=device)
+    model = build_model(cfg, args, device)
+    model.load_state_dict(
+        {k: v.to(device) for k, v in artifact["model_state"].items()}
+    )
+    channel_weights = artifact["channel_weights"]
+
+    target_ds = FairGraphDataset(
+        target_name,
+        cfg,
+        str(cache_dir),
+        train_batch_size=args.train_batch,
+        val_test_batch_size=args.eval_batch,
+        preprocess_device=device,
+    )
+    metrics = evaluate_target(model, target_ds, channel_weights, cfg, args, device)
+    out_path = write_run_result(args.dataset, args.run_idx, metrics, args)
+    print(f"[GraphAny-SF] run result saved: {out_path}")
+    print(json.dumps(metrics, indent=2, ensure_ascii=False))
+
+
+def fmt_mean_std(values):
+    arr = np.asarray(values, dtype=float)
+    return f"{np.nanmean(arr):.2f}±{np.nanstd(arr):.2f}"
+
+
+def aggregate_dataset(dataset):
+    rows = []
+    for run_idx in range(N_RUNS):
+        path = run_result_path(dataset, run_idx)
+        if not path.exists():
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            rows.append(json.load(f)["metrics"])
+
+    summary = {
+        metric: fmt_mean_std([row[metric] for row in rows])
+        for metric in ["Acc", "AUC", "DP", "EO"]
+    }
+    out = dataset_result_path(dataset)
+    with open(out, "w", encoding="utf-8") as f:
+        f.write("|Dataset|ACC|AUC|DP|EO|\n")
+        f.write("|---|---|---|---|---|\n")
+        f.write(
+            f"|{dataset}|{summary['Acc']}|{summary['AUC']}|"
+            f"{summary['DP']}|{summary['EO']}|\n"
+        )
+    return summary
+
+
+def aggregate_all(datasets):
+    summaries = {}
+    for dataset in datasets:
+        summary = aggregate_dataset(dataset)
+        if summary is not None:
+            summaries[dataset] = summary
+
+    SUMMARY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
+        f.write("|Dataset|ACC|AUC|DP|EO|\n")
+        f.write("|---|---|---|---|---|\n")
+        for dataset in datasets:
+            if dataset not in summaries:
+                continue
+            row = summaries[dataset]
+            f.write(
+                f"|{dataset}|{row['Acc']}|{row['AUC']}|"
+                f"{row['DP']}|{row['EO']}|\n"
+            )
+    return SUMMARY_FILE
+
+
+def parse_gpu_ids(gpus):
+    ids = []
+    for item in gpus.split(","):
+        item = item.strip()
+        if item:
+            ids.append(int(item))
+    return ids or [-1]
+
+
+def launch_parallel(args):
+    """父进程调度所有数据集和 run，尽量填满可用 GPU。"""
+    RESULT_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    tasks = [(dataset, run_idx) for dataset in args.datasets for run_idx in range(N_RUNS)]
+    gpu_ids = parse_gpu_ids(args.gpus)
+    if not torch.cuda.is_available():
+        gpu_ids = [-1]
+
+    running = {}
+    completed = set()
+    task_queue = list(tasks)
+    free_gpus = list(gpu_ids)
+
+    def start_task(dataset, run_idx, gpu_id):
+        log_path = LOG_DIR / f"{dataset}_run{run_idx}.log"
+        cmd = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--worker",
+            "--dataset",
+            dataset,
+            "--run_idx",
+            str(run_idx),
+            "--cuda",
+            str(gpu_id),
+            "--seed",
+            str(args.seed),
+            "--epochs",
+            str(args.epochs),
+            "--lr",
+            str(args.lr),
+            "--weight_decay",
+            str(args.weight_decay),
+            "--train_batch",
+            str(args.train_batch),
+            "--eval_batch",
+            str(args.eval_batch),
+            "--n_hidden",
+            str(args.n_hidden),
+            "--n_mlp_layer",
+            str(args.n_mlp_layer),
+            "--entropy",
+            str(args.entropy),
+            "--attn_temp",
+            str(args.attn_temp),
+            "--feat_chn",
+            args.feat_chn,
+            "--pred_chn",
+            args.pred_chn,
+            "--n_hops",
+            str(args.n_hops),
+            "--n_per_label_examples",
+            str(args.n_per_label_examples),
+            "--eval_split",
+            args.eval_split,
+            "--cache_dir",
+            args.cache_dir,
+            "--print_every",
+            str(args.print_every),
+        ]
+        if args.add_self_loop:
+            cmd.append("--add_self_loop")
+        if not args.to_bidirected:
+            cmd.append("--no_to_bidirected")
+        if args.verbose:
+            cmd.append("--verbose")
+
+        log_file = open(log_path, "w", encoding="utf-8")
+        proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT)
+        running[proc] = {
+            "dataset": dataset,
+            "run_idx": run_idx,
+            "gpu": gpu_id,
+            "log": log_file,
+            "log_path": log_path,
+        }
+        print(f"[Launch] {dataset} run{run_idx} -> cuda={gpu_id}, log={log_path}")
+
+    while task_queue or running:
+        while task_queue and free_gpus:
+            dataset, run_idx = task_queue.pop(0)
+            start_task(dataset, run_idx, free_gpus.pop(0))
+
+        time.sleep(2)
+        for proc in list(running.keys()):
+            ret = proc.poll()
+            if ret is None:
+                continue
+
+            info = running.pop(proc)
+            info["log"].close()
+            free_gpus.append(info["gpu"])
+            if ret != 0:
+                raise RuntimeError(
+                    f"{info['dataset']} run{info['run_idx']} failed, "
+                    f"see {info['log_path']}"
                 )
 
-        _save_checkpoint(ckpt_path, model)
+            completed.add((info["dataset"], info["run_idx"]))
+            print(f"[Done] {info['dataset']} run{info['run_idx']}")
 
-    src_val  = evaluate(model, src_ds, "val",  args.eval_batch, device)
-    tgt_test = evaluate(model, tgt_ds, "test", args.eval_batch, device)
-    print(
-        f"[{device}] Final (epoch {args.epochs})  "
-        f"src_val_acc={src_val['acc']:.2f}%  "
-        f"tgt_test_acc={tgt_test['acc']:.2f}%  "
-        f"tgt_test_auc={tgt_test['auc']:.2f}%"
-    )
+            dataset_runs = {(info["dataset"], idx) for idx in range(N_RUNS)}
+            if dataset_runs.issubset(completed):
+                summary = aggregate_dataset(info["dataset"])
+                print(f"[Dataset summary] {info['dataset']}: {summary}")
 
-    return {
-        "src": src_name,
-        "tgt": tgt_name,
-        "final_src_val_acc": src_val["acc"],
-        **tgt_test,
-    }
+    out = aggregate_all(args.datasets)
+    print(f"[All done] summary saved: {out}")
 
 
-# ---------------------------------------------------------------------------
-# Repeated runs & parallel workers
-# ---------------------------------------------------------------------------
-
-def _aggregate_runs(runs: list, src_name: str, tgt_name: str) -> dict:
-    agg = {"src": src_name, "tgt": tgt_name, "n_runs": len(runs)}
-    for metric in ("acc", "auc", "dp", "eo"):
-        vals = np.array([r[metric] for r in runs], dtype=float)
-        agg[f"{metric}_mean"] = float(vals.mean())
-        agg[f"{metric}_std"] = float(vals.std())
-    return agg
-
-
-def _run_worker(payload):
-    """Execute a single seed run."""
-    ds_key, src_name, tgt_name, args_dict, device, run_idx = payload
-    args = argparse.Namespace(**args_dict)
-    args.device = device
-    args.run_idx = run_idx
-    args.seed = args_dict["seed"] + run_idx
-    set_seed(args.seed)
-    print(
-        f"\n{'#'*60}\n"
-        f"# [{device}] {ds_key} run {run_idx + 1}/{N_RUNS}  seed={args.seed}  "
-        f"{src_name} -> {tgt_name}\n"
-        f"{'#'*60}"
-    )
-    return run_pair(src_name, tgt_name, args)
-
-
-def _build_run_jobs(pairs_to_run, base_seed: int):
-    jobs = []
-    for ds_key, (src_name, tgt_name) in pairs_to_run:
-        for run_idx in range(N_RUNS):
-            jobs.append((ds_key, src_name, tgt_name, run_idx, base_seed + run_idx))
-    return jobs
-
-
-def _make_worker_payload(job, device, args_dict):
-    ds_key, src_name, tgt_name, run_idx, _seed = job
-    return (ds_key, src_name, tgt_name, args_dict, device, run_idx)
-
-
-def _schedule_runs(jobs, args_dict):
-    """
-    GPU scheduler: pokec seeds start immediately on POKEC_RUN_GPUS; other
-    dataset seeds fill OTHER_GPUS first, then reuse any GPU that becomes idle.
-    """
-    pokec_jobs = [j for j in jobs if j[0] == "pokec"]
-    other_jobs = [j for j in jobs if j[0] != "pokec"]
-    results_by_ds = defaultdict(list)
-
-    if not jobs:
-        return results_by_ds
-
-    if not torch.cuda.is_available():
-        print("CUDA unavailable — running all jobs sequentially on CPU.")
-        for job in jobs:
-            ds_key = job[0]
-            payload = _make_worker_payload(job, "cpu", args_dict)
-            results_by_ds[ds_key].append(_run_worker(payload))
-        return results_by_ds
-
-    gpu_pool = queue.Queue()
-    for gpu in OTHER_GPUS:
-        gpu_pool.put(gpu)
-
-    max_workers = min(len(ALL_GPUS), len(jobs))
-    print(
-        f"Scheduling {len(jobs)} runs: pokec priority on "
-        f"{', '.join(POKEC_RUN_GPUS)}; idle GPUs from "
-        f"{', '.join(OTHER_GPUS)} (+ pokec GPUs when free)."
-    )
-
-    with ProcessPoolExecutor(max_workers=max_workers) as pool:
-        future_map = {}
-
-        for i, job in enumerate(pokec_jobs):
-            gpu = POKEC_RUN_GPUS[i]
-            payload = _make_worker_payload(job, gpu, args_dict)
-            fut = pool.submit(_run_worker, payload)
-            future_map[fut] = (job, gpu)
-
-        while other_jobs and not gpu_pool.empty():
-            gpu = gpu_pool.get_nowait()
-            job = other_jobs.pop(0)
-            payload = _make_worker_payload(job, gpu, args_dict)
-            fut = pool.submit(_run_worker, payload)
-            future_map[fut] = (job, gpu)
-
-        while future_map:
-            done, _ = wait(future_map.keys(), return_when=FIRST_COMPLETED)
-            for fut in done:
-                job, gpu = future_map.pop(fut)
-                ds_key = job[0]
-                results_by_ds[ds_key].append(fut.result())
-                gpu_pool.put(gpu)
-                if other_jobs:
-                    next_job = other_jobs.pop(0)
-                    payload = _make_worker_payload(next_job, gpu, args_dict)
-                    new_fut = pool.submit(_run_worker, payload)
-                    future_map[new_fut] = (next_job, gpu)
-
-    return results_by_ds
-
-
-def run_pair_repeated(pairs_to_run, args) -> dict:
-    args_dict = {k: v for k, v in vars(args).items() if k != "device"}
-    jobs = _build_run_jobs(pairs_to_run, args.seed)
-    results_by_ds = _schedule_runs(jobs, args_dict)
-
-    if len(pairs_to_run) == 1:
-        ds_key, (src_name, tgt_name) = pairs_to_run[0]
-        runs = results_by_ds[ds_key]
-        return _aggregate_runs(runs, src_name, tgt_name)
-
-    aggregated = {}
-    for ds_key, (src_name, tgt_name) in pairs_to_run:
-        runs = results_by_ds[ds_key]
-        aggregated[ds_key] = _aggregate_runs(runs, src_name, tgt_name)
-    return aggregated
-
-
-# ---------------------------------------------------------------------------
-# Result writer
-# ---------------------------------------------------------------------------
-
-def _fmt_mean_std(mean: float, std: float) -> str:
-    return f"{mean:.2f}±{std:.2f}%"
-
-
-def dataset_results_path(results_file: str, ds_key: str) -> str:
-    """Per-dataset result path: results/graphany_final_{ds_key}.txt"""
-    results_dir = os.path.dirname(results_file) or "."
-    return os.path.join(results_dir, f"graphany_final_{ds_key}.txt")
-
-
-def _format_results_table(results: list) -> str:
-    lines = []
-    lines.append("=" * 90)
-    lines.append(
-        f"GraphAny SFDA Benchmark Results ({N_RUNS} runs, mean±std, final-epoch checkpoint)"
-    )
-    lines.append("=" * 90)
-    lines.append(
-        f"{'Dataset':<12} {'Src→Tgt':<22} {'ACC':>14} {'AUC':>14} {'DP':>14} {'EO':>14}"
-    )
-    lines.append("-" * 90)
-    for r in results:
-        pair = f"{r['src']} -> {r['tgt']}"
-        lines.append(
-            f"{r['src'].split('_')[0]:<12} {pair:<22} "
-            f"{_fmt_mean_std(r['acc_mean'], r['acc_std']):>14} "
-            f"{_fmt_mean_std(r['auc_mean'], r['auc_std']):>14} "
-            f"{_fmt_mean_std(r['dp_mean'], r['dp_std']):>14} "
-            f"{_fmt_mean_std(r['eo_mean'], r['eo_std']):>14}"
-        )
-    lines.append("=" * 90)
-    return "\n".join(lines)
-
-
-def write_dataset_result(result: dict, path: str):
-    """Write one dataset's aggregated result immediately after its 3 runs finish."""
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    text = _format_results_table([result])
-    print("\n" + text)
-    with open(path, "w") as f:
-        f.write(text + "\n")
-    print(f"\nDataset results written to: {path}")
-
-
-def write_results(results: list, path: str):
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    text = _format_results_table(results)
-    print("\n" + text)
-    with open(path, "w") as f:
-        f.write(text + "\n")
-    print(f"\nResults written to: {path}")
-
-
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="GraphAny on SFDA fairness benchmark (all 4 dataset pairs)"
-    )
-    parser.add_argument("--dataset",      type=str,   default="all",
-                        choices=["all", "pokec", "bailA", "german", "syn"],
-                        help="Dataset pair to run. 'all' runs all four pairs.")
-    parser.add_argument("--seed",         type=int,   default=42)
-    parser.add_argument("--lr",           type=float, default=2e-4)
-    parser.add_argument("--weight_decay", type=float, default=0.02)
-    parser.add_argument("--epochs",       type=int,   default=800)
-    parser.add_argument("--train_batch",  type=int,   default=128)
-    parser.add_argument("--eval_batch",   type=int,   default=100000)
-    parser.add_argument("--n_hidden",     type=int,   default=128)
-    parser.add_argument("--n_mlp_layer",  type=int,   default=2)
-    parser.add_argument("--entropy",      type=float, default=1.0)
-    parser.add_argument("--attn_temp",    type=float, default=5.0)
-    parser.add_argument("--feat_chn",     type=str,   default="X+L1+L2+H1+H2")
-    parser.add_argument("--pred_chn",     type=str,   default="X+L1+L2")
-    parser.add_argument("--n_hops",       type=int,   default=2)
-    parser.add_argument("--eval_freq",    type=int,   default=50)
-    parser.add_argument("--cache_dir",    type=str,   default="./data_cache")
-    parser.add_argument("--output_dir",   type=str,   default="./output")
-    parser.add_argument("--results_file", type=str,   default=RESULTS_FILE)
+def get_args():
+    parser = argparse.ArgumentParser(description="GraphAny-SF fair benchmark runner")
+    parser.add_argument("--worker", action="store_true")
+    parser.add_argument("--aggregate_only", action="store_true")
+    parser.add_argument("--dataset", choices=list(DATASET_PAIRS.keys()), default="bailA")
     parser.add_argument(
-        "--use_checkpoint", action="store_true",
-        help="load checkpoint and skip source training when available",
+        "--datasets",
+        nargs="+",
+        default=["bailA", "german", "pokec", "syn"],
+        choices=list(DATASET_PAIRS.keys()),
     )
+    parser.add_argument("--run_idx", type=int, default=0)
+    parser.add_argument("--gpus", type=str, default="0,1,3,4,5")
+    parser.add_argument("--cuda", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=42)
+
+    parser.add_argument("--epochs", type=int, default=1000)
+    parser.add_argument("--lr", type=float, default=2e-4)
+    parser.add_argument("--weight_decay", type=float, default=0.02)
+    parser.add_argument("--train_batch", type=int, default=128)
+    parser.add_argument("--eval_batch", type=int, default=100000)
+    parser.add_argument("--n_hidden", type=int, default=128)
+    parser.add_argument("--n_mlp_layer", type=int, default=2)
+    parser.add_argument("--entropy", type=float, default=1.0)
+    parser.add_argument("--attn_temp", type=float, default=5.0)
+    parser.add_argument("--feat_chn", type=str, default="X+L1+L2+H1+H2")
+    parser.add_argument("--pred_chn", type=str, default="X+L1+L2")
+    parser.add_argument("--n_hops", type=int, default=2)
+    parser.add_argument("--n_per_label_examples", type=int, default=5)
+    parser.add_argument("--add_self_loop", action="store_true")
+    parser.add_argument("--to_bidirected", dest="to_bidirected", action="store_true")
+    parser.add_argument("--no_to_bidirected", dest="to_bidirected", action="store_false")
+    parser.set_defaults(to_bidirected=True)
+
+    parser.add_argument("--eval_split", choices=["all", "train", "val", "test"], default="all")
+    parser.add_argument("--cache_dir", type=str, default="./data_cache/fair_dg")
+    parser.add_argument("--print_every", type=int, default=50)
+    parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def main():
-    args = parse_args()
-    set_seed(args.seed)
-
-    pairs_to_run = (
-        list(DATASET_PAIRS.items())
-        if args.dataset == "all"
-        else [(args.dataset, DATASET_PAIRS[args.dataset])]
-    )
-
-    if args.dataset == "all":
-        aggregated = run_pair_repeated(pairs_to_run, args)
-        all_results = []
-        for ds_key in DATASET_PAIRS:
-            if ds_key not in aggregated:
-                continue
-            result = aggregated[ds_key]
-            write_dataset_result(
-                result, dataset_results_path(args.results_file, ds_key)
-            )
-            all_results.append(result)
-    else:
-        ds_key = pairs_to_run[0][0]
-        result = run_pair_repeated(pairs_to_run, args)
-        write_dataset_result(
-            result, dataset_results_path(args.results_file, ds_key)
-        )
-        all_results = [result]
-
-    for r in all_results:
-        print(f"\n--- {r['src']} -> {r['tgt']} (n={r['n_runs']}) ---")
-        for metric in ("acc", "auc", "dp", "eo"):
-            print(f"  {metric.upper():>3}: {_fmt_mean_std(r[f'{metric}_mean'], r[f'{metric}_std'])}")
-
-    if args.dataset == "all":
-        write_results(all_results, args.results_file)
-
-
 if __name__ == "__main__":
-    import multiprocessing as mp
-    try:
-        mp.set_start_method("spawn")
-    except RuntimeError:
-        pass
-    main()
+    cli_args = get_args()
+    if cli_args.aggregate_only:
+        out_file = aggregate_all(cli_args.datasets)
+        print(f"[Aggregate] summary saved: {out_file}")
+    elif cli_args.worker:
+        run_single(cli_args)
+    else:
+        launch_parallel(cli_args)
