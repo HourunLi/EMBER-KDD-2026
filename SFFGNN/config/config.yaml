@@ -47,7 +47,7 @@ syn:
   lr: 0.0005
   lr2_reg: 0.0015
   dropout: 0.1
-  runs: 1
+  runs: 3
   hidden_dim: 64
   n_layers: 3
   # use_checkpoint: true

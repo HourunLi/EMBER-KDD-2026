@@ -459,7 +459,7 @@ class SFDAGraphDataset:
             return x
 
         for attr in ["label", "train_mask", "val_mask", "test_mask",
-                     "train_indices", "unmasked_pred", "dist"]:
+                     "train_indices", "features", "unmasked_pred", "dist"]:
             if hasattr(self, attr):
                 setattr(self, attr, _to(getattr(self, attr)))
 
@@ -474,20 +474,24 @@ class SFDAGraphDataset:
         return visible_nodes[torch.cat(sampled)]
 
     def compute_linear_gnn_logits(self, features, n_per_label, visible_nodes, bootstrap=False):
+        # lstsq uses CPU gelss (small ref set); full-graph F @ W runs on F's device (GPU).
         preds = {}
-        label        = self.label.cpu()
-        visible_nodes = visible_nodes.cpu()
-        num_class    = self.num_class
+        label = self.label
+        num_class = self.num_class
+        visible_nodes = visible_nodes.to(label.device)
 
         for channel, F in features.items():
-            F = F.cpu()
             if bootstrap:
-                ref_nodes = self.sample_k_nodes_per_label(label, visible_nodes, n_per_label, num_class)
+                ref_nodes = self.sample_k_nodes_per_label(
+                    label, visible_nodes, n_per_label, num_class
+                )
             else:
                 ref_nodes = visible_nodes
 
             Y_L = torch.nn.functional.one_hot(label[ref_nodes], num_class).float()
-            W   = torch.linalg.lstsq(F[ref_nodes], Y_L, driver="gelss")[0]
+            W = torch.linalg.lstsq(
+                F[ref_nodes].cpu(), Y_L.cpu(), driver="gelss"
+            )[0].to(F.device)
             preds[channel] = F @ W
 
         return preds

@@ -10,8 +10,6 @@ from config import args
 from utils import seed_everything
 
 
-# Leave empty to mirror main.py and run the current args once.
-# Fill with lists of candidate values to perform grid search.
 SEARCH_TRIALS = {
 }
 
@@ -24,11 +22,11 @@ def compute_joint_metric(result):
     All four metrics are already on a 0-100 scale, so a weighted linear
     combination keeps the ranking simple and easy to inspect.
     """
-    return float(
-        0.35 * result['ada_acc']
-        + 0.35 * result['ada_auc']
-        - 0.15 * result['ada_dp']
-        - 0.15 * result['ada_eo']
+    return float( 10
+        - max(68.93 - result['ada_acc'], 0) / 68.93
+        - max(76.16 - result['ada_auc'], 0) / 76.16
+        - max(0, result['ada_dp'] - 0.37) / 0.37
+        - max(0, result['ada_eo'] - 0.71) / 0.71
     )
 
 
