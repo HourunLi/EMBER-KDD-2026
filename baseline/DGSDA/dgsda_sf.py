@@ -103,7 +103,9 @@ def load_graph(dataset, domain_id, device=None):
 def build_model(data, args, device):
     """DGSDA 原始 BernNet：属性编码器 h_X=lin1，分类器=lin2，prop1/prop2 为源/目标 BernNet。"""
     num_features = data.x.shape[1]
-    num_classes = int(data.y.max().item()) + 1
+    # pokec 中存在 y=-1 的未标注节点；类别数只由有效标签 {0, 1} 决定。
+    valid_labels = data.y[data.y >= 0]
+    num_classes = int(valid_labels.max().item()) + 1
     return BernNet(
         num_features,
         args.hidden,
@@ -239,14 +241,18 @@ def fair_metric(pred, labels, sens):
 
 
 def evaluate_target(model, target_data):
-    """评估目标域全图结果；原始 DGSDA 目标域评估也是全图口径。"""
+    """评估目标域结果；按 SFFGNN 的 all split 口径排除 pokec 的 y=-1 节点。"""
     model.eval()
     with torch.no_grad():
         output = model(target_data, False)
-        prob = F.softmax(output, dim=1)[:, 1].detach().cpu().numpy()
-        pred = output.argmax(dim=1).detach().cpu().numpy()
-        labels = target_data.y.detach().cpu().numpy()
-        sens = target_data.sens_labels.detach().cpu().numpy()
+        # SFFGNN 的 all split 是 train/val/test 三个 mask 的并集。
+        # 对 pokec，y=-1 节点没有进入这些 mask，因此不会参与 Acc/AUC/DP/EO。
+        eval_mask = target_data.train_mask | target_data.val_mask | target_data.test_mask
+        eval_mask = eval_mask & (target_data.y >= 0)
+        prob = F.softmax(output, dim=1)[:, 1][eval_mask].detach().cpu().numpy()
+        pred = output.argmax(dim=1)[eval_mask].detach().cpu().numpy()
+        labels = target_data.y[eval_mask].detach().cpu().numpy()
+        sens = target_data.sens_labels[eval_mask].detach().cpu().numpy()
 
     if accuracy_score is not None:
         acc = accuracy_score(labels, pred) * 100.0
@@ -455,7 +461,7 @@ def get_args():
     parser.add_argument("--seed", type=int, default=1111)
 
     # DGSDA 原始超参数；alpha/gamma 沿用 main.py 默认设置。
-    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--wd", type=float, default=0.01)
     parser.add_argument("--hidden", type=int, default=128)
     parser.add_argument("--K", type=int, default=8)
