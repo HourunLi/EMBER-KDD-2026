@@ -5,6 +5,10 @@ from GRADE import *
 
 
 def train(args, g_s, features_s, labels_s, g_t, features_t, labels_t):
+    # 这两行新加的
+    g_s = g_s.to(args.device)
+    g_t = g_t.to(args.device)
+
     in_feats = features_s.shape[1]
     n_classes = labels_s.max().item() + 1
     features_s = features_s.to(device=args.device)

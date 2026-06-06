@@ -1,0 +1,18 @@
+论文：https://ojs.aaai.org/index.php/AAAI/article/view/26231
+代码：https://github.com/junwu6/GRADE
+又一个不给数据集的=）
+找完数据集用前几个环境先试试
+这个方法属于Graph Domain Adaptation，并不source-free，可以作为参考的性能上界
+先收拾cross-network
+
+原文使用Python 3.6.5，numpy torch torchvision dgl
+用fairvgnn试一下，
+装了pip install dgl-cu111==0.7.0 -f https://data.dgl.ai/wheels/repo.html，
+需要小改一下代码去兼容dgl 0.4.3，但都是warning，不改也无伤大雅；
+显卡掉了，逆天=）
+
+装了conda install cudatoolkit=11.1，跑通了；
+
+
+
+

@@ -1,0 +1,14 @@
+Disentangled Graph Spectral Domain Adaptation
+
+"We introduce a novel UGDA pipeline by disentangling
+attribute and topology alignments and replacing topology
+alignment with model alignment."
+
+用FatraGNN试一下：
+FileNotFoundError: [Errno 2] No such file or directory: '/home/disk2/lhr/sfda/code/baseline/baseline/11_DGSDA/data/ACMv9/raw/ACMv9_edgelist.txt'
+data里没有data是何意味。。。
+
+
+
+
+

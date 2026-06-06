@@ -17,8 +17,12 @@ except ModuleNotFoundError as e:
     raise ImportError("Please ensure all necessary libraries such as torch, pygda, and torch_geometric are installed.") from e
 
 # Load datasets
-MAG_CN_dataset = MAGDataset('C:/Users/Administrator/Desktop/Graph DA/MAG_US', name='source')[0]
-MAG_RU_dataset = MAGDataset('C:/Users/Administrator/Desktop/Graph DA/MAG_JP', name='source')[0]
+# MAG_CN_dataset = MAGDataset('C:/Users/Administrator/Desktop/Graph DA/MAG_US', name='source')[0]
+# MAG_RU_dataset = MAGDataset('C:/Users/Administrator/Desktop/Graph DA/MAG_JP', name='source')[0]
+
+# 改成自己的
+MAG_CN_dataset = MAGDataset('./dataset/MAG_US', name='source')[0]
+MAG_RU_dataset = MAGDataset('./dataset/MAG_JP', name='source')[0]
 
 source_dataset = MAG_CN_dataset
 target_dataset = MAG_RU_dataset

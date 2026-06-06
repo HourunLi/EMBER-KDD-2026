@@ -28,6 +28,9 @@ from torch.autograd import Function
 
 import dgl
 from dgl.nn.pytorch import GraphConv
+# 下面所有dgl.xx都有改
+# import dgl-cu113
+# from dgl-cu113.nn.pytorch import GraphConv
 
 from torch_geometric.utils import from_scipy_sparse_matrix
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
@@ -185,6 +188,7 @@ def edge_index_to_dgl(edge_index, num_nodes):
     src = edge_index[0].numpy()
     dst = edge_index[1].numpy()
     g = dgl.graph((src, dst), num_nodes=num_nodes)
+    # g = dgl-cu113.graph((src, dst), num_nodes=num_nodes)
     return g
 
 

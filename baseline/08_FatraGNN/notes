@@ -1,0 +1,8 @@
+用python 3.8.20
+这requirements.txt是个啥玩意=）
+
+用torch 2.1.1，cu121：
+pip install torch==2.1.1 torchvision==0.16.1 torchaudio==2.1.1 --index-url https://download.pytorch.org/whl/cu121
+装PyG：
+pip install pyg_lib torch_scatter torch_sparse torch-cluster -f https://data.pyg.org/whl/torch-2.1.1+cu121.html
+装requirements，很多要求python3.10，用3.10试一下

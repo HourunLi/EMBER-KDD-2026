@@ -1,0 +1,17 @@
+代码：https://github.com/EdwardLXF/Homophily-Enhanced-Graph-Domain-Adaptation
+论文：https://arxiv.org/abs/2505.20089
+"graph domain alignment", "Unsupervised Graph Domain Adaptation（UGDA）"
+HGDA 可以作为 迁移学习上界（Upper Bound）Baseline
+
+又一个什么都不给的=）
+用fairvgnn试一下,
+安装：pip install pygda，
+版本冲突得乱七八糟，自己摸索一下吧=）
+
+用torch2跑通了，但找不到数据，先略过
+
+
+
+
+
+

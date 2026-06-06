@@ -4,6 +4,8 @@ import torch
 from torch.autograd import Function
 import numpy as np
 from dgl.nn.pytorch import GraphConv, SAGEConv, GINConv
+# from dgl-cu113.nn.pytorch import GraphConv, SAGEConv, GINConv
+
 
 
 def guassian_kernel(source, target, kernel_mul=2.0, kernel_num=5, fix_sigma=None):
