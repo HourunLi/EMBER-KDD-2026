@@ -104,13 +104,17 @@ $\mathcal{L}_{hgdasf} = \mathcal{L}^{SF}_H + \alpha \mathcal{L}_T$
 
 ## UDAGCN
 
-Adversarial UDA
-Feature-level Alignment
-适配：GCN + PPMI + Entropy; 删去L_DA
-or 加入部分SFDA方法
+adversarial feature-level alignment
+
+贡献一：局部+全局双通道 GCN + 图间注意力（解决图表示学习层面的问题）
+贡献二：三损失对抗域自适应框架（解决域迁移层面的问题）
+
+删去对抗对齐损失L_DA
 
 
 
 ## GRADE
 
-Discrepancy-based Graph Domain Adaptation
+non-IID UDA
+
+基于 Weisfeiler-Lehman (WL) 子树核与消息传递 GNN 的图子树差异 Graph Subtree Discrepancy (GSD)
