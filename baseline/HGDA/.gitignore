@@ -1,0 +1,68 @@
+# === Python cache ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# === Jupyter / IPython checkpoints ===
+.ipynb_checkpoints/
+*.ipynb
+
+# === Logs ===
+*.log
+*.out
+logs/
+log/
+
+# === Data files ===
+data/
+dataset/
+*.csv
+*.txt
+*.zip
+*.rar
+*.gz
+*.tar
+*.npy
+*.npz
+*.pkl
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.json
+
+# === Model checkpoints & weights ===
+*.pth
+*.pt
+*.ckpt
+weights_*.pt
+
+# === Visualize / result outputs ===
+visualize/
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# === Temp / misc ===
+tmp/
+param/
+*.DS_Store
+.DS_Store
+
+# === Virtual environments ===
+venv/
+env/
+.env/
+*.egg-info/
+dist/
+build/
+
+# === IDE ===
+.idea/
+.vscode/
+
+
+results/
