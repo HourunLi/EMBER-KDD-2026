@@ -116,6 +116,7 @@ def write_dataset_result(result_dir, dataset, rows):
     lines = [
         f"Dataset: {dataset}",
         "Metric scale: 0-100",
+        "Train/eval split: all valid labeled nodes",
         "Checkpoint: final epoch",
         "",
         "|Run|ACC|AUC|DP|EO|",
@@ -353,6 +354,10 @@ def run_worker(args):
         data.y = data.y.long()
         return data
 
+    def all_valid_mask(data):
+        # 训练和评估统一使用 all split，即 train/val/test 的并集，并排除 pokec 中 y=-1 的节点。
+        return (data.train_mask | data.val_mask | data.test_mask) & (data.y >= 0)
+
     class GNN(torch.nn.Module):
         def __init__(self, num_features, encoder_dim, base_model=None, type="gcn", **kwargs):
             super(GNN, self).__init__()
@@ -439,9 +444,9 @@ def run_worker(args):
     def pretrain_source(model, optimizer, source_data, epochs):
         model.train()
         loss_func = nn.CrossEntropyLoss().to(device)
-        train_mask = source_data.train_mask
+        train_mask = all_valid_mask(source_data)
         if int(train_mask.sum().item()) == 0:
-            raise ValueError(f"{args.dataset} source train_mask 中没有有效 0/1 标签节点")
+            raise ValueError(f"{args.dataset} source all split 中没有有效 0/1 标签节点")
 
         for epoch in range(1, epochs + 1):
             model.train()
@@ -470,9 +475,9 @@ def run_worker(args):
 
     def evaluate_target(model, target_data):
         model.eval()
-        mask = target_data.test_mask & (target_data.y >= 0)
+        mask = all_valid_mask(target_data)
         if int(mask.sum().item()) == 0:
-            raise ValueError(f"{args.dataset} target test_mask 中没有有效 0/1 标签节点")
+            raise ValueError(f"{args.dataset} target all split 中没有有效 0/1 标签节点")
 
         with torch.no_grad():
             logits = model.predict(target_data, "target")
@@ -550,6 +555,8 @@ def run_worker(args):
         "lr": args.lr,
         "encoder_dim": args.encoder_dim,
         "use_udagcn": args.use_udagcn,
+        "train_split": "all",
+        "eval_split": "all",
         "target": target_metrics,
     }
 
