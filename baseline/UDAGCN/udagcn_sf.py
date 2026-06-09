@@ -431,8 +431,19 @@ def run_worker(args):
                 if hasattr(module, "cache_dict"):
                     module.cache_dict.clear()
 
-    def build_optimizer(model):
-        return torch.optim.Adam(model.parameters(), lr=args.lr)
+    def build_optimizer(model, trainable_only=False):
+        if trainable_only:
+            params = [param for param in model.parameters() if param.requires_grad]
+        else:
+            params = list(model.parameters())
+        if not params:
+            raise ValueError("optimizer 没有可训练参数")
+        return torch.optim.Adam(params, lr=args.lr)
+
+    def freeze_classifier(model):
+        # 阶段二冻结源域预训练得到的分类边界，只更新 encoder/PPMI/attention，降低熵最小化单类坍缩风险。
+        for param in model.cls_model.parameters():
+            param.requires_grad_(False)
 
     def add_original_weight_regularization(model, loss):
         # 沿用 UDAGCN_demo.py 的权重正则实现，而不是改成新的 weight decay。
@@ -539,8 +550,9 @@ def run_worker(args):
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    # 目标迁移阶段重新构造优化器，沿用原始学习率，避免携带源域 Adam 动量状态。
-    target_optimizer = build_optimizer(model)
+    # 目标迁移阶段冻结分类器并重新构造优化器，沿用原始学习率，避免携带源域 Adam 动量状态。
+    freeze_classifier(model)
+    target_optimizer = build_optimizer(model, trainable_only=True)
     adapt_target(model, target_optimizer, target_data, args.epochs)
 
     # final-epoch checkpoint 策略：不使用 target 指标选最佳轮次，直接评估最终模型。
@@ -555,6 +567,7 @@ def run_worker(args):
         "lr": args.lr,
         "encoder_dim": args.encoder_dim,
         "use_udagcn": args.use_udagcn,
+        "freeze_classifier_target": True,
         "train_split": "all",
         "eval_split": "all",
         "target": target_metrics,
