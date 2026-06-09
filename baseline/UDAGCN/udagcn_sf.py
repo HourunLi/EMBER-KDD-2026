@@ -347,6 +347,8 @@ def run_worker(args):
 
     def mask_valid_binary_labels(data):
         # pokec 的标签为 {-1, 0, 1}；与 SFFGNN 对齐，监督和评估只使用 mask 中的 0/1 节点。
+        # german 等数据集可能存在常数特征列，SFFGNN 的 min-max 归一化会产生 NaN/Inf，这里统一清理。
+        data.x = torch.nan_to_num(data.x, nan=0.0, posinf=0.0, neginf=0.0)
         valid = data.y >= 0
         data.train_mask = data.train_mask & valid
         data.val_mask = data.val_mask & valid

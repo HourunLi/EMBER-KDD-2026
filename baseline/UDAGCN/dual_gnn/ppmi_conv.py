@@ -33,7 +33,6 @@ class PPMIConv(CachedGCNConv):
                 neighbors.add(b)
 
         cpu_device = torch.device("cpu")
-        gpu_device = torch.device("cuda")
         for a, b in edge_index.t().detach().to(cpu_device).numpy():
             a = int(a)
             b = int(b)
@@ -86,7 +85,15 @@ class PPMIConv(CachedGCNConv):
 
         for a, normed_walk_counter in normed_walk_counters.items():
             for b, prob in normed_walk_counter.items():
-                ppmi = np.log(prob / prob_sums[b] * len(prob_sums) / self.path_len)
+                # PPMI 是 Positive PMI。原始实现直接保留负 PMI，可能导致后续 degree 为负，
+                # 进而在 deg.pow(-0.5) 中产生 NaN。这里过滤非有限值和非正值。
+                denominator = max(prob_sums[b], 1e-12)
+                pmi_input = prob / denominator * len(prob_sums) / self.path_len
+                if pmi_input <= 0:
+                    continue
+                ppmi = max(np.log(pmi_input), 0.0)
+                if not np.isfinite(ppmi) or ppmi <= 0:
+                    continue
                 ppmis[(a, b)] = ppmi
 
         new_edge_index = []
@@ -95,8 +102,13 @@ class PPMIConv(CachedGCNConv):
             new_edge_index.append([a, b])
             edge_weight.append(ppmi)
 
-        edge_index = torch.tensor(new_edge_index).t().to(gpu_device)
-        edge_weight = torch.tensor(edge_weight).to(gpu_device)
+        target_device = edge_index.device
+        if len(new_edge_index) == 0:
+            edge_index = torch.empty((2, 0), dtype=torch.long, device=target_device)
+            edge_weight = torch.empty((0, ), dtype=torch.float32, device=target_device)
+        else:
+            edge_index = torch.tensor(new_edge_index, dtype=torch.long, device=target_device).t()
+            edge_weight = torch.tensor(edge_weight, dtype=torch.float32, device=target_device)
 
 
         fill_value = 1 if not improved else 2
@@ -105,10 +117,13 @@ class PPMIConv(CachedGCNConv):
 
         row, col = edge_index
         deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
+        deg = torch.clamp(deg, min=1e-12)
         deg_inv_sqrt = deg.pow(-0.5)
-        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+        deg_inv_sqrt[~torch.isfinite(deg_inv_sqrt)] = 0
 
-        return edge_index, (deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]).type(torch.float32)
+        norm = deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
+        norm = torch.nan_to_num(norm, nan=0.0, posinf=0.0, neginf=0.0)
+        return edge_index, norm.type(torch.float32)
 
 
 
