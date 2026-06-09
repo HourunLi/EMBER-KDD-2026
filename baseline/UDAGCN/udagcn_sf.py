@@ -50,6 +50,7 @@ def parse_args():
     # UDAGCN 原始超参数，阶段一和阶段二共用。
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=3e-3)
+    parser.add_argument("--lambda_prior", type=float, default=1.0)
     parser.add_argument("--encoder_dim", type=int, default=16)
     parser.add_argument("--use_udagcn", action="store_true", default=True)
     parser.add_argument("--no_udagcn", dest="use_udagcn", action="store_false")
@@ -226,6 +227,7 @@ def launch_all(args):
                 "--seed", str(job["seed"]),
                 "--epochs", str(args.epochs),
                 "--lr", str(args.lr),
+                "--lambda_prior", str(args.lambda_prior),
                 "--encoder_dim", str(args.encoder_dim),
                 "--result_dir", str(result_dir),
             ]
@@ -358,6 +360,18 @@ def run_worker(args):
         # 训练和评估统一使用 all split，即 train/val/test 的并集，并排除 pokec 中 y=-1 的节点。
         return (data.train_mask | data.val_mask | data.test_mask) & (data.y >= 0)
 
+    def compute_source_prior(data, num_classes=2):
+        # 阶段二只保存源域类别先验，不保留或访问源域样本，满足 source-free 设定。
+        mask = all_valid_mask(data)
+        labels = data.y[mask].long()
+        if int(labels.numel()) == 0:
+            raise ValueError(f"{args.dataset} source all split 中没有可用于统计先验的标签")
+        counts = torch.bincount(labels, minlength=num_classes)[:num_classes].float()
+        prior = counts / counts.sum().clamp_min(1.0)
+        prior = torch.clamp(prior, min=1e-6)
+        prior = prior / prior.sum()
+        return prior
+
     class GNN(torch.nn.Module):
         def __init__(self, num_features, encoder_dim, base_model=None, type="gcn", **kwargs):
             super(GNN, self).__init__()
@@ -470,7 +484,8 @@ def run_worker(args):
             if epoch % 50 == 0 or epoch == epochs:
                 print(f"[Stage 1][{args.dataset}][run {args.run_idx}] epoch={epoch} loss={loss.item():.4f}")
 
-    def adapt_target(model, optimizer, target_data, epochs):
+    def adapt_target(model, optimizer, target_data, epochs, source_prior):
+        source_prior = source_prior.to(target_data.x.device)
         for epoch in range(1, epochs + 1):
             model.train()
             optimizer.zero_grad()
@@ -478,11 +493,20 @@ def run_worker(args):
             target_logits = model.cls_model(encoded_target)
             target_probs = torch.clamp(F.softmax(target_logits, dim=-1), min=1e-9, max=1.0)
             loss_entropy = torch.mean(torch.sum(-target_probs * torch.log(target_probs), dim=-1))
-            loss = loss_entropy * (epoch / epochs * 0.01)
+
+            # 源域类别先验约束目标平均预测分布，排除熵最小化的单类坍缩解。
+            target_mean_prob = torch.clamp(target_probs.mean(dim=0), min=1e-9, max=1.0)
+            target_mean_prob = target_mean_prob / target_mean_prob.sum()
+            loss_prior = torch.sum(source_prior * (torch.log(source_prior) - torch.log(target_mean_prob)))
+
+            loss = (loss_entropy + args.lambda_prior * loss_prior) * (epoch / epochs * 0.01)
             loss.backward()
             optimizer.step()
             if epoch % 50 == 0 or epoch == epochs:
-                print(f"[Stage 2][{args.dataset}][run {args.run_idx}] epoch={epoch} entropy={loss_entropy.item():.4f}")
+                print(
+                    f"[Stage 2][{args.dataset}][run {args.run_idx}] epoch={epoch} "
+                    f"entropy={loss_entropy.item():.4f} prior={loss_prior.item():.4f}"
+                )
 
     def evaluate_target(model, target_data):
         model.eval()
@@ -492,7 +516,8 @@ def run_worker(args):
 
         with torch.no_grad():
             logits = model.predict(target_data, "target")
-            probs = F.softmax(logits, dim=-1)[:, 1].detach().cpu().numpy()
+            prob_matrix = F.softmax(logits, dim=-1).detach().cpu().numpy()
+            probs = prob_matrix[:, 1]
             preds = logits.argmax(dim=1).detach().cpu().numpy()
 
         mask_np = mask.detach().cpu().numpy()
@@ -504,11 +529,18 @@ def run_worker(args):
         acc = accuracy_score(y_true, pred) * 100
         auc = roc_auc_score(y_true, prob) * 100 if len(set(y_true.tolist())) == 2 else float("nan")
         dp, eo = fair_metric(pred, y_true, sens)
+        mean_prob = prob_matrix[mask_np].mean(axis=0)
+        pred_count = {
+            str(class_id): int((pred == class_id).sum())
+            for class_id in range(prob_matrix.shape[1])
+        }
         return {
             "acc": float(acc),
             "auc": float(auc),
             "dp": float(dp * 100),
             "eo": float(eo * 100),
+            "mean_prob": [float(value) for value in mean_prob],
+            "pred_count": pred_count,
         }
 
     seed = args.seed if args.seed is not None else 200 + args.run_idx
@@ -543,6 +575,7 @@ def run_worker(args):
 
     source_optimizer = build_optimizer(model)
     pretrain_source(model, source_optimizer, source_data, args.epochs)
+    source_prior = compute_source_prior(source_data).to(device)
 
     model.clear_cache()
     del source_data
@@ -551,9 +584,10 @@ def run_worker(args):
         torch.cuda.empty_cache()
 
     # 目标迁移阶段冻结分类器并重新构造优化器，沿用原始学习率，避免携带源域 Adam 动量状态。
+    target_before_metrics = evaluate_target(model, target_data)
     freeze_classifier(model)
     target_optimizer = build_optimizer(model, trainable_only=True)
-    adapt_target(model, target_optimizer, target_data, args.epochs)
+    adapt_target(model, target_optimizer, target_data, args.epochs, source_prior)
 
     # final-epoch checkpoint 策略：不使用 target 指标选最佳轮次，直接评估最终模型。
     target_metrics = evaluate_target(model, target_data)
@@ -565,11 +599,14 @@ def run_worker(args):
         "seed": seed,
         "epochs": args.epochs,
         "lr": args.lr,
+        "lambda_prior": args.lambda_prior,
         "encoder_dim": args.encoder_dim,
         "use_udagcn": args.use_udagcn,
         "freeze_classifier_target": True,
         "train_split": "all",
         "eval_split": "all",
+        "source_prior": [float(value) for value in source_prior.detach().cpu().tolist()],
+        "target_before": target_before_metrics,
         "target": target_metrics,
     }
 
