@@ -50,7 +50,7 @@ def parse_args():
     # UDAGCN 原始超参数，阶段一和阶段二共用。
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=3e-3)
-    parser.add_argument("--lambda_prior", type=float, default=1.0)
+    parser.add_argument("--lambda_prior", type=float, default=0.4)
     parser.add_argument("--encoder_dim", type=int, default=16)
     parser.add_argument("--use_udagcn", action="store_true", default=True)
     parser.add_argument("--no_udagcn", dest="use_udagcn", action="store_false")

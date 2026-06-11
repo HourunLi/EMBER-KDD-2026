@@ -106,10 +106,21 @@ $\mathcal{L}_{hgdasf} = \mathcal{L}^{SF}_H + \alpha \mathcal{L}_T$
 
 adversarial feature-level alignment
 
-贡献一：局部+全局双通道 GCN + 图间注意力（解决图表示学习层面的问题）
+贡献一：局部+全局双通道 GCN + 图间注意力（解决图表示学习层面的问题）\
 贡献二：三损失对抗域自适应框架（解决域迁移层面的问题）
 
 删去对抗对齐损失L_DA
+
+ppmi_conv 修复了 german 报 NaN 的问题
+
+阶段二冻结分类器 + source-prior marginal regularization (lambda_prior = 0.4), 避免预测坍塌为一类
+
+|Dataset|ACC|AUC|DP|EO|
+|---|---:|---:|---:|---:|
+|bailA|87.62±0.97|87.46±1.32|4.17±1.08|5.49±1.47|
+|german|63.55±2.18|52.25±2.76|20.19±5.14|20.47±4.70|
+|pokec|54.70±0.43|55.96±0.58|14.10±0.22|9.50±1.28|
+|syn|86.07±1.15|92.01±1.13|24.17±2.71|15.80±3.85|
 
 
 
