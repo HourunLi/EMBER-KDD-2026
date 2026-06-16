@@ -128,4 +128,32 @@ ppmi_conv 修复了 german 报 NaN 的问题
 
 non-IID UDA
 
-基于 Weisfeiler-Lehman (WL) 子树核与消息传递 GNN 的图子树差异 Graph Subtree Discrepancy (GSD)
+feature alignment
+
+基于 Weisfeiler-Lehman (WL) 子树核与消息传递 GNN 的图子树差异 Graph Subtree Discrepancy (GSD): \
+逐层 WL子图差异 求和，差异使用 差异距离 计算（差异距离：两个探测函数分别在源图和目标图上的期望预测差异的差值的最大值）
+
+loss: 交叉熵 + GSD(有限M层近似)
+
+原始 GRADE 用源图和目标图的逐层 WL 子图表示在线计算 GSD；GRADE-SF 则在源阶段预先保存逐层、类别条件的表示均值和方差，目标阶段用目标预测概率构造软伪标签统计量，再让目标逐层 class-conditional statistics 对齐到保存的源域 statistics。
+
+GSD改造：把“在线源-目标分布差异”改成“源域统计量和目标域伪标签统计量之间的差异” \
+按层、类别保存源域节点表示均值和方差 \
+用 source-free GSD loss 代替原始 GSD：
+$$ \mathcal{L}_{GSD}^{SF}=\frac{1}{L}\sum_{l=1}^{L}\sum_{c=1}^{C}\hat{\pi}_{c}^{T}\left[D_{\mu}(\mu_{l,c}^{T}, \mu_{l,c}^{S})+\beta D_{\sigma}(\sigma_{l,c}^{2,T}, \sigma_{l,c}^{2,S})\right] $$
+$$ D_{\mu}=\frac{1}{d_l}\sum_j\frac{(\mu_{l,c,j}^{T} - \mu_{l,c,j}^{S})^2}{\sigma_{l,c,j}^{2,S} + \epsilon} $$
+$$ D_{\sigma}=SmoothL1\left(\log(\sigma_{l,c}^{2,T}+\epsilon),\log(\sigma_{l,c}^{2,S}+\epsilon)\right) $$
+
+源域预训练loss - 交叉熵 \
+目标域适配loss - $\mathcal{L}_{GSD}^{SF}$
+
+source_lr: 0.001 \
+target_lr: 0.0003 \
+dropout: 0.3
+
+|Dataset|ACC|AUC|DP|EO|
+|---|---:|---:|---:|---:|
+|bailA|89.82+/-1.09|93.81+/-1.27|4.58+/-0.28|6.88+/-0.27|
+|german|67.79+/-1.53|56.68+/-0.95|11.90+/-6.45|9.60+/-5.40|
+|pokec|69.36+/-0.17|75.85+/-0.20|4.69+/-1.23|4.24+/-0.57|
+|syn|87.82+/-0.65|95.39+/-0.01|16.30+/-0.35|13.56+/-3.81|
