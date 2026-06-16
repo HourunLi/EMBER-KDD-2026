@@ -78,11 +78,11 @@ $\mathcal{P} = \left\{ \boldsymbol{\mu}^S_{L,c},\ \boldsymbol{\mu}^S_{H,c},\ \bo
 改造说明:
 
 1. 替换损失：基于原型的同质性对齐损失 $\mathcal{L}^{SF}_H$
-   用伪标签将目标节点分配到各类，计算目标嵌入与存储原型的 KL 散度，替代原来对源域在线嵌入的依赖：
+   使用目标预测的 hard pseudo-label 将目标节点分配到各类，计算每类目标嵌入均值与源域存储原型之间的 KL 散度，替代原来对源域在线嵌入的依赖。代码中不是对高斯分布 $\mathcal{N}(\mu, I)$ 做 KL，而是在隐藏维度上先做 softmax，再计算目标均值向量与源域原型向量的 KL：
 
-   $\mathcal{L}^{SF}_H = \sum_{c=1}^C \hat{p}(c) \cdot \left[ KL\!\left(\hat{Z}^T_{L,c} \,\Big\|\, \mathcal{N}(\boldsymbol{\mu}^S_{L,c}, \mathbf{I})\right) + KL\!\left(\hat{Z}^T_{H,c} \,\Big\|\, \mathcal{N}(\boldsymbol{\mu}^S_{H,c}, \mathbf{I})\right) + KL\!\left(\hat{Z}^T_{F,c} \,\Big\|\, \mathcal{N}(\boldsymbol{\mu}^S_{F,c}, \mathbf{I})\right) \right]$
+   $\mathcal{L}^{SF}_H = \sum_{c=1}^C \hat{p}(c) \cdot \left[ KL\!\left(\mathrm{softmax}(\boldsymbol{\mu}^T_{L,c}) \,\Big\|\, \mathrm{softmax}(\boldsymbol{\mu}^S_{L,c})\right) + KL\!\left(\mathrm{softmax}(\boldsymbol{\mu}^T_{H,c}) \,\Big\|\, \mathrm{softmax}(\boldsymbol{\mu}^S_{H,c})\right) + KL\!\left(\mathrm{softmax}(\boldsymbol{\mu}^T_{F,c}) \,\Big\|\, \mathrm{softmax}(\boldsymbol{\mu}^S_{F,c})\right) \right]$
 
-   其中 $\hat{Z}^T_{L,c}$​ 表示被伪标签分配到类 c 的目标节点嵌入的均值，$\hat{p}(c)$ 是目标域的估计类别先验。
+   其中 $\boldsymbol{\mu}^T_{L,c}$​ 表示被 hard pseudo-label 分配到类 c 的目标节点嵌入均值，$\boldsymbol{\mu}^S_{L,c}$ 表示源域保存的类条件原型，$\hat{p}(c)$ 是目标域 hard pseudo-label 估计出的类别占比。
 
 2. 保留损失：目标域熵最小化 $\mathcal{L}_T$
    
