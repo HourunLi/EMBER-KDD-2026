@@ -12,18 +12,18 @@ bailA:
   lambda_fair: 3.0
   proto_temp: 3
   lambda_pi: 0.02
-german:
+germanA:
   train_epochs: 800
-  lr: 0.0015
-  lr2_reg: 0.002
-  dropout: 0.15
+  lr: 0.0005
+  lr2_reg: 0.004
+  dropout: 0.0
   runs: 3
-  hidden_dim: 64
-  n_layers: 2
+  hidden_dim: 24
+  n_layers: 1
   tau_c: 0.35
   #use_checkpoint: true
   inter_encoder: GCN
-  lambda_fair: 2.0
+  lambda_fair: 5.0
   proto_temp: 1.6
   lambda_pi: 0.05
   adapt_lr: 0.0007

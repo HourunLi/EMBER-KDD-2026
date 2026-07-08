@@ -28,8 +28,8 @@ DATASET_ALIASES = {
     "pokec_n": ("pokec", "_n"),
     "bailA_2": ("bailA", "_2"),
     "bailA_1": ("bailA", "_1"),
-    "german_2": ("german", "_2"),
-    "german_1": ("german", "_1"),
+    "germanA_2": ("germanA", "_2"),
+    "germanA_1": ("germanA", "_1"),
     "syn-2": ("syn", "-2"),
     "syn-1": ("syn", "-1"),
 }

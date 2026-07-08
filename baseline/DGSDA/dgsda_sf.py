@@ -41,7 +41,7 @@ LOG_DIR = RESULT_DIR / "logs"
 
 DATASET_ID_MAP = {
     "bailA": ("_2", "_1"),
-    "german": ("_2", "_1"),
+    "germanA": ("_2", "_1"),
     "pokec": ("_z", "_n"),
     "syn": ("-2", "-1"),
 }
@@ -454,9 +454,9 @@ def get_args():
     parser.add_argument("--worker", action="store_true", help="run one dataset/run worker")
     parser.add_argument("--aggregate_only", action="store_true", help="only aggregate existing run json files")
     parser.add_argument("--dataset", type=str, default="syn", choices=list(DATASET_ID_MAP.keys()))
-    parser.add_argument("--datasets", nargs="+", default=["bailA", "german", "pokec", "syn"])
+    parser.add_argument("--datasets", nargs="+", default=["bailA", "germanA", "pokec", "syn"])
     parser.add_argument("--run_idx", type=int, default=0)
-    parser.add_argument("--gpus", type=str, default="0,1,3,4,5")
+    parser.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7")
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--seed", type=int, default=1111)
 

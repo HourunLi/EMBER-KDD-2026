@@ -11,6 +11,12 @@ from utils import seed_everything
 
 
 SEARCH_TRIALS = {
+    "hidden_dim": [16, 24, 32, 64],
+    "n_layers": [1, 2, 3],
+    "dropout": [0.0, 0.1, 0.2],
+    "lr": [0.0005],
+    "lr2_reg": [0.0],
+    "lambda_fair": [1.0, 2.0],
 }
 
 
@@ -22,12 +28,7 @@ def compute_joint_metric(result):
     All four metrics are already on a 0-100 scale, so a weighted linear
     combination keeps the ranking simple and easy to inspect.
     """
-    return float( 10
-        - max(68.93 - result['ada_acc'], 0) / 68.93
-        - max(76.16 - result['ada_auc'], 0) / 76.16
-        - max(0, result['ada_dp'] - 0.37) / 0.37
-        - max(0, result['ada_eo'] - 0.71) / 0.71
-    )
+    return float( result['ada_acc'] + result['ada_auc'] - result['ada_dp'] - result['ada_eo'])
 
 
 def run_once(run_args):

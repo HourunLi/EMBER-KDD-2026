@@ -51,7 +51,7 @@ from SFFGNN.utils import fair_metric
 METHOD_NAME = "GRADE-SF"
 DATASET_ID_MAP = {
     "bailA": ("_2", "_1"),
-    "german": ("_2", "_1"),
+    "germanA": ("_2", "_1"),
     "pokec": ("_z", "_n"),
     "syn": ("-2", "-1"),
 }
@@ -712,12 +712,12 @@ def get_args():
     parser.add_argument(
         "--datasets",
         nargs="+",
-        default=["bailA", "german", "pokec", "syn"],
+        default=["bailA", "germanA", "pokec", "syn"],
         choices=list(DATASET_ID_MAP.keys()),
     )
     parser.add_argument("--run_idx", type=int, default=0)
     parser.add_argument("--runs", type=int, default=3)
-    parser.add_argument("--gpus", type=str, default="1,3,4,5,6,7")
+    parser.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7")
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--seed", type=int, default=1111)
 

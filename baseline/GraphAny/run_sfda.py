@@ -31,13 +31,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 DATASET_PAIRS = {
-    "bailA": ("bailA_2", "bailA_1"),
-    "german": ("german_2", "german_1"),
-    "pokec": ("pokec_z", "pokec_n"),
-    "syn": ("syn-2", "syn-1"),
+    #"bailA": ("bailA_2", "bailA_1"),
+    "germanA": ("germanA_2", "germanA_1"),
+    #"pokec": ("pokec_z", "pokec_n"),
+    #"syn": ("syn-2", "syn-1"),
 }
 
-N_RUNS = 3
+N_RUNS = 5
 RESULT_DIR = SCRIPT_DIR / "results"
 RUN_DIR = RESULT_DIR / "runs"
 CHECKPOINT_DIR = RESULT_DIR / "checkpoints"
@@ -526,11 +526,11 @@ def get_args():
     parser.add_argument(
         "--datasets",
         nargs="+",
-        default=["bailA", "german", "pokec", "syn"],
+        default=["bailA", "germanA", "pokec", "syn"],
         choices=list(DATASET_PAIRS.keys()),
     )
     parser.add_argument("--run_idx", type=int, default=0)
-    parser.add_argument("--gpus", type=str, default="0,1,3,4,5")
+    parser.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7")
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
 
