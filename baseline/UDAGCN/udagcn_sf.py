@@ -22,7 +22,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
 SFFGNN_DIR = REPO_ROOT / "SFFGNN"
 
-RUN = 3
+RUN = 5
 DEFAULT_GPUS = "0,1,2,3,4,5,6,7"
 DEFAULT_DATASETS = ("bailA", "germanA", "pokec", "syn")
 

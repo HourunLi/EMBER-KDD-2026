@@ -33,6 +33,7 @@ except ImportError:  # 服务器若缺少 sklearn，AUC 会被置为 NaN，Acc/D
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 
+N_RUNS = 5
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SFFGNN_DIR = REPO_ROOT / "SFFGNN"
 RESULT_DIR = Path(__file__).resolve().parent / "results"
@@ -305,7 +306,7 @@ def fmt_mean_std(values):
 
 def aggregate_dataset(dataset):
     rows = []
-    for run_idx in range(3):
+    for run_idx in range(N_RUNS):
         path = run_result_path(dataset, run_idx)
         if not path.exists():
             return None
@@ -367,7 +368,7 @@ def launch_parallel(args):
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     datasets = args.datasets
-    tasks = [(dataset, run_idx) for dataset in datasets for run_idx in range(3)]
+    tasks = [(dataset, run_idx) for dataset in datasets for run_idx in range(N_RUNS)]
     gpu_ids = parse_gpu_ids(args.gpus)
     running = {}
     completed = set()
@@ -440,7 +441,7 @@ def launch_parallel(args):
             completed.add((info["dataset"], info["run_idx"]))
             print(f"[Done] {info['dataset']} run{info['run_idx']}")
 
-            dataset_runs = {(info["dataset"], idx) for idx in range(3)}
+            dataset_runs = {(info["dataset"], idx) for idx in range(N_RUNS)}
             if dataset_runs.issubset(completed):
                 summary = aggregate_dataset(info["dataset"])
                 print(f"[Dataset summary] {info['dataset']}: {summary}")

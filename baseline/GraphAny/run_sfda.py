@@ -31,10 +31,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 DATASET_PAIRS = {
-    #"bailA": ("bailA_2", "bailA_1"),
+    "bailA": ("bailA_2", "bailA_1"),
     "germanA": ("germanA_2", "germanA_1"),
-    #"pokec": ("pokec_z", "pokec_n"),
-    #"syn": ("syn-2", "syn-1"),
+    "pokec": ("pokec_z", "pokec_n"),
+    "syn": ("syn-2", "syn-1"),
 }
 
 N_RUNS = 5
@@ -46,7 +46,7 @@ SUMMARY_FILE = RESULT_DIR / "graphany_sf_summary.md"
 
 
 def set_seed(seed):
-    """固定随机性，保证 3 次运行只由 run seed 区分。"""
+    """固定随机性，保证 5 次运行只由 run seed 区分。"""
     import random
 
     random.seed(seed)
