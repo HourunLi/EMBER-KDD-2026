@@ -104,7 +104,7 @@ def sample_visible_nodes(train_indices, batch_nodes):
     return train_indices[~torch.isin(train_indices, batch_nodes)]
 
 
-def train_one_epoch(model, optimizer, criterion, ds, batch_size, device):
+def train_one_epoch(model, optimizer, criterion, ds, batch_size, device, limit_batches):
     model.train()
     train_idx = ds.train_indices[torch.randperm(len(ds.train_indices))]
     total_loss = 0.0
@@ -135,6 +135,8 @@ def train_one_epoch(model, optimizer, criterion, ds, batch_size, device):
 
         total_loss += loss.item()
         n_batches += 1
+        if limit_batches > 0 and n_batches >= limit_batches:
+            break
 
     return total_loss / max(n_batches, 1)
 
@@ -270,7 +272,8 @@ def run_single(args):
 
     print(
         f"[GraphAny-SF] dataset={args.dataset} run={args.run_idx} "
-        f"source={source_name} target={target_name} device={device}"
+        f"source={source_name} target={target_name} device={device}",
+        flush=True,
     )
 
     source_ds = FairGraphDataset(
@@ -297,11 +300,13 @@ def run_single(args):
             source_ds,
             args.train_batch,
             device,
+            args.limit_train_batches,
         )
         if args.verbose and (epoch + 1) % args.print_every == 0:
             print(
                 f"[{args.dataset} run{args.run_idx}] "
-                f"epoch={epoch + 1}/{args.epochs} loss={loss:.6f}"
+                f"epoch={epoch + 1}/{args.epochs} loss={loss:.6f}",
+                flush=True,
             )
 
     # 只保存 source 训练得到的参数和 source-derived channel 权重。
@@ -342,8 +347,8 @@ def run_single(args):
     )
     metrics = evaluate_target(model, target_ds, channel_weights, cfg, args, device)
     out_path = write_run_result(args.dataset, args.run_idx, metrics, args)
-    print(f"[GraphAny-SF] run result saved: {out_path}")
-    print(json.dumps(metrics, indent=2, ensure_ascii=False))
+    print(f"[GraphAny-SF] run result saved: {out_path}", flush=True)
+    print(json.dumps(metrics, indent=2, ensure_ascii=False), flush=True)
 
 
 def fmt_mean_std(values):
@@ -425,6 +430,7 @@ def launch_parallel(args):
         log_path = LOG_DIR / f"{dataset}_run{run_idx}.log"
         cmd = [
             sys.executable,
+            "-u",
             str(Path(__file__).resolve()),
             "--worker",
             "--dataset",
@@ -445,6 +451,8 @@ def launch_parallel(args):
             str(args.train_batch),
             "--eval_batch",
             str(args.eval_batch),
+            "--limit_train_batches",
+            str(args.limit_train_batches),
             "--n_hidden",
             str(args.n_hidden),
             "--n_mlp_layer",
@@ -530,7 +538,7 @@ def get_args():
         choices=list(DATASET_PAIRS.keys()),
     )
     parser.add_argument("--run_idx", type=int, default=0)
-    parser.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7")
+    parser.add_argument("--gpus", type=str, default="0,1,2,4,5,6,7")
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
 
@@ -539,6 +547,7 @@ def get_args():
     parser.add_argument("--weight_decay", type=float, default=0.02)
     parser.add_argument("--train_batch", type=int, default=128)
     parser.add_argument("--eval_batch", type=int, default=100000)
+    parser.add_argument("--limit_train_batches", type=int, default=1)
     parser.add_argument("--n_hidden", type=int, default=128)
     parser.add_argument("--n_mlp_layer", type=int, default=2)
     parser.add_argument("--entropy", type=float, default=1.0)

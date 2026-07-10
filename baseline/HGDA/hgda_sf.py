@@ -681,7 +681,7 @@ def get_args():
     )
     parser.add_argument("--run_idx", type=int, default=0)
     parser.add_argument("--runs", type=int, default=5)
-    parser.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7")
+    parser.add_argument("--gpus", type=str, default="0,1,2,4,5,6,7")
     parser.add_argument("--cuda", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1111)
 

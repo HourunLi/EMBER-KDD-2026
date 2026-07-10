@@ -23,7 +23,7 @@ REPO_ROOT = SCRIPT_DIR.parents[1]
 SFFGNN_DIR = REPO_ROOT / "SFFGNN"
 
 RUN = 5
-DEFAULT_GPUS = "0,1,2,3,4,5,6,7"
+DEFAULT_GPUS = "0,1,2,4,5,6,7"
 DEFAULT_DATASETS = ("bailA", "germanA", "pokec", "syn")
 
 # 源/目标 id 与 SFFGNN/config.py 中注释的默认迁移方向保持一致。
