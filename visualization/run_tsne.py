@@ -10,11 +10,13 @@ if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
 from data_io import (  # noqa: E402
-    enabled_names,
+    build_context,
     dataset_lookup,
+    enabled_names,
     load_method_dataset,
     load_yaml_config,
     method_lookup,
+    resolve_path,
     sample_points,
     slugify,
     split_csv_arg,
@@ -44,12 +46,6 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="Comma-separated method names. Defaults to enabled methods in config.",
-    )
-    parser.add_argument(
-        "--stage",
-        type=str,
-        default=None,
-        help="Embedding stage placeholder, e.g. source_trained or adapted.",
     )
     parser.add_argument(
         "--output-dir",
@@ -145,7 +141,6 @@ def main() -> int:
             print(f"Unknown methods: {', '.join(missing_methods)}", file=sys.stderr)
         return 2
 
-    stage = args.stage or str(config.get("stage", "source_trained"))
     output_dir = resolve_output_dir(config, config_path, args.output_dir)
 
     tsne_cfg = dict(config.get("tsne") or {})
@@ -163,13 +158,11 @@ def main() -> int:
     for dataset in selected_datasets:
         dataset_cfg = datasets_by_name[dataset]
         dataset_title = str(dataset_cfg.get("title", dataset))
-        panels = []
-        group_names = None
 
         for method in selected_methods:
             method_cfg = methods_by_name[method]
             try:
-                loaded = load_method_dataset(config, config_path, method_cfg, dataset, stage)
+                loaded = load_method_dataset(config, config_path, method_cfg, dataset)
                 max_points = int(sampling_cfg.get("max_points", 5000))
                 emb, labels, source_indices = sample_points(
                     loaded.embeddings,
@@ -179,18 +172,14 @@ def main() -> int:
                     random_state=int(sampling_cfg.get("random_state", tsne_cfg.get("random_state", 42))),
                 )
                 print(
-                    f"[{dataset}/{method}] loaded {loaded.embeddings.shape[0]} points "
+                    f"[{method}/{dataset}] loaded {loaded.embeddings.shape[0]} points "
                     f"from {loaded.embedding_path}; plotting {labels.shape[0]} points."
                 )
+
                 coords = compute_tsne(emb, tsne_cfg)
-                coord_path = (
-                    output_dir
-                    / "coordinates"
-                    / slugify(dataset)
-                    / f"{slugify(method)}_{slugify(stage)}_tsne.csv"
-                )
+                result_dir = output_dir / f"{slugify(method)}_{slugify(dataset)}"
                 write_coordinates_csv(
-                    coord_path,
+                    result_dir / "coordinates.csv",
                     method,
                     dataset,
                     coords,
@@ -198,26 +187,18 @@ def main() -> int:
                     source_indices,
                     loaded.group_names,
                 )
-                panels.append({"method": method, "coords": coords, "labels": labels})
-                group_names = loaded.group_names
+
+                panel = {"method": method, "dataset": dataset, "coords": coords, "labels": labels}
+                for fmt in output_formats:
+                    fmt = fmt.lstrip(".")
+                    out_path = result_dir / f"tsne.{fmt}"
+                    plot_panels(out_path, dataset_title, [panel], loaded.group_names, plot_cfg)
+                    print(f"[saved] {out_path}")
+                any_plotted = True
             except Exception as exc:
                 if args.strict:
                     raise
-                print(f"[skip] {dataset}/{method}: {exc}", file=sys.stderr)
-
-        if not panels:
-            message = f"No plottable methods for dataset={dataset}."
-            if args.strict:
-                raise RuntimeError(message)
-            print(f"[skip] {message}", file=sys.stderr)
-            continue
-
-        for fmt in output_formats:
-            fmt = fmt.lstrip(".")
-            out_path = output_dir / f"{slugify(dataset)}_{slugify(stage)}_tsne.{fmt}"
-            plot_panels(out_path, dataset_title, panels, group_names or {}, plot_cfg)
-            print(f"[saved] {out_path}")
-            any_plotted = True
+                print(f"[skip] {method}/{dataset}: {exc}", file=sys.stderr)
 
     return 0 if any_plotted else 1
 
@@ -226,18 +207,9 @@ def resolve_output_dir(config: dict, config_path: Path, override: Path | None) -
     if override is not None:
         return override.resolve()
 
-    from data_io import resolve_path  # local import avoids exporting this in the CLI surface
-
     config_dir = config_path.resolve().parent
-    base_context = {"config_dir": str(config_dir)}
-    project_template = ((config.get("project") or {}).get("root")) or str(Path(__file__).resolve().parents[2])
-    project_root = resolve_path(str(project_template), base_context, config_dir)
-    context = {
-        "config_dir": str(config_dir),
-        "project_root": str(project_root),
-        "sffgnn_root": str(project_root / "SFFGNN"),
-    }
-    template = str(config.get("output_dir", "{sffgnn_root}/results/visualization"))
+    context = build_context(config, config_path, dataset="", method_name="")
+    template = str(config.get("output_dir", "{visualization_root}/results"))
     return resolve_path(template, context, config_dir)
 
 

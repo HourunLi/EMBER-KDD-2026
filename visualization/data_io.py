@@ -5,7 +5,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 
@@ -51,7 +51,7 @@ def load_yaml_config(config_path: Path) -> dict[str, Any]:
 
 
 def project_root_from_here() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[1]
 
 
 def split_csv_arg(value: str | None) -> list[str] | None:
@@ -114,36 +114,25 @@ def build_context(
     config_path: Path,
     dataset: str,
     method_name: str,
-    method_cfg: Mapping[str, Any],
-    stage: str,
 ) -> dict[str, str]:
     config_dir = config_path.resolve().parent
     project_root = resolve_path(
         ((config.get("project") or {}).get("root")) or str(project_root_from_here()),
-        {"config_dir": str(config_dir), "stage": stage},
+        {"config_dir": str(config_dir)},
         config_dir,
     )
-    sffgnn_root = project_root / "SFFGNN"
-    baseline_root = project_root / "baseline"
+    visualization_root = project_root / "visualization"
 
-    context = {
+    return {
         "config_dir": str(config_dir),
         "project_root": str(project_root),
-        "sffgnn_root": str(sffgnn_root),
-        "baseline_root": str(baseline_root),
+        "visualization_root": str(visualization_root),
+        "embeddings_root": str(visualization_root / "embeddings"),
+        "results_root": str(visualization_root / "results"),
         "dataset": dataset,
         "method": method_name,
         "method_name": method_name,
-        "stage": stage,
     }
-
-    default_method_root = (
-        "{sffgnn_root}" if method_name.lower() == "sffgnn" else "{baseline_root}/{method}"
-    )
-    root_template = method_cfg.get("root") or method_cfg.get("method_root") or default_method_root
-    method_root = resolve_path(str(root_template), context, config_dir)
-    context["method_root"] = str(method_root)
-    return context
 
 
 def resolve_path(value: str, context: Mapping[str, str], base_dir: Path) -> Path:
@@ -155,7 +144,7 @@ def resolve_path(value: str, context: Mapping[str, str], base_dir: Path) -> Path
     return path.resolve()
 
 
-def path_candidates(
+def _path_templates(
     method_cfg: Mapping[str, Any],
     config: Mapping[str, Any],
     key: str,
@@ -175,7 +164,11 @@ def path_candidates(
     return []
 
 
-def first_existing_path(templates: Iterable[str], context: Mapping[str, str], base_dir: Path) -> tuple[Path | None, list[Path]]:
+def _first_existing_path(
+    templates: Sequence[str],
+    context: Mapping[str, str],
+    base_dir: Path,
+) -> tuple[Path | None, list[Path]]:
     checked: list[Path] = []
     for template in templates:
         path = resolve_path(template, context, base_dir)
@@ -190,33 +183,32 @@ def load_method_dataset(
     config_path: Path,
     method_cfg: Mapping[str, Any],
     dataset: str,
-    stage: str,
 ) -> LoadedEmbedding:
     config_dir = config_path.resolve().parent
     method_name = str(method_cfg["name"])
-    context = build_context(config, config_path, dataset, method_name, method_cfg, stage)
+    context = build_context(config, config_path, dataset, method_name)
 
-    embedding_templates = path_candidates(method_cfg, config, "embedding_path", "embedding_paths")
-    label_templates = path_candidates(method_cfg, config, "label_path", "label_paths")
+    embedding_templates = _path_templates(method_cfg, config, "embedding_path", "embedding_paths")
+    label_templates = _path_templates(method_cfg, config, "label_path", "label_paths")
     if not embedding_templates:
         raise ValueError(f"No embedding_path configured for method {method_name}.")
 
-    embedding_path, checked_embeddings = first_existing_path(embedding_templates, context, config_dir)
+    embedding_path, checked_embeddings = _first_existing_path(
+        embedding_templates, context, config_dir
+    )
     if embedding_path is None:
         checked = "\n  - ".join(str(path) for path in checked_embeddings)
         raise FileNotFoundError(
-            f"Missing embeddings for method={method_name}, dataset={dataset}, stage={stage}.\n"
+            f"Missing embeddings for method={method_name}, dataset={dataset}.\n"
             f"Checked:\n  - {checked}"
         )
 
-    labels_path, checked_labels = first_existing_path(label_templates, context, config_dir)
-    embedding_keys = _as_key_list(method_cfg.get("embedding_key"), ["representations", "embeddings", "features", "x"])
-    emb = load_array(embedding_path, embedding_keys)
-    labels = load_labels(
-        labels_path,
-        embedding_path,
-        method_cfg,
+    labels_path, _ = _first_existing_path(label_templates, context, config_dir)
+    embedding_keys = _as_key_list(
+        method_cfg.get("embedding_key"), ["representations", "embeddings", "features", "x"]
     )
+    emb = load_array(embedding_path, embedding_keys)
+    labels = load_labels(labels_path, embedding_path, method_cfg)
 
     emb, labels = clean_and_validate(emb, labels, method_name, dataset)
     return LoadedEmbedding(
@@ -267,7 +259,7 @@ def load_labels(labels_path: Path | None, embedding_path: Path, method_cfg: Mapp
         return load_label_array_or_encode(embedding_path, label_keys, y_keys, sens_keys)
 
     raise FileNotFoundError(
-        f"No labels_path found for {embedding_path}. Provide a label npz or include labels/y+sens in the embedding npz."
+        f"No labels_path found for {embedding_path}. Provide labels.npz or include labels/y+sens in feat.npz."
     )
 
 

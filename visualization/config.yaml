@@ -1,0 +1,94 @@
+# CELL-style t-SNE visualization config.
+#
+# Input convention:
+#   visualization/embeddings/<method>/<dataset>/feat.npz
+#   visualization/embeddings/<method>/<dataset>/labels.npz
+#
+# Output convention:
+#   visualization/results/<method>_<dataset>/coordinates.csv
+#   visualization/results/<method>_<dataset>/tsne.png
+#   visualization/results/<method>_<dataset>/tsne.pdf
+
+project:
+  root: "{config_dir}/.."
+
+output_dir: "{visualization_root}/results"
+
+defaults:
+  embedding_paths:
+    - "{embeddings_root}/{method}/{dataset}/feat.npz"
+  label_paths:
+    - "{embeddings_root}/{method}/{dataset}/labels.npz"
+
+datasets:
+  - name: bailA
+    title: Bail-A
+    enabled: false
+  - name: germanA
+    title: German-A
+    enabled: false
+  - name: pokec
+    title: Pokec
+    enabled: true
+  - name: syn
+    title: Synthetic
+    enabled: false
+
+methods:
+  - name: SFFGNN
+    enabled: true
+  - name: DGSDA
+    enabled: false
+  - name: GRADE
+    enabled: false
+  - name: GraphAny
+    enabled: false
+  - name: HGDA
+    enabled: false
+  - name: UDAGCN
+    enabled: false
+
+labels:
+  groups:
+    0: "Y=1, S=0"
+    1: "Y=1, S=1"
+    2: "Y=0, S=0"
+    3: "Y=0, S=1"
+
+sampling:
+  max_points: 5000
+  stratify: true
+  random_state: 42
+
+tsne:
+  random_state: 42
+  perplexity: 30
+  init: pca
+  learning_rate: auto
+  max_iter: 1000
+  metric: euclidean
+  normalize: minmax
+
+plot:
+  formats: [png, pdf]
+  dpi: 300
+  figure_width: 5.35
+  figure_height: 4.35
+  point_size: 34
+  alpha: 1.0
+  axis_margin: 0.05
+  tick_label_size: 28
+  tick_length: 5.0
+  tick_width: 1.1
+  tick_pad: 5.0
+  axis_label_size: 34
+  axis_label_pad: 6.0
+  spine_color: "#7F7F7F"
+  spine_width: 1.3
+  tight_layout_pad: 0.2
+  show_legend: false
+  font_family: serif
+  font_serif: ["Times New Roman", "DejaVu Serif"]
+  xlabel_template: "{method} {dataset} t-SNE result"
+  group_order: [0, 1, 2, 3]
+  colors: ["#5B8DE8", "#FF7043", "#86B889", "#FFB6C8"]

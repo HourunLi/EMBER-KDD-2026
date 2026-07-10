@@ -1,5 +1,7 @@
 from tqdm import tqdm
 import numpy as np
+import os
+import sys
 from models import *
 from config import mprint
 from utils import *
@@ -8,6 +10,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.func import functional_call
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 from visualization.export_utils import save_visualization_embeddings
 
 # 1) 源域上的 FairGNN 训练；
@@ -810,9 +816,6 @@ def train_and_adapt(args, source_data, target_data):
             target_data,
             model,
             cold_state,
-            visualization_stage='source_trained'
-            if getattr(args, 'save_visualization_embeddings', False)
-            else None,
         )
         print(f"[Run {run_idx}] Target (before adapt) | "
               f"Acc={t_accs['all']:.2f}  AUC={t_auc_rocs['all']:.2f}  "
@@ -832,9 +835,7 @@ def train_and_adapt(args, source_data, target_data):
             target_data,
             adapted_model,
             state,
-            visualization_stage='adapted'
-            if getattr(args, 'save_visualization_embeddings', False)
-            else None,
+            save_visualization=getattr(args, 'save_visualization_embeddings', False),
         )
         print(f"[Run {run_idx}] Target (after adapt) | "
               f"Acc={a_accs['all']:.2f}  AUC={a_aucs['all']:.2f}  "
@@ -849,7 +850,7 @@ def train_and_adapt(args, source_data, target_data):
             ada_acc, ada_auc_roc, ada_parity, ada_equality)
 
 
-def evaluate_after(args, data, encoder, state, visualization_stage=None):
+def evaluate_after(args, data, encoder, state, save_visualization=False):
     """
     Evaluate on target (after adaptation)
     Returns:
@@ -914,18 +915,14 @@ def evaluate_after(args, data, encoder, state, visualization_stage=None):
                  representations=feat[data.test_mask].cpu().numpy())
         np.savez(f"{args.dataset}_labels.npz",
                  labels=labels.cpu().numpy())
-        if visualization_stage is not None and getattr(args, 'save_visualization_embeddings', False):
-            import os
-            export_dir = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                'visualization_embeddings',
-            )
+        if save_visualization and getattr(args, 'save_visualization_embeddings', False):
+            embeddings_root = os.path.join(PROJECT_ROOT, 'visualization', 'embeddings')
             save_visualization_embeddings(
-                export_dir,
+                embeddings_root,
+                'SFFGNN',
                 args.dataset,
                 feat[data.test_mask].cpu().numpy(),
                 labels=labels.cpu().numpy(),
-                stage=visualization_stage,
             )
 
         result = {}

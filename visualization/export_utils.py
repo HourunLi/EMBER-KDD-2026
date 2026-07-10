@@ -22,20 +22,20 @@ def encode_ys_groups(y, sens) -> np.ndarray:
 
 
 def save_visualization_embeddings(
-    output_dir,
+    embeddings_root,
+    method: str,
     dataset: str,
     representations,
     *,
     labels: Optional[object] = None,
     y: Optional[object] = None,
     sens: Optional[object] = None,
-    stage: Optional[str] = "source_trained",
 ) -> tuple[Path, Path]:
     """Save embeddings in the standard format consumed by run_tsne.py.
 
     Baselines can import this helper, or simply write equivalent npz files:
-    - {dataset}_{stage}_feat.npz with key "representations"
-    - {dataset}_{stage}_labels.npz with key "labels"
+    - visualization/embeddings/{method}/{dataset}/feat.npz with key "representations"
+    - visualization/embeddings/{method}/{dataset}/labels.npz with key "labels"
     """
     emb = np.asarray(representations)
     if emb.ndim != 2:
@@ -53,13 +53,11 @@ def save_visualization_embeddings(
             f"representations and labels length mismatch: {emb.shape[0]} vs {labels_arr.shape[0]}."
         )
 
-    out_dir = Path(output_dir)
+    out_dir = Path(embeddings_root) / method / dataset
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    suffix = f"_{stage}" if stage else ""
-    feat_path = out_dir / f"{dataset}{suffix}_feat.npz"
-    labels_path = out_dir / f"{dataset}{suffix}_labels.npz"
+    feat_path = out_dir / "feat.npz"
+    labels_path = out_dir / "labels.npz"
     np.savez_compressed(feat_path, representations=emb)
     np.savez_compressed(labels_path, labels=labels_arr)
     return feat_path, labels_path
-

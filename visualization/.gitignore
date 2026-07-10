@@ -1,0 +1,7 @@
+embeddings/**
+results/**
+!embeddings/
+!results/
+!embeddings/.gitkeep
+!results/.gitkeep
+

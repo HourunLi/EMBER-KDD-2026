@@ -78,7 +78,7 @@ parser.add_argument('--use_checkpoint',    dest='use_checkpoint', action='store_
                     help='load checkpoint and skip source training when available')
 parser.set_defaults(use_checkpoint=False)
 parser.add_argument('--save_visualization_embeddings', action='store_true',
-                    help='export stage-aware embeddings for t-SNE visualization')
+                    help='export embeddings for root-level t-SNE visualization')
 parser.add_argument('--tune',     action='store_true')
 parser.set_defaults(tune=True)
 parser.add_argument('--verbose',  action='store_true')

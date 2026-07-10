@@ -82,86 +82,87 @@ def plot_panels(
         raise ValueError("No panels to plot.")
 
     plt = require_matplotlib()
-    n_panels = len(panels)
-    max_cols = int(plot_cfg.get("max_cols", 3))
-    cols = min(max_cols, n_panels)
-    rows = int(np.ceil(n_panels / cols))
-    width = float(plot_cfg.get("width_per_panel", 4.0)) * cols
-    height = float(plot_cfg.get("height_per_row", 3.7)) * rows + 0.8
-
-    fig, axes = plt.subplots(rows, cols, figsize=(width, height), squeeze=False)
-    axes_flat = axes.reshape(-1)
-
-    colors = plot_cfg.get("colors") or ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
-    markers = plot_cfg.get("markers") or ["o", "s", "^", "D"]
-    point_size = float(plot_cfg.get("point_size", 8))
-    alpha = float(plot_cfg.get("alpha", 0.72))
-
-    group_order = [int(item) for item in plot_cfg.get("group_order", sorted(group_names))]
-    for panel_idx, panel in enumerate(panels):
-        ax = axes_flat[panel_idx]
-        coords = np.asarray(panel["coords"])
-        panel_labels = np.asarray(panel["labels"]).astype(int)
-
-        for group_idx, group in enumerate(group_order):
-            mask = panel_labels == group
-            if not mask.any():
-                continue
-            scatter = ax.scatter(
-                coords[mask, 0],
-                coords[mask, 1],
-                s=point_size,
-                c=colors[group_idx % len(colors)],
-                marker=markers[group_idx % len(markers)],
-                alpha=alpha,
-                linewidths=0,
-                label=group_names.get(group, str(group)),
-            )
-
-        caption = f"({chr(ord('a') + panel_idx)}) {panel['method']}"
-        ax.set_title(caption, fontsize=10)
-        ax.set_xlim(0.0, 1.0)
-        ax.set_ylim(0.0, 1.0)
-        ax.set_xticks(np.linspace(0, 1, 6))
-        ax.set_yticks(np.linspace(0, 1, 6))
-        ax.tick_params(labelsize=8)
-        ax.grid(False)
-
-    for ax in axes_flat[n_panels:]:
-        ax.axis("off")
-
-    fig.suptitle(
-        f"Domain adaptation t-SNE: Source-Learned Representations on {dataset_title} (target domain)",
-        fontsize=12,
+    plt.rcParams.update(
+        {
+            "font.family": plot_cfg.get("font_family", "serif"),
+            "font.serif": plot_cfg.get("font_serif", ["Times New Roman", "DejaVu Serif"]),
+            "axes.unicode_minus": False,
+        }
     )
-    from matplotlib.lines import Line2D
 
-    handles = [
-        Line2D(
-            [0],
-            [0],
-            marker=markers[idx % len(markers)],
-            color="none",
-            markerfacecolor=colors[idx % len(colors)],
-            markeredgecolor="none",
-            markersize=6,
-            label=group_names.get(group, str(group)),
+    panel = panels[0]
+    coords = np.asarray(panel["coords"])
+    panel_labels = np.asarray(panel["labels"]).astype(int)
+
+    fig_width = float(plot_cfg.get("figure_width", 5.35))
+    fig_height = float(plot_cfg.get("figure_height", 4.35))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+    colors = plot_cfg.get("colors") or ["#5B8DE8", "#FF7043", "#86B889", "#FFB6C8"]
+    point_size = float(plot_cfg.get("point_size", 34))
+    alpha = float(plot_cfg.get("alpha", 1.0))
+    group_order = [int(item) for item in plot_cfg.get("group_order", sorted(group_names))]
+
+    for group_idx, group in enumerate(group_order):
+        mask = panel_labels == group
+        if not mask.any():
+            continue
+        ax.scatter(
+            coords[mask, 0],
+            coords[mask, 1],
+            s=point_size,
+            c=colors[group_idx % len(colors)],
+            marker="o",
+            alpha=alpha,
+            linewidths=0,
         )
-        for idx, group in enumerate(group_order)
-    ]
-    labels = [group_names.get(group, str(group)) for group in group_order]
-    if handles:
-        fig.legend(
-            handles,
-            labels,
-            loc="lower center",
-            ncol=min(len(labels), 4),
-            frameon=False,
-            fontsize=9,
-        )
-        fig.tight_layout(rect=(0.0, 0.08, 1.0, 0.94))
-    else:
-        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.94))
+
+    margin = float(plot_cfg.get("axis_margin", 0.05))
+    ax.set_xlim(0.0 - margin, 1.0 + margin)
+    ax.set_ylim(0.0 - margin, 1.0 + margin)
+    ax.set_xticks(np.linspace(0, 1, 6))
+    ax.set_yticks(np.linspace(0, 1, 6))
+    from matplotlib.ticker import FormatStrFormatter
+
+    ax.xaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+    ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+
+    tick_label_size = int(plot_cfg.get("tick_label_size", 28))
+    ax.tick_params(
+        axis="both",
+        which="major",
+        labelsize=tick_label_size,
+        length=float(plot_cfg.get("tick_length", 5.0)),
+        width=float(plot_cfg.get("tick_width", 1.1)),
+        direction="out",
+        pad=float(plot_cfg.get("tick_pad", 5.0)),
+    )
+
+    spine_color = plot_cfg.get("spine_color", "#7F7F7F")
+    spine_width = float(plot_cfg.get("spine_width", 1.3))
+    for spine in ax.spines.values():
+        spine.set_color(spine_color)
+        spine.set_linewidth(spine_width)
+
+    xlabel_template = plot_cfg.get("xlabel_template", "{method} {dataset} t-SNE result")
+    xlabel = xlabel_template.format(
+        method=panel.get("method", ""),
+        dataset=panel.get("dataset", dataset_title),
+        dataset_title=dataset_title,
+    )
+    ax.set_xlabel(
+        xlabel,
+        fontsize=int(plot_cfg.get("axis_label_size", 34)),
+        labelpad=float(plot_cfg.get("axis_label_pad", 6.0)),
+    )
+    ax.set_ylabel("")
+    ax.set_title("")
+    ax.grid(False)
+
+    if plot_cfg.get("show_legend", False):
+        ax.legend(frameon=False, fontsize=int(plot_cfg.get("legend_size", 12)))
+
+    fig.tight_layout(pad=float(plot_cfg.get("tight_layout_pad", 0.2)))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=int(plot_cfg.get("dpi", 300)), bbox_inches="tight")
