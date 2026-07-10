@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.func import functional_call
+from visualization.export_utils import save_visualization_embeddings
 
 # 1) 源域上的 FairGNN 训练；
 # 2) 从源模型中提取“可迁移知识”（prototype / residual / prior）；
@@ -805,7 +806,13 @@ def train_and_adapt(args, source_data, target_data):
         # ── Evaluate on target (before adaptation) ─────────────────────────
         cold_state = _build_source_free_eval_state(args, model, target_data, knowledge)
         t_accs, t_auc_rocs, t_parity, t_equality = evaluate_after(
-            args, target_data, model, cold_state
+            args,
+            target_data,
+            model,
+            cold_state,
+            visualization_stage='source_trained'
+            if getattr(args, 'save_visualization_embeddings', False)
+            else None,
         )
         print(f"[Run {run_idx}] Target (before adapt) | "
               f"Acc={t_accs['all']:.2f}  AUC={t_auc_rocs['all']:.2f}  "
@@ -820,7 +827,15 @@ def train_and_adapt(args, source_data, target_data):
         adapted_model, state = adapt_target(args, target_data, knowledge)
 
         # ── Evaluate on target (after adaptation) ──────────────────────────
-        a_accs, a_aucs, a_par, a_eq = evaluate_after(args, target_data, adapted_model, state)
+        a_accs, a_aucs, a_par, a_eq = evaluate_after(
+            args,
+            target_data,
+            adapted_model,
+            state,
+            visualization_stage='adapted'
+            if getattr(args, 'save_visualization_embeddings', False)
+            else None,
+        )
         print(f"[Run {run_idx}] Target (after adapt) | "
               f"Acc={a_accs['all']:.2f}  AUC={a_aucs['all']:.2f}  "
               f"DP={a_par['all']:.2f}  EO={a_eq['all']:.2f}")
@@ -834,7 +849,7 @@ def train_and_adapt(args, source_data, target_data):
             ada_acc, ada_auc_roc, ada_parity, ada_equality)
 
 
-def evaluate_after(args, data, encoder, state):
+def evaluate_after(args, data, encoder, state, visualization_stage=None):
     """
     Evaluate on target (after adaptation)
     Returns:
@@ -899,6 +914,19 @@ def evaluate_after(args, data, encoder, state):
                  representations=feat[data.test_mask].cpu().numpy())
         np.savez(f"{args.dataset}_labels.npz",
                  labels=labels.cpu().numpy())
+        if visualization_stage is not None and getattr(args, 'save_visualization_embeddings', False):
+            import os
+            export_dir = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                'visualization_embeddings',
+            )
+            save_visualization_embeddings(
+                export_dir,
+                args.dataset,
+                feat[data.test_mask].cpu().numpy(),
+                labels=labels.cpu().numpy(),
+                stage=visualization_stage,
+            )
 
         result = {}
         for split_name, mask in splits.items():
