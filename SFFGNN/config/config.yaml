@@ -2,16 +2,24 @@ bailA:
   train_epochs: 800
   lr: 0.006
   lr2_reg: 0.001
-  dropout: 0.5
-  runs: 3
+  dropout: 0.6
+  runs: 5
   hidden_dim: 64
   n_layers: 1
-  tau_c: 0.5
-  use_checkpoint: true
+  tau_c: 0.35
+  #use_checkpoint: true
   inter_encoder: GCN
-  lambda_fair: 3.0
-  proto_temp: 3
-  lambda_pi: 0.02
+  lambda_fair: 4.0
+  proto_temp: 4.5
+  lambda_pi: 0.08
+  adapt_lr: 0.0005
+  alpha_p: 0.9
+  alpha_pi: 0.9
+  alpha_r: 0.995
+  lambda_e: 0.2
+  lambda_res: 0.03
+  lambda_s: 1.0
+  tau_adjust: 0.6
 germanA:
   train_epochs: 800
   lr: 0.005
@@ -28,26 +36,46 @@ germanA:
   lambda_pi: 0.02
 pokec:
   train_epochs: 800
-  lr: 0.004
+  lr: 0.002
   lr2_reg: 0.001
   dropout: 0.4
-  runs: 3
-  hidden_dim: 128
-  n_layers: 3
-  tau_c: 0.3
-  # use_checkpoint: true
+  runs: 5
+  hidden_dim: 64
+  n_layers: 4
+  tau_c: 0.2
+  use_checkpoint: true
   inter_encoder: GCN
-  lambda_fair: 1.0
+  lambda_fair: 0.5
+  adapt_lr: 0.0005
+  alpha_p: 0.98
+  alpha_pi: 0.9
+  alpha_r: 0.998
+  lambda_e: 0.03
+  lambda_pi: 0.05
+  lambda_res: 0.0003
+  lambda_s: 0.5
+  meta_lr: 0.003
+  proto_temp: 0.4
+  tau_adjust: 1.0
 syn:
   train_epochs: 800
-  lr: 0.0005
-  lr2_reg: 0.0015
+  lr: 0.001
+  lr2_reg: 0.001
   dropout: 0.1
-  runs: 3
-  hidden_dim: 64
+  runs: 5
+  hidden_dim: 128
   n_layers: 3
-  # use_checkpoint: true
+  use_checkpoint: true
   inter_encoder: MLP
-  lambda_fair: 1.0
-  proto_temp: 0.1
-  lambda_pi: 1.0
+  lambda_fair: 2.0
+  proto_temp: 0.2
+  lambda_pi: 0.5
+  alpha_p: 0.95
+  alpha_pi: 0.7
+  alpha_r: 0.98
+  lambda_e: 0.05
+  lambda_res: 0.01
+  lambda_s: 0.5
+  tau_adjust: 1.5
+  tau_c: 0.3
+  adapt_lr: 0.001
