@@ -20,7 +20,8 @@ from scipy.sparse import load_npz
 def feature_norm(features):
     min_values = features.min(axis=0)[0]
     max_values = features.max(axis=0)[0]
-    return 2*(features - min_values).div(max_values-min_values) - 1
+    denom = (max_values - min_values).clamp_min(1e-12)
+    return 2*(features - min_values).div(denom) - 1
 
 def index_to_mask(node_num, index):
     mask = torch.zeros(node_num, dtype=torch.bool)
