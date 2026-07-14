@@ -6,34 +6,62 @@ bailA:
   runs: 5
   hidden_dim: 64
   n_layers: 1
-  tau_c: 0.35
-  #use_checkpoint: true
+  use_checkpoint: true
   inter_encoder: GCN
   lambda_fair: 4.0
-  proto_temp: 4.5
-  lambda_pi: 0.08
-  adapt_lr: 0.0005
-  alpha_p: 0.9
-  alpha_pi: 0.9
-  alpha_r: 0.995
-  lambda_e: 0.2
-  lambda_res: 0.03
+  # target adaptation
+  adapt_epochs: 75
+  adapt_lr: 0.0008
+  adapter_bottleneck: 8
+  tau_c: 0.25
+  proto_temp: 1.0
+  lambda_pi: 0.005
+  tau_adjust: 1.0
+  alpha_p: 0.8
+  alpha_pi: 0.98
   lambda_s: 1.0
-  tau_adjust: 0.6
+  lambda_e: 0.0
+  lambda_anchor: 5.0
+  target_lambda_fair: 0.5
+  meta_lr: 0.02
+  mmd_bandwidth: 1.5
+  mmd_chunk_size: 256
+  target_mmd_min_samples: 8
+  target_mmd_max_samples: 512
+  fairness_warmup_ratio: 0.2
+  prior_count_smoothing: 5.0
 germanA:
   train_epochs: 800
   lr: 0.005
   lr2_reg: 0.001
   dropout: 0.4
-  runs: 3
+  runs: 5
   hidden_dim: 128
   n_layers: 3
-  tau_c: 0.5
-  #use_checkpoint: true
+  use_checkpoint: true
   inter_encoder: GCN
   lambda_fair: 2
-  proto_temp: 2
+  # target adaptation
+  adapt_epochs: 100
+  adapt_lr: 0.0005
+  adapter_bottleneck: 64
+  tau_c: 0.35
+  proto_temp: 1.5
   lambda_pi: 0.02
+  tau_adjust: 1.0
+  alpha_p: 0.7
+  alpha_pi: 0.9
+  lambda_s: 0.5
+  lambda_e: 0.05
+  lambda_anchor: 5.0
+  target_lambda_fair: 0.5
+  meta_lr: 0.02
+  mmd_bandwidth: 0.5
+  mmd_chunk_size: 256
+  target_mmd_min_samples: 4
+  target_mmd_max_samples: 256
+  fairness_warmup_ratio: 0.1
+  prior_count_smoothing: 5.0
 pokec:
   train_epochs: 800
   lr: 0.002
@@ -42,21 +70,30 @@ pokec:
   runs: 5
   hidden_dim: 64
   n_layers: 4
-  tau_c: 0.2
   use_checkpoint: true
   inter_encoder: GCN
   lambda_fair: 0.5
-  adapt_lr: 0.0005
-  alpha_p: 0.98
-  alpha_pi: 0.9
-  alpha_r: 0.998
-  lambda_e: 0.03
-  lambda_pi: 0.05
-  lambda_res: 0.0003
-  lambda_s: 0.5
-  meta_lr: 0.003
-  proto_temp: 0.4
+  # target adaptation
+  adapt_epochs: 100
+  adapt_lr: 0.0004
+  adapter_bottleneck: 8
+  tau_c: 0.1
+  proto_temp: 0.7
+  lambda_pi: 0.01
   tau_adjust: 1.0
+  alpha_p: 0.95
+  alpha_pi: 0.7
+  lambda_s: 2.0
+  lambda_e: 0.1
+  lambda_anchor: 1.0
+  target_lambda_fair: 1.0
+  meta_lr: 0.0003
+  mmd_bandwidth: 1.5
+  mmd_chunk_size: 256
+  target_mmd_min_samples: 8
+  target_mmd_max_samples: 256
+  fairness_warmup_ratio: 0.2
+  prior_count_smoothing: 1.0
 syn:
   train_epochs: 800
   lr: 0.001
@@ -68,14 +105,24 @@ syn:
   use_checkpoint: true
   inter_encoder: MLP
   lambda_fair: 2.0
+  # target adaptation
+  adapt_epochs: 75
+  adapt_lr: 0.0012
+  adapter_bottleneck: 64
+  tau_c: 0.2
   proto_temp: 0.2
-  lambda_pi: 0.5
-  alpha_p: 0.95
-  alpha_pi: 0.7
-  alpha_r: 0.98
-  lambda_e: 0.05
-  lambda_res: 0.01
-  lambda_s: 0.5
-  tau_adjust: 1.5
-  tau_c: 0.3
-  adapt_lr: 0.001
+  lambda_pi: 0.1
+  tau_adjust: 1.0
+  alpha_p: 0.7
+  alpha_pi: 0.5
+  lambda_s: 1.0
+  lambda_e: 0.0
+  lambda_anchor: 10.0
+  target_lambda_fair: 0.1
+  meta_lr: 0.01
+  mmd_bandwidth: 1.5
+  mmd_chunk_size: 256
+  target_mmd_min_samples: 8
+  target_mmd_max_samples: 512
+  fairness_warmup_ratio: 0.2
+  prior_count_smoothing: 0.1

@@ -49,8 +49,14 @@ def fair_metric(pred, labels, sens):
     idx_s1 = sens == 1
     idx_s0_y1 = np.bitwise_and(idx_s0, labels == 1)
     idx_s1_y1 = np.bitwise_and(idx_s1, labels == 1)
-    parity   = abs(pred[idx_s0].mean() - pred[idx_s1].mean())
-    equality = abs(pred[idx_s0_y1].mean() - pred[idx_s1_y1].mean())
+    def safe_gap(left, right):
+        if left.size == 0 or right.size == 0:
+            return 0.0
+        value = abs(float(left.mean()) - float(right.mean()))
+        return value if np.isfinite(value) else 0.0
+
+    parity = safe_gap(pred[idx_s0], pred[idx_s1])
+    equality = safe_gap(pred[idx_s0_y1], pred[idx_s1_y1])
     return float(parity), float(equality)
 
 

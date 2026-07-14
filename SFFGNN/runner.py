@@ -11,6 +11,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.func import functional_call
 
+try:
+    from .adaptation import (
+        load_adaptation_state,
+        predict_target_proba,
+        run_target_adaptation,
+        save_adaptation_state,
+    )
+except ImportError:
+    from adaptation import (
+        load_adaptation_state,
+        predict_target_proba,
+        run_target_adaptation,
+        save_adaptation_state,
+    )
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -285,18 +300,9 @@ class ResidualScaler(nn.Module):
 
 
 def _init_residual_scalers(dim, dev, pi_ys, keys):
-    """
-    根据联合先验初始化 residual scaler。
-    小群体的初始权重更大，便于冷启动时更快校正其 residual。
-    """
-    total_pi = sum(pi_ys.values())
-
-    def _minor_init(ys_key):
-        pi = max(pi_ys[ys_key], 1e-8)
-        # normalise so mean init across groups ≈ 0.01
-        return (total_pi / (len(keys) * pi)) * 0.01
-
-    return {k: ResidualScaler(dim, dev, init_weight=_minor_init(k)) for k in keys}
+    """Build safe zero-initialised scalers for legacy cold-state inference."""
+    del pi_ys
+    return {k: ResidualScaler(dim, dev, init_weight=0.0) for k in keys}
 
 
 def _build_sfda_state(args, model, target_data, p_y, r_ys, pi_ys, tau_adjust, temp, keys, scalers=None):
@@ -361,99 +367,25 @@ def _build_source_free_eval_state(args, model, target_data, knowledge):
 
 
 # SFDA Target Adaptation
-def adapt_target(args, target_data, knowledge):
-    """
-    Full SFDA target adaptation — strict source-free.
-    """
-    # 不使用source_data，只依赖导出的knowledge。
-    # 用source学到的统计先验，在target域重新校准prototype，并通过高置信伪标签慢慢让目标域分布贴合这个结构。”
+def _adapt_target_shared(args, target_data, knowledge):
+    """Load the frozen source model and run FairMAC target adaptation."""
     dev = args.device
-    adapt_epochs = getattr(args, 'adapt_epochs', 400)
-    tau_c        = getattr(args, 'tau_c',        0.80)
-    lambda_pi    = getattr(args, 'lambda_pi',    1.0)
-    alpha_p      = getattr(args, 'alpha_p',      0.90)
-    alpha_r      = getattr(args, 'alpha_r',      0.99)
-    alpha_pi     = getattr(args, 'alpha_pi',     0.90)
-    lambda_s     = getattr(args, 'lambda_s',     1.0)
-    lambda_e     = getattr(args, 'lambda_e',     0.1)
-    lambda_res   = getattr(args, 'lambda_res',   0.01)
-    meta_lr      = getattr(args, 'meta_lr',      0.01)
-    adapt_lr     = getattr(args, 'adapt_lr',     1e-3)
-    tau_adjust   = getattr(args, 'tau_adjust',   1.0)
-    temp         = getattr(args, 'proto_temp',   0.5)   # softmax temperature for posterior sharpening
-    keys         = [(0, 0), (0, 1), (1, 0), (1, 1)]
-
-    # ── Stage 3.1: load model ──────────────────
     model = FairGNN(args, encoder_type=args.inter_encoder).to(dev)
     model.load_state_dict({k: v.to(dev) for k, v in knowledge['model_state'].items()})
-    # 冻结骨干参数，防止大范围飘逸，保持基本性能不要掉太多。
-    # freeze the backbone
-    for p in model.backbone.parameters():
-        p.requires_grad_(False)
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+        parameter.grad = None
     model.eval()
-
-    dim = knowledge['p_y'][0].shape[0]
-
-    # Source anchors (frozen, used for L_align^SF)
-    p_y_S  = {yv: knowledge['p_y'][yv].clone().to(dev)     for yv in [0, 1]}
-    # sensitive 是residual的
-    r_ys_S = {k:  v.clone().to(dev) for k, v in knowledge['r_ys'].items()}
-
-    # Mutable target prototypes / residuals 
-    # prototype for y
-    p_y  = {yv: p_y_S[yv].clone()  for yv in [0, 1]}
-    # prototype for (y,s)
-    r_ys = {k:  v.clone()          for k, v in r_ys_S.items()}
-    # BCA prior
-    pi_ys  = {k: float(v)  for k, v in knowledge['pi_ys'].items()}
-
-    # Learnable residual scalers: Δ_{y,s}(h) = γ_{y,s} ⊙ h
-    # Minor-attribute groups get a higher initial weight (inverse-frequency weighting)
-    # so their residuals are updated more aggressively at the start of adaptation.
-    scalers = _init_residual_scalers(dim, dev, pi_ys, keys)
-    opt_res = torch.optim.Adam(
-        [p for sc in scalers.values() for p in sc.parameters()],
-        lr=adapt_lr,
-    )
-
     target_data = target_data.to(dev)
-    print(f'[SFDA] adapt_epochs={adapt_epochs}  tau_c={tau_c}  alpha_p={alpha_p}  alpha_r={alpha_r}  tau_adjust={tau_adjust}  proto_temp={temp}')
-    # Adaptation loop
-    _adapt_loop(args, model, target_data,
-                p_y, r_ys, p_y_S, r_ys_S, pi_ys,
-                scalers, opt_res, keys,
-                adapt_epochs, tau_c, lambda_pi,
-                alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp)
-
-    state = _build_sfda_state(
-        args, model, target_data, p_y, r_ys, pi_ys, tau_adjust, temp, keys, scalers=scalers
-    )
+    state = run_target_adaptation(args, model, target_data, knowledge)
     return model, state
 
 
-def _adapt_loop(args, model, target_data,
-                p_y, r_ys, p_y_S, r_ys_S, pi_ys,
-                scalers, opt_res, keys,
-                adapt_epochs, tau_c, lambda_pi,
-                alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp):
-    for step in range(adapt_epochs):
-        n_hc, debug_stats = _adapt_step(
-            args, model, target_data,
-            p_y, r_ys, p_y_S, r_ys_S, pi_ys,
-            scalers, opt_res, keys,
-            tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
-            lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust, temp,
-        )
-        if (step) % 50 == 0:
-            N = target_data.x.shape[0]
-            print(f'  [Adapt {step:3d}]  high-conf={n_hc}/{N}  '
-                  f"conf[min/max/mean]={debug_stats['conf_min']:.6f}/{debug_stats['conf_max']:.6f}/{debug_stats['conf_mean']:.6f}  "
-                  f"threshold={debug_stats['threshold']:.6f}  "
-                  f"unique(6dp)={debug_stats['conf_unique_6dp']}  "
-                  + '  '.join(f'pi({yv},{sv})={pi_ys[(yv,sv)]:.3f}'
-                              for yv in [0,1] for sv in [0,1]))
+def adapt_target(args, target_data, knowledge):
+    """Run FairMAC target adaptation."""
+    return _adapt_target_shared(args, target_data, knowledge)
+
+
 
 
 def _build_protos(p_y, r_ys, scalers, h_mean_y, keys):
@@ -500,187 +432,6 @@ def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0, temp=0
     return q_ys, q_y
 
 
-def _adapt_step(args, model, target_data,
-                p_y, r_ys, p_y_S, r_ys_S, pi_ys,
-                scalers, opt_res, keys,
-                tau_c, lambda_pi, alpha_p, alpha_r, alpha_pi,
-                lambda_s, lambda_e, lambda_res, meta_lr, tau_adjust=1.0, temp=0.1):
-    """
-    One full adaptation step:
-      1. Encode target nodes (backbone frozen).
-      2. Compute joint posterior q_i(y,s) — two-pass: coarse (global mean) → refine h_mean_y → refined posterior.
-      3. p_y^T EMA update (momentum alpha_p).
-      4. r_{y,s}^T slow EMA update (momentum alpha_r).
-      5. BCA prior online EMA update.
-      6. MetaAlign meta-objective → optimise residual scalers γ.
-    Returns n_hc (number of high-confidence nodes) and debug stats.
-    """
-    dev = args.device
-
-    # 1. Encode 
-    with torch.no_grad():
-        emb_raw, _ = model(target_data.x, target_data.edge_index)   # [N, D]
-    h = F.normalize(emb_raw.detach(), p=2, dim=1)                   # [N, D]
-
-    # 2a. Coarse posterior — global mean placeholder → h_mean_y
-    with torch.no_grad():
-        protos_coarse = _build_protos(p_y, r_ys, scalers, {yv: h.mean(0) for yv in [0, 1]}, keys)
-        _, q_y_coarse = _compute_posterior(h, protos_coarse, pi_ys, lambda_pi, keys, tau_adjust, temp)
-
-    # 2b. Class-wise mean from coarse posterior (soft q_y weighted)
-    with torch.no_grad():
-        h_mean_y = {}
-        for yv in [0, 1]:
-            w = q_y_coarse[:, yv]
-            h_mean_y[yv] = (h * w.unsqueeze(1)).sum(0) / w.sum().clamp(min=1e-8)  # [D]
-
-    # 2c. Refined posterior — use class-wise h_mean_y for residual correction
-    with torch.no_grad():
-        protos_ng = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
-        q_ys, q_y = _compute_posterior(h, protos_ng, pi_ys, lambda_pi, keys, tau_adjust, temp)
-
-    conf, pseudo_y = q_y.max(dim=1)         # [N], range [0.5, 1.0] for binary softmax
-
-    # Use a percentile-based threshold instead of a fixed absolute value.
-    # tau_c is reinterpreted as the fraction of nodes to keep (top-tau_c%).
-    # e.g. tau_c=0.5 → keep the top 50% most confident nodes.
-    # This avoids the [0.5,1.0] compression problem of binary softmax.
-    threshold  = torch.quantile(conf, 1.0 - tau_c)
-    high_conf  = conf >= threshold
-    n_hc       = int(high_conf.sum().item())
-    debug_stats = {
-        'conf_min': conf.min().item(),
-        'conf_max': conf.max().item(),
-        'conf_mean': conf.mean().item(),
-        'threshold': threshold.item(),
-        'conf_unique_6dp': int(torch.unique(conf.detach().cpu().round(decimals=6)).numel()),
-    }
-
-    if n_hc > 0:
-        hc_h    = h[high_conf].detach()      # [M, D]
-        hc_y    = pseudo_y[high_conf]        # [M]
-        hc_conf = conf[high_conf].detach()   # [M]  confidence scores
-        hc_qys  = q_ys[high_conf].detach()   # [M, 4]
-
-        # 3. p_y^T EMA update (confidence-weighted mean)
-        for yv in [0, 1]:
-            mask = (hc_y == yv)
-            if mask.sum() == 0:
-                continue
-            w = hc_conf[mask]
-            w = w / w.sum().clamp(min=1e-8)
-            p_new = (hc_h[mask] * w.unsqueeze(1)).sum(0)   # [D] conf-weighted
-            p_y[yv] = F.normalize(
-                alpha_p * p_y[yv] + (1.0 - alpha_p) * p_new, p=2, dim=0
-            )
-
-        # 4. r_{y,s}^T slow EMA update
-        #    r_new = Norm( soft q(y,s)-weighted mean ) - p_y
-        #    r_{y,s} = alpha_r * r_{y,s} + (1-alpha_r) * r_new
-        for ki, (yv, sv) in enumerate(keys):
-            mask = (hc_y == yv)
-            if mask.sum() == 0:
-                continue
-            w = hc_qys[mask, ki]            # [M_y]
-            if w.sum() < 1e-6:
-                continue
-            wm    = (hc_h[mask] * w.unsqueeze(1)).sum(0) / w.sum()  # [D]
-            r_new = F.normalize(wm, p=2, dim=0) - p_y[yv].detach()
-            r_ys[(yv, sv)] = (alpha_r * r_ys[(yv, sv)]
-                              + (1.0 - alpha_r) * r_new)
-
-        # 5. BCA prior EMA update (fixed momentum alpha_pi)
-        # Add a floor to prevent any group's prior from collapsing to zero
-        pi_floor = 0.01  # minimum prior for any (y,s) group
-        soft_mean = hc_qys.mean(0)           # [4]
-        soft_mean = soft_mean / soft_mean.sum().clamp(min=1e-8)
-        for ki, (yv, sv) in enumerate(keys):
-            pi_ys[(yv, sv)] = (
-                alpha_pi * pi_ys[(yv, sv)] + (1.0 - alpha_pi) * soft_mean[ki].item()
-            )
-        # Apply floor and renormalize
-        for k in keys:
-            pi_ys[k] = max(pi_ys[k], pi_floor)
-        total_pi = sum(pi_ys.values())
-        for k in keys:
-            pi_ys[k] /= max(total_pi, 1e-8)
-
-    # ── 6. MetaAlign meta-objective for residual scalers ─────────────────
-    #
-    #  L_align^SF(ω)  = Σ_y ||p_y^T - p_y^S||²
-    #                 + λ_r_sf Σ_{y,s} ||r_{y,s}^T - r_{y,s}^S||²
-    #
-    #  Inner step:    ω' = ω - meta_lr · ∇_ω L_align^SF
-    #  Outer loss:    L_meta = L_align^SF(ω)
-    #                        + λ_s · L_self(ω')   [CE on high-conf pseudolabels]
-    #                        + λ_e · L_ent(ω')    [entropy on all nodes]
-    #                        + λ_res · L_res(ω)   [residual regularisation]
-    opt_res.zero_grad()
-
-    # L_align^SF — penalises deviation of protos_w from source protos (has grad via γ)
-    protos_w   = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
-    L_align_sf = sum(
-        (protos_w[(yv, sv)] - F.normalize(
-            p_y_S[yv] + r_ys_S[(yv, sv)], p=2, dim=0)
-        ).pow(2).sum()
-        for (yv, sv) in keys
-    )
-
-    # L_res — keep γ small
-    L_res = sum(sc.gamma.pow(2).sum() for sc in scalers.values())
-
-    # Virtual inner step on scaler params
-    scaler_params = [p for sc in scalers.values() for p in sc.parameters()]
-    grads = torch.autograd.grad(
-        L_align_sf, scaler_params,
-        create_graph=True, retain_graph=True, allow_unused=True
-    )
-    params_prime = [
-        (p - meta_lr * g) if g is not None else p
-        for p, g in zip(scaler_params, grads)
-    ]
-
-    # Re-evaluate protos with ω' using functional application
-    idx = 0
-    protos_prime = {}
-    for (yv, sv) in keys:
-        gamma_p = params_prime[idx]; idx += 1
-        delta_p = gamma_p * h_mean_y[yv]
-        raw_p   = p_y[yv].detach() + r_ys[(yv, sv)].detach() + delta_p
-        protos_prime[(yv, sv)] = F.normalize(raw_p, p=2, dim=0)
-
-    # Re-compute posterior with ω' (temp only scales likelihood, not prior)
-    scores_p = []
-    for (yv, sv) in keys:
-        sim_p = (h * protos_prime[(yv, sv)].unsqueeze(0)).sum(1)
-        pi    = max(pi_ys[(yv, sv)], 1e-8)
-        scores_p.append(sim_p / temp + tau_adjust * lambda_pi * float(np.log(pi)))
-    scores_p = torch.stack(scores_p, dim=1)          # [N,4]
-    q_ys_p   = torch.softmax(scores_p, dim=1)        # [N,4]
-    q_y_p    = torch.stack([
-        q_ys_p[:, 0] + q_ys_p[:, 1],
-        q_ys_p[:, 2] + q_ys_p[:, 3],
-    ], dim=1)                                         # [N,2]
-
-    # L_self — CE on high-conf pseudo-labels with ω'
-    if n_hc > 0:
-        hc_q_y_p = q_y_p[high_conf]                  # [M,2]
-        # clamp for numerical safety
-        hc_q_y_p = hc_q_y_p.clamp(min=1e-8)
-        pseudo_oh = pseudo_y[high_conf].to(dev)       # [M]
-        L_self = F.nll_loss(hc_q_y_p.log(), pseudo_oh)
-    else:
-        L_self = q_y_p.new_tensor(0.0)
-
-    # L_ent — entropy on all nodes with ω'
-    q_y_p_c = q_y_p.clamp(min=1e-8)
-    L_ent   = -(q_y_p_c * q_y_p_c.log()).sum(1).mean()
-
-    L_meta = L_align_sf + lambda_s * L_self + lambda_e * L_ent + lambda_res * L_res
-    L_meta.backward()
-    opt_res.step()
-
-    return n_hc, debug_stats
 
 # Training + Adaptation
 
@@ -870,26 +621,37 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
 
     encoder.eval()
     with torch.no_grad():
-        emb_raw, _ = encoder(data.x, data.edge_index)
-        feat = F.normalize(emb_raw, p=2, dim=1) # [N, D]
-
-        p_y = {k: v.to(args.device) for k, v in state['p_y'].items()}
-        r_ys = {k: v.to(args.device) for k, v in state['r_ys'].items()}
-        pi_ys = state['pi_ys']
-        tau_adjust = state.get('tau_adjust', 1.0)
-        temp       = state.get('proto_temp', 1)
-        keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
-
-        if 'final_protos' in state:
-            final_protos = {k: v.to(args.device) for k, v in state['final_protos'].items()}
+        if int(state.get('state_version', 0)) >= 2:
+            feat, q_y = predict_target_proba(args, data, encoder, state)
         else:
-            final_protos = {}
-            for (yv, sv) in keys:
-                raw = p_y[yv] + r_ys[(yv, sv)]
-                final_protos[(yv, sv)] = F.normalize(raw, p=2, dim=0)
-
-        # compute posterior with Bayesian logit adjustment
-        _, q_y = _compute_posterior(feat, final_protos, pi_ys, args.lambda_pi, keys, tau_adjust, temp)
+            emb_raw, _ = encoder(data.x, data.edge_index)
+            feat = F.normalize(emb_raw, p=2, dim=1)
+            p_y = {k: v.to(args.device) for k, v in state['p_y'].items()}
+            r_ys = {k: v.to(args.device) for k, v in state['r_ys'].items()}
+            pi_ys = state['pi_ys']
+            tau_adjust = state.get('tau_adjust', 1.0)
+            temp = state.get('proto_temp', 1)
+            keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
+            if 'final_protos' in state:
+                final_protos = {
+                    k: v.to(args.device) for k, v in state['final_protos'].items()
+                }
+            else:
+                final_protos = {}
+                for (yv, sv) in keys:
+                    raw = p_y[yv] + r_ys[(yv, sv)]
+                    final_protos[(yv, sv)] = F.normalize(
+                        raw, p=2, dim=0, eps=1e-12
+                    )
+            _, q_y = _compute_posterior(
+                feat,
+                final_protos,
+                pi_ys,
+                args.lambda_pi,
+                keys,
+                tau_adjust,
+                temp,
+            )
         
         # extract positive probability
         probs = q_y[:, 1].cpu().numpy()
@@ -905,17 +667,21 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
             'test':  data.test_mask.cpu().numpy(),
         }
 
-        # Save embeddings for analysis
+        # Save embeddings only when explicitly requested.  Random-tune workers
+        # otherwise race while overwriting the same dataset-level NPZ files.
         labels = torch.full((test_labels.shape[0],), -1, dtype=torch.int64)
         labels[t_idx_s0_y1] = 0
         labels[t_idx_s1_y1] = 1
         labels[t_idx_s0_y0] = 2
         labels[t_idx_s1_y0] = 3
-        np.savez(f"{args.dataset}_feat.npz",
-                 representations=feat[data.test_mask].cpu().numpy())
-        np.savez(f"{args.dataset}_labels.npz",
-                 labels=labels.cpu().numpy())
-        if save_visualization and getattr(args, 'save_visualization_embeddings', False):
+        export_embeddings = not getattr(args, 'disable_embedding_export', False)
+        if export_embeddings:
+            np.savez(f"{args.dataset}_feat.npz",
+                     representations=feat[data.test_mask].cpu().numpy())
+            np.savez(f"{args.dataset}_labels.npz",
+                     labels=labels.cpu().numpy())
+        if (export_embeddings and save_visualization
+                and getattr(args, 'save_visualization_embeddings', False)):
             embeddings_root = os.path.join(PROJECT_ROOT, 'visualization', 'embeddings')
             save_visualization_embeddings(
                 embeddings_root,
@@ -930,10 +696,18 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
             y_true = y_all[mask]
             sens   = sens_all[mask]
             prob   = probs[mask]
+            if y_true.size == 0:
+                result[split_name] = {
+                    'overall': {'acc': 0.0, 'auc': 50.0, 'f1': 0.0},
+                    'sens_group': {},
+                    'target_group': {},
+                    'fairness': {'dp': 0.0, 'eo': 0.0},
+                }
+                continue
             pred   = (prob > 0.5).astype(int)
 
             acc_total = accuracy_score(y_true, pred) * 100
-            auc_total = roc_auc_score(y_true, prob) * 100 if len(set(y_true)) == 2 else float('nan')
+            auc_total = roc_auc_score(y_true, prob) * 100 if len(set(y_true)) == 2 else 50.0
             f1_total  = f1_score(y_true, pred, zero_division=0) * 100
 
             # Per sensitive group
@@ -943,7 +717,7 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
                 sens_metrics[int(s)] = {
                     'acc': accuracy_score(y_true[idx], pred[idx]) * 100,
                     'auc': roc_auc_score(y_true[idx], prob[idx]) * 100
-                          if len(np.unique(y_true[idx])) == 2 else float('nan'),
+                          if len(np.unique(y_true[idx])) == 2 else 50.0,
                     'f1':  f1_score(y_true[idx], pred[idx], zero_division=0) * 100,
                 }
 
@@ -955,7 +729,7 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
                     'acc': accuracy_score(y_true[idx], pred[idx]) * 100,
                     'auc': roc_auc_score((y_true == yval).astype(int),
                                          prob if yval == 1 else 1 - prob) * 100
-                          if len(set(y_true)) == 2 else float('nan'),
+                          if len(set(y_true)) == 2 else 50.0,
                     'f1':  f1_score((y_true == yval).astype(int),
                                     (pred == yval).astype(int), zero_division=0) * 100,
                 }
@@ -969,10 +743,9 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
             }
 
     for split_name in splits:
-        target_vals = result[split_name]['target_group'].values()
-        accs[split_name]     = np.nanmean([v['acc'] for v in target_vals])
-        auc_rocs[split_name] = np.nanmean([v['auc'] for v in target_vals])
-        f1s[split_name]      = np.nanmean([v['f1']  for v in target_vals])
+        accs[split_name]     = result[split_name]['overall']['acc']
+        auc_rocs[split_name] = result[split_name]['overall']['auc']
+        f1s[split_name]      = result[split_name]['overall']['f1']
         paritys[split_name]  = result[split_name]['fairness']['dp']
         equalitys[split_name]= result[split_name]['fairness']['eo']
 

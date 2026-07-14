@@ -5,6 +5,7 @@ import yaml
 from utils import *
 import sys
 
+
 def read_config(args):
     fileNamePath = os.path.split(os.path.realpath(__file__))[0]
     yamlPath = os.path.join(fileNamePath, 'config/config.yaml')
@@ -34,7 +35,7 @@ parser.add_argument('--outid',   type=str, default='-1')
 # parser.add_argument('--dataset', type=str, default='bailA')
 # parser.add_argument('--inid',    type=str, default='_2')
 # parser.add_argument('--outid',   type=str, default='_1')
-# parser.add_argument('--dataset', type=str, default='german')
+# parser.add_argument('--dataset', type=str, default='germanA')
 # parser.add_argument('--inid',    type=str, default='_2')
 # parser.add_argument('--outid',   type=str, default='_1')
 # optimisation
@@ -60,11 +61,9 @@ parser.add_argument('--adapt_epochs', type=int,   default=200)
 parser.add_argument('--tau_c',        type=float, default=0.2)   # top-tau_c fraction of nodes kept as high-confidence
 parser.add_argument('--lambda_pi',    type=float, default=1.0)
 parser.add_argument('--alpha_p',      type=float, default=0.90)
-parser.add_argument('--alpha_r',      type=float, default=0.99)
 parser.add_argument('--alpha_pi',     type=float, default=0.90)
 parser.add_argument('--lambda_s',     type=float, default=1.0)
 parser.add_argument('--lambda_e',     type=float, default=0.1)
-parser.add_argument('--lambda_res',   type=float, default=0.01)
 parser.add_argument('--meta_lr',      type=float, default=0.01)
 parser.add_argument('--adapt_lr',     type=float, default=1e-3)
 parser.add_argument('--tau_adjust',   type=float, default=1.0)   # Bayesian logit adjustment temperature
