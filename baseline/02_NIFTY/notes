@@ -1,1 +1,434 @@
+代码：https://github.com/chirag-agarwall/nifty/tree/main
 用了torch 1.10.0+cu111，python Python 3.8.20
+
+6.20：重新配
+pip install torch==1.10.1+cu111 torchvision==0.11.2+cu111 torchaudio==0.10.1 -f https://download.pytorch.org/whl/cu111/torch_stable.html
+torch版本太老了，不能这样：
+pip install pyg_lib torch_scatter torch_sparse -f https://data.pyg.org/whl/torch-1.10.1+cu111.html
+需要这样：
+pip install --upgrade pip setuptools wheel importlib_metadata
+pip install torch-scatter==2.0.9 -f https://data.pyg.org/whl/torch-1.10.0+cu111.html
+pip install torch-sparse==0.6.12 -f https://data.pyg.org/whl/torch-1.10.0+cu111.html
+pip install torch-cluster==1.5.9 -f https://data.pyg.org/whl/torch-1.10.0+cu111.html
+pip install --upgrade packaging
+pip install torch-geometric==2.0.4
+然后收拾dgl：
+pip uninstall dgl-cu102 -y
+pip install dgl==0.6.1
+然后收拾numpy：
+pip install numpy==1.23.5
+这个script一直跑不通，因为torch1.6.0和1.10.1的差距，但这个应该不用跑：
+python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model rogcn --dataset german --seed 5
+
+6.24
+用torch110pt38跑
+6.26
+跑了GCN(bail,credit,german),NIFTY(bail,credit,german)
+还要跑pokec和syn，要改代码
+7.4
+German的edges.txt有问题，重跑
+求一下Accuracy，重跑
+
+
+一、GCN
+(一)Bail:
+命令：python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset bail --seed 1
+结果：
+(1)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset bail --seed 1
+Using backend: pytorch
+The AUCROC of estimator: 0.8713
+Parity: 0.0666442848803605 | Equality: 0.04317089910775562
+F1-score: 0.7929336808572256
+CounterFactual Fairness: 0.025217207035388878
+Robustness Score: 0.20364484000847638
+
+(2)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset bail --seed 2
+Using backend: pytorch
+The AUCROC of estimator: 0.8720
+Parity: 0.06883567503371646 | Equality: 0.04381911080607026
+F1-score: 0.7965317919075144
+CounterFactual Fairness: 0.035388853570671785
+Robustness Score: 0.183513456240729
+
+(3)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset bail --seed 3
+Using backend: pytorch
+The AUCROC of estimator: 0.8655
+Parity: 0.08342882735734847 | Equality: 0.05789674368946851
+F1-score: 0.7774936061381076
+CounterFactual Fairness: 0.07543971180334819
+Robustness Score: 0.22080949353676627
+
+(4)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset bail --seed 4
+Using backend: pytorch
+The AUCROC of estimator: 0.8763
+Parity: 0.06728931885562456 | Equality: 0.045428201021886716
+F1-score: 0.7975531605010195
+CounterFactual Fairness: 0.04089849544394997
+Robustness Score: 0.19368510277601192
+
+(5)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset bail --seed 5
+Using backend: pytorch
+The AUCROC of estimator: 0.8691
+Parity: 0.08194339804401402 | Equality: 0.056394417753374504
+F1-score: 0.7861635220125786
+CounterFactual Fairness: 0.08751854206399656
+Robustness Score: 0.20661157024793386
+
+(6)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset bail --seed 6
+Using backend: pytorch
+The AUCROC of estimator: 0.8684
+Parity: 0.07642044065759318 | Equality: 0.05241363532372456
+F1-score: 0.7806691449814127
+CounterFactual Fairness: 0.05912269548633187
+Robustness Score: 0.22229285865649506
+
+(二)Credit:
+命令：python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset credit --seed 1
+结果：
+(1)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset credit --seed 1
+Using backend: pytorch
+The AUCROC of estimator: 0.7380
+Parity: 0.1282129416279778 | Equality: 0.10589330260475371
+F1-score: 0.8184316599486992
+CounterFactual Fairness: 0.013333333333333308
+Robustness Score: 0.07506666666666661
+
+(2)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset credit --seed 2
+Using backend: pytorch
+The AUCROC of estimator: 0.7376
+Parity: 0.12937067780093625 | Equality: 0.10551863044289533
+F1-score: 0.8182901127096124
+CounterFactual Fairness: 0.012666666666666715
+Robustness Score: 0.06253333333333333
+
+(3)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset credit --seed 3
+Using backend: pytorch
+The AUCROC of estimator: 0.5535
+Parity: 0.07306843130690788 | Equality: 0.0709121069759785
+F1-score: 0.8334533813525411
+CounterFactual Fairness: 0.0696
+Robustness Score: 0.03359999999999996
+
+(4)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset credit --seed 4
+Using backend: pytorch
+The AUCROC of estimator: 0.7393
+Parity: 0.12532701838292404 | Equality: 0.10379052027289237
+F1-score: 0.8196541312105408
+CounterFactual Fairness: 0.013333333333333308
+Robustness Score: 0.08840000000000003
+
+(5)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset credit --seed 5
+Using backend: pytorch
+The AUCROC of estimator: 0.7356
+Parity: 0.13299070763826715 | Equality: 0.10893276534126073
+F1-score: 0.817973406694177
+CounterFactual Fairness: 0.01626666666666665
+Robustness Score: 0.050000000000000044
+
+(6)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset credit --seed 6
+Using backend: pytorch
+The AUCROC of estimator: 0.7349
+Parity: 0.13240342236444547 | Equality: 0.10818342101754397
+F1-score: 0.8175396752591505
+CounterFactual Fairness: 0.014133333333333331
+Robustness Score: 0.03426666666666667
+
+(三)German:
+命令：python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset german --seed 1
+结果：
+
+(1)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset german --seed 1
+Using backend: pytorch
+The AUCROC of estimator: 0.7377
+Parity: 0.35474631751227503 | Equality: 0.2731092436974789
+F1-score: 0.8100558659217878
+CounterFactual Fairness: 0.124
+Robustness Score: 0.08799999999999997
+
+(2)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset german --seed 2
+Using backend: pytorch
+The AUCROC of estimator: 0.6686
+Parity: 0.30182760501909445 | Equality: 0.20903361344537819
+F1-score: 0.8073878627968337
+CounterFactual Fairness: 0.18400000000000005
+Robustness Score: 0.14
+
+(3)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset german --seed 3
+Using backend: pytorch
+The AUCROC of estimator: 0.7250
+Parity: 0.32719585379159855 | Equality: 0.2457983193277311
+F1-score: 0.8065395095367848
+CounterFactual Fairness: 0.09999999999999998
+Robustness Score: 0.07999999999999996
+
+(4)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset german --seed 4
+Using backend: pytorch
+The AUCROC of estimator: 0.7075
+Parity: 0.40384615384615385 | Equality: 0.35924369747899165
+F1-score: 0.8209366391184574
+CounterFactual Fairness: 0.18000000000000005
+Robustness Score: 0.128
+
+(5)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset german --seed 5
+Using backend: pytorch
+The AUCROC of estimator: 0.7219
+Parity: 0.22490452809601746 | Equality: 0.19327731092436973
+F1-score: 0.8065395095367848
+CounterFactual Fairness: 0.09999999999999998
+Robustness Score: 0.09999999999999998
+
+(6)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset german --seed 6
+Using backend: pytorch
+The AUCROC of estimator: 0.7315
+Parity: 0.2888707037643208 | Equality: 0.19117647058823528
+F1-score: 0.8346883468834688
+CounterFactual Fairness: 0.10399999999999998
+Robustness Score: 0.08799999999999997
+
+(四)Pokec-n
+命令：python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset pokec_n --seed 1
+结果：
+(1)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset pokec_n --seed 1
+Using backend: pytorch
+The AUCROC of estimator: 0.7398
+Parity: 0.044670507851714836 | Equality: 0.005034125562708769
+F1-score: 0.6573957016434893
+CounterFactual Fairness: 0.03749999999999998
+Robustness Score: 0.23409090909090913
+
+(2)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset pokec_n --seed 2
+Using backend: pytorch
+The AUCROC of estimator: 0.7577
+Parity: 0.013257472476202625 | Equality: 0.08341665833416656
+F1-score: 0.6805385556915544
+CounterFactual Fairness: 0.06477272727272732
+Robustness Score: 0.20454545454545459
+
+(3)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset pokec_n --seed 3
+Using backend: pytorch
+The AUCROC of estimator: 0.7624
+Parity: 0.08061186186186187 | Equality: 0.05999520613614573
+F1-score: 0.6799007444168735
+CounterFactual Fairness: 0.050000000000000044
+Robustness Score: 0.18409090909090908
+
+(4)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset pokec_n --seed 4
+Using backend: pytorch
+The AUCROC of estimator: 0.7327
+Parity: 0.04218458620536031 | Equality: 0.010202454965726138
+F1-score: 0.6383526383526383
+CounterFactual Fairness: 0.025000000000000022
+Robustness Score: 0.21704545454545454
+
+(5)python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset pokec_n --seed 5
+Using backend: pytorch
+The AUCROC of estimator: 0.7338
+Parity: 0.04841098841906816 | Equality: 0.06931937651414732
+F1-score: 0.633587786259542
+CounterFactual Fairness: 0.04886363636363633
+Robustness Score: 0.23295454545454541
+
+
+(五)syn
+
+
+二、NIFTY
+(一)Bail:
+命令：python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 1
+结果：
+(1)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset bail --sim_coeff 0.6 --seed 1
+Using backend: pytorch
+The AUCROC of estimator: 0.8513
+Parity: 0.03312839860475686 | Equality: 0.023038206360100677
+F1-score: 0.7606888361045131
+CounterFactual Fairness: 0.027336300063572794
+Robustness Score: 0.15681288408561134
+
+(2)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset bail --sim_coeff 0.6 --seed 2
+Using backend: pytorch
+The AUCROC of estimator: 0.7605
+Parity: 0.012920449284405888 | Equality: 0.013932738503774855
+F1-score: 0.6180034622042702
+CounterFactual Fairness: 0.025852934943843997
+Robustness Score: 0.12290739563466835
+
+(3)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset bail --sim_coeff 0.6 --seed 3
+Using backend: pytorch
+The AUCROC of estimator: 0.8533
+Parity: 0.024951797683988308 | Equality: 0.0262716388316937
+F1-score: 0.7680988816951148
+CounterFactual Fairness: 0.04746768383132016
+Robustness Score: 0.16740834922653103
+
+(4)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset bail --sim_coeff 0.6 --seed 4
+Using backend: pytorch
+The AUCROC of estimator: 0.8500
+Parity: 0.042775871092413265 | Equality: 0.037298863723022935
+F1-score: 0.7615062761506277
+CounterFactual Fairness: 0.025217207035388878
+Robustness Score: 0.13138376774740412
+
+(5)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset bail --sim_coeff 0.6 --seed 5
+Using backend: pytorch
+The AUCROC of estimator: 0.8418
+Parity: 0.0364676940242068 | Equality: 0.03581178982688926
+F1-score: 0.7419451972297502
+CounterFactual Fairness: 0.010171646535282908
+Robustness Score: 0.13562195380377196
+
+(6)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset bail --sim_coeff 0.6 --seed 6
+Using backend: pytorch
+The AUCROC of estimator: 0.8421
+Parity: 0.03334694452671866 | Equality: 0.026027606192328245
+F1-score: 0.7410768300060496
+CounterFactual Fairness: 0.02373384191566008
+Robustness Score: 0.14473405382496296
+
+(二)Credit
+命令：python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset credit --sim_coeff 0.6 --seed 1
+结果：
+(1)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset credit --sim_coeff 0.6 --seed 1
+Using backend: pytorch
+The AUCROC of estimator: 0.7208
+Parity: 0.11772597857261125 | Equality: 0.09494363902758052
+F1-score: 0.8175061932287365
+CounterFactual Fairness: 0.0
+Robustness Score: 0.003066666666666662
+
+(2)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset credit --sim_coeff 0.6 --seed 2
+Using backend: pytorch
+The AUCROC of estimator: 0.7226
+Parity: 0.11801962120952214 | Equality: 0.0953183111894389
+F1-score: 0.8177231446656271
+CounterFactual Fairness: 0.0
+Robustness Score: 0.005733333333333368
+
+(3)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset credit --sim_coeff 0.6 --seed 3
+Using backend: pytorch
+The AUCROC of estimator: 0.7206
+Parity: 0.11493637352195796 | Equality: 0.09175892565178434
+F1-score: 0.8158088235294118
+CounterFactual Fairness: 0.0002666666666666373
+Robustness Score: 0.007333333333333303
+
+(4)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset credit --sim_coeff 0.6 --seed 4
+Using backend: pytorch
+The AUCROC of estimator: 0.7215
+Parity: 0.11816644252797759 | Equality: 0.09550564727036803
+F1-score: 0.817831590533847
+CounterFactual Fairness: 0.0
+Robustness Score: 0.0023999999999999577
+
+(5)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset credit --sim_coeff 0.6 --seed 5
+Using backend: pytorch
+The AUCROC of estimator: 0.7190
+Parity: 0.11699187198033412 | Equality: 0.09419429470386376
+F1-score: 0.817147053423903
+CounterFactual Fairness: 0.0006666666666667043
+Robustness Score: 0.003066666666666662
+
+(6)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset credit --sim_coeff 0.6 --seed 6
+Using backend: pytorch
+The AUCROC of estimator: 0.7141
+Parity: 0.11596412275114598 | Equality: 0.09307027821828862
+F1-score: 0.8165702213649306
+CounterFactual Fairness: 0.0017333333333333645
+Robustness Score: 0.003866666666666685
+
+(三)German
+命令：python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 1
+结果：
+(1)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 1
+Using backend: pytorch
+The AUCROC of estimator: 0.7260
+Parity: 0.3078286961265685 | Equality: 0.23949579831932766
+F1-score: 0.7921348314606742
+CounterFactual Fairness: 0.028000000000000025
+Robustness Score: 0.07999999999999996
+
+(2)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 2
+Using backend: pytorch
+The AUCROC of estimator: 0.7525
+Parity: 0.23117839607201307 | Equality: 0.11449579831932766
+F1-score: 0.8222222222222222
+CounterFactual Fairness: 0.040000000000000036
+Robustness Score: 0.08399999999999996
+
+(3)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 3
+Using backend: pytorch
+The AUCROC of estimator: 0.7317
+Parity: 0.18698854337152204 | Equality: 0.15441176470588236
+F1-score: 0.8091603053435115
+CounterFactual Fairness: 0.06000000000000005
+Robustness Score: 0.04400000000000004
+
+(4)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 4
+Using backend: pytorch
+The AUCROC of estimator: 0.7308
+Parity: 0.22067648663393336 | Equality: 0.2006302521008404
+F1-score: 0.8238482384823848
+CounterFactual Fairness: 0.04400000000000004
+Robustness Score: 0.06000000000000005
+
+(5)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 5
+Using backend: pytorch
+The AUCROC of estimator: 0.7360
+Parity: 0.23813420621931258 | Equality: 0.15336134453781514
+F1-score: 0.8244274809160306
+CounterFactual Fairness: 0.0040000000000000036
+Robustness Score: 0.06799999999999995
+
+(6)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 6
+Using backend: pytorch
+The AUCROC of estimator: 0.7213
+Parity: 0.1359792689579924 | Equality: 0.08193277310924363
+F1-score: 0.8279301745635911
+CounterFactual Fairness: 0.04400000000000004
+Robustness Score: 0.07199999999999995
+
+(四)Pokec-n
+命令：python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset pokec_n --sim_coeff 0.6 --seed 1
+结果：
+(1)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset pokec_n --sim_coeff 0.6 --seed 1
+Using backend: pytorch
+The AUCROC of estimator: 0.7141
+Parity: 0.002101094295960726 | Equality: 0.010964701356160456
+F1-score: 0.6268656716417911
+CounterFactual Fairness: 0.001136363636363602
+Robustness Score: 0.1465909090909091
+
+(2)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset pokec_n --sim_coeff 0.6 --seed 2
+Using backend: pytorch
+The AUCROC of estimator: 0.7476
+Parity: 0.04331694867189717 | Equality: 0.013593757667959006
+F1-score: 0.6650124069478908
+CounterFactual Fairness: 0.002272727272727315
+Robustness Score: 0.19772727272727275
+
+(3)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset pokec_n --sim_coeff 0.6 --seed 3
+Using backend: pytorch
+The AUCROC of estimator: 0.7140
+Parity: 0.0015882091353789374 | Equality: 0.004358747044917233
+F1-score: 0.645083932853717
+CounterFactual Fairness: 0.002272727272727315
+Robustness Score: 0.13749999999999996
+
+(4)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset pokec_n --sim_coeff 0.6 --seed 4
+Using backend: pytorch
+The AUCROC of estimator: 0.7150
+Parity: 0.04738095238095236 | Equality: 0.024460431654676262
+F1-score: 0.630272952853598
+CounterFactual Fairness: 0.003409090909090917
+Robustness Score: 0.1488636363636363
+
+(5)python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset pokec_n --sim_coeff 0.6 --seed 5
+Using backend: pytorch
+The AUCROC of estimator: 0.7228
+Parity: 0.07690476190476186 | Equality: 0.05439068962200633
+F1-score: 0.6157894736842104
+CounterFactual Fairness: 0.015909090909090873
+Robustness Score: 0.13409090909090904
+
+
+(五)syn
+

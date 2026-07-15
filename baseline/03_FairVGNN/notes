@@ -1,3 +1,5 @@
+代码：https://github.com/yuwvandy/FairVGNN/tree/main
+论文：https://arxiv.org/abs/2206.03426
 原文用了python3.8.10，torch 1.10.0+cu113，torch-geometric，和nifty一样，但其它包差很多
 同样先：pip install torch==1.10.0+cu111 torchvision==0.11.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
 然后：pip install -r requirements.txt
@@ -7,3 +9,54 @@ pip install --no-index torch_scatter torch_sparse torch_cluster -f https://data.
 pip install torch-geometric==2.0.4
 记得解压dataset/*.zip，然后bash run_german.sh
 能跑，但太慢了，直接ctrl+C =）
+
+6.20：
+用torch110pt38能跑，好慢
+
+三、FairVGNN(代码已经实现了seed 1-5的五次实验，所以每个数据集都只有一个已经算好的结果)
+(一)Bail
+命令：python fairvgnn.py --dataset='bail' --encoder='GCN' --clip_e=1 --d_epochs=5 --g_epochs=10 --c_epochs=10 --c_lr=0.01 --e_lr=0.001 --ratio=1 --epochs=300
+结果：
+======bailGCN======
+auc_roc: 86.79840008203922 0.3717419604227996
+Acc: 85.49692731510913 0.47735598479529856
+f1: 79.67971869136889 0.5229259247957303
+parity: 6.65404036773227 0.33017704891448185
+equality: 5.072828490810646 0.6698999109271827
+
+(二)German 
+命令：python fairvgnn.py --dataset='german' --encoder='GCN' --clip_e=1 --d_epochs=5 --g_epochs=10 --c_epochs=10 --c_lr=0.01 --e_lr=0.001 --ratio=1 --epochs=300
+结果：
+======germanGCN======
+auc_roc: 66.09066666666668 2.041555620470317
+Acc: 70.0 0.0（？怎么可能是0呢）
+f1: 82.31940757300545 0.06706720693027801
+parity: 0.851063829787233 1.702127659574466
+equality: 0.714285714285714 1.428571428571428
+
+再来一遍：
+======germanGCN======
+auc_roc: 68.24228571428571 1.6209666610081042
+Acc: 70.31999999999998 0.5306599664568644
+f1: 82.3925150175024 0.2821059484996017
+parity: 3.1478450627386816 1.3216989319954522
+equality: 1.9747899159663906 0.86211279532282
+
+(三)Pokec-n
+命令：python fairvgnn.py --dataset='pokec_n' --encoder='GCN' --clip_e=1 --d_epochs=5 --g_epochs=10 --c_epochs=10 --c_lr=0.01 --e_lr=0.001 --ratio=1 --epochs=300
+结果： 
+======pokec_nGCN======
+auc_roc: 75.56846750291099 0.17122938097558163
+Acc: 68.77272727272727 0.4215281134316229
+f1: 67.5538923569637 0.10361840628920674
+parity: 0.6425428298596136 0.5249922362888666
+equality: 0.924820642671973 0.5824728781732214
+
+(四)syn
+
+
+
+
+
+
+

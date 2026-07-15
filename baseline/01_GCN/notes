@@ -1,0 +1,10 @@
+代码：https://github.com/tkipf/gcn?tab=readme-ov-file
+环境：conda create -n gcn python=3.7 -vvv
+pip install -r requirements.txt（需要改几个版本）
+运行：
+cd gcn
+python train.py
+降级这个包：
+pip uninstall protobuf，pip install protobuf==3.20.3
+
+

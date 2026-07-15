@@ -187,8 +187,10 @@ class RobustGCN(Module):
         self.output = output
 
     def _train_with_val(self, labels, idx_train, idx_val, train_iters, verbose):
+        # 改错
+        labels = labels.to(self.device)
+        
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
-
         best_loss_val = 100
         best_acc_val = 0
         import tqdm
@@ -248,6 +250,11 @@ class RobustGCN(Module):
         return output
 
     def _loss(self, input, labels):
+        # 排错
+        print(input.device)
+        print(labels.device)
+        labels = labels.to(input.device)
+
         loss = F.binary_cross_entropy_with_logits(input[:, 0], labels.float())  # double())  # F.binary_cross_entropy_with_logits(input, labels)
         miu1 = self.gc1.miu
         sigma1 = self.gc1.sigma

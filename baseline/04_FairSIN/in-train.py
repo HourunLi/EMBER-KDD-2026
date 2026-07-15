@@ -8,7 +8,7 @@ from torch import tensor
 import warnings
 warnings.filterwarnings('ignore')
 import math
-os.environ['CUDA_VISIBLE_DEVICES'] = '6'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 from torch.optim.lr_scheduler import ExponentialLR
 import time
 from memory_profiler import memory_usage
@@ -286,6 +286,7 @@ if __name__ == '__main__':
 
     print('======' + args.dataset + args.encoder + '======')
     print('Acc:', round(np.mean(acc) * 100,2), '±' ,round(np.std(acc) * 100,2), sep='')
+    print('auc_roc:', round(np.mean(auc_roc) * 100,2), '±', round(np.std(auc_roc) * 100,2), sep='')
     print('f1:', round(np.mean(f1) * 100,2), '±' ,round(np.std(f1) * 100,2), sep='')
     print('parity:', round(np.mean(parity) * 100,2), '±', round(np.std(parity) * 100,2), sep='')
     print('equality:', round(np.mean(equality) * 100,2), '±', round(np.std(equality) * 100,2), sep='')

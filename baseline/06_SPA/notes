@@ -37,6 +37,13 @@ AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute 'next'
 
 先搞下一个=）
 
+6.29
+用torch110pt38试一下
+指令格式：sh train_uda_officehome.sh spa 0.2 1.0 DANNE 0.3 laplac1 gauss 
+
+一、Bail
+
+
 
 
 

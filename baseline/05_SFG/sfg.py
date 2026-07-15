@@ -398,7 +398,7 @@ def run(data, args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='german')
-    parser.add_argument('--runs', type=int, default=1)
+    parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--d_epochs', type=int, default=5)
     parser.add_argument('--g_epochs', type=int, default=5)

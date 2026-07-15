@@ -1,0 +1,15 @@
+代码：https://github.com/TrustAGI-Lab/UDAGCN
+论文：https://dl.acm.org/doi/epdf/10.1145/3366423.3380219
+"Graph UDA Baselines"
+
+数据在https://drive.google.com/file/d/1DzQ3QN9yjQxU4vtYkXyCiJKFw7oCCPSM/view，但点进去是空的；
+用fairvgnn试一下，没有数据集跑不了；
+
+
+
+
+
+
+
+
+

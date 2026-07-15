@@ -179,8 +179,8 @@ def run(data, args):
             accs, auc_rocs, F1s, tmp_parity, tmp_equality = evaluate_ged3(
                 data.x, classifier, discriminator, generator, encoder, data, args)
 
-            # print(epoch, 'Acc:', accs['test'], 'AUC_ROC:', auc_rocs['test'], 'F1:', F1s['test'],
-            #       'Parity:', tmp_parity['test'], 'Equality:', tmp_equality['test'])
+            print(epoch, 'Acc:', accs['test'], 'AUC_ROC:', auc_rocs['test'], 'F1:', F1s['test'],
+                  'Parity:', tmp_parity['test'], 'Equality:', tmp_equality['test'])
 
             if auc_rocs['val'] + F1s['val'] + accs['val'] - args.alpha * (tmp_parity['val'] + tmp_equality['val']) > best_val_tradeoff:
                 test_acc = accs['test']
@@ -225,7 +225,7 @@ def run(data, args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='german')
-    parser.add_argument('--runs', type=int, default=5)
+    parser.add_argument('--runs', type=int, default=5) 
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--d_epochs', type=int, default=5)
     parser.add_argument('--g_epochs', type=int, default=5)
@@ -256,8 +256,13 @@ if __name__ == '__main__':
     args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     data, args.sens_idx, args.corr_sens, args.corr_idx, args.x_min, args.x_max = get_dataset(
         args.dataset, args.top_k)
-    args.num_features, args.num_classes = data.x.shape[1], len(
-        data.y.unique()) - 1
+    # 自己改的
+    # args.num_features, args.num_classes = data.x.shape[1], len(data.y.unique()) - 1
+    if(args.dataset in ['credit', 'bail', 'bailA','german','germanA', 'syn-1']):
+        args.num_features, args.num_classes = data.x.shape[1], len(data.y.unique()) - 1
+    elif(args.dataset == 'pokec_n'):
+        valid_labels = data.y[data.y >= 0]
+        args.num_features, args.num_classes = data.x.shape[1], len(torch.unique(valid_labels)) - 1
 
     # print((data.y == 1).sum(), (data.y == 0).sum())
     # print((data.y[data.train_mask] == 1).sum(),

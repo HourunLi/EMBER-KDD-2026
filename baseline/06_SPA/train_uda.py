@@ -11,7 +11,7 @@ import torch.optim as optim
 import loss
 import utils
 
-
+# 调用指令类似于：sh train_uda_officehome.sh spa 0.2 1.0 DANNE 0.3 laplac1 gauss 
 def gauss_(v1, v2, sigma):
     norm_ = torch.norm(v1 - v2, p=2, dim=0)
     return torch.exp(-0.5 * norm_ / sigma**2)
@@ -106,18 +106,18 @@ def data_load(args, labels=None):
 
 def train(args, validate=False, label=None):
     ## set pre-process
-    dset_loaders = data_load(args, label)
+    dset_loaders = data_load(args, label)  # 要改
     class_num = args.class_num
     class_weight_src = torch.ones(class_num, ).cuda()
     ##################################################################################################
     ## set base network
     if args.net == 'resnet101':
-        netG = utils.ResBase101().cuda()
+        netG = utils.ResBase101().cuda()  # 特征提取器（要改GCN
     elif args.net == 'resnet50':
         netG = utils.ResBase50().cuda()  
 
     netF = utils.ResClassifier(class_num=class_num, feature_dim=netG.in_features, 
-        bottleneck_dim=args.bottleneck_dim).cuda()
+        bottleneck_dim=args.bottleneck_dim).cuda()  # 分类器
 
     max_len = max(len(dset_loaders["source"]), len(dset_loaders["target"]))
     args.max_iter = args.max_epoch * max_len
@@ -131,32 +131,32 @@ def train(args, validate=False, label=None):
         random_layer = None
         ad_flag = True  
 
-    optimizer_g = optim.SGD(netG.parameters(), lr = args.lr * 0.1)
-    optimizer_f = optim.SGD(netF.parameters(), lr = args.lr)
+    optimizer_g = optim.SGD(netG.parameters(), lr = args.lr * 0.1) # 更新ResNet（更新GCN）
+    optimizer_f = optim.SGD(netF.parameters(), lr = args.lr) # 更新classifier
     if ad_flag:
-        optimizer_d = optim.SGD(ad_net.parameters(), lr = args.lr)
+        optimizer_d = optim.SGD(ad_net.parameters(), lr = args.lr)  # 更新Domain Discriminator
    
-    base_network = nn.Sequential(netG, netF)
+    base_network = nn.Sequential(netG, netF) # 组合ResNet -> classifier（GCN -> classifier）
 
     mem_fea = torch.rand(len(dset_loaders["target"].dataset), args.bottleneck_dim).cuda()
-    mem_fea = mem_fea / torch.norm(mem_fea, p=2, dim=1, keepdim=True)
-    mem_cls = torch.ones(len(dset_loaders["target"].dataset), class_num).cuda() / class_num
+    mem_fea = mem_fea / torch.norm(mem_fea, p=2, dim=1, keepdim=True)  # Target Feature Memory
+    mem_cls = torch.ones(len(dset_loaders["target"].dataset), class_num).cuda() / class_num  # Target Probability
 
     source_loader_iter = iter(dset_loaders["source"])
     target_loader_iter = iter(dset_loaders["target"])
     ####
     list_acc = []
     best_ent = 100
-    for iter_num in range(1, args.max_iter + 1):
+    for iter_num in range(1, args.max_iter + 1): # epoch * batch
         base_network.train()
-        lr_scheduler(optimizer_g, init_lr=args.lr * 0.1, iter_num=iter_num, max_iter=args.max_iter)
-        lr_scheduler(optimizer_f, init_lr=args.lr, iter_num=iter_num, max_iter=args.max_iter)
+        lr_scheduler(optimizer_g, init_lr=args.lr * 0.1, iter_num=iter_num, max_iter=args.max_iter) # 更新Feature Extractor
+        lr_scheduler(optimizer_f, init_lr=args.lr, iter_num=iter_num, max_iter=args.max_iter) # 更新Classifier
         if ad_flag:
-            lr_scheduler(optimizer_d, init_lr=args.lr, iter_num=iter_num, max_iter=args.max_iter)
+            lr_scheduler(optimizer_d, init_lr=args.lr, iter_num=iter_num, max_iter=args.max_iter) # 更新Discriminator
 
         try:
             inputs_source, labels_source = source_loader_iter.next()
-        except:
+        except: # epoch结束，重新开始
             source_loader_iter = iter(dset_loaders["source"])
             inputs_source, labels_source = source_loader_iter.next()
         try:
@@ -194,28 +194,28 @@ def train(args, validate=False, label=None):
         src_ = loss.CrossEntropyLabelSmooth(reduction='none',num_classes=class_num, epsilon=args.smooth)(outputs_source, labels_source)
         weight_src = class_weight_src[labels_source].unsqueeze(0)
         classifier_loss = torch.sum(weight_src * src_) / (torch.sum(weight_src).item())
-        total_loss = transfer_loss + classifier_loss
+        total_loss = transfer_loss + classifier_loss  # 目前只有两个
 
         eff = iter_num / args.max_iter
 
         if args.ifcorrect:
             features_target = features_target / torch.norm(features_target, p=2, dim=1, keepdim=True)
-        dis = -torch.mm(features_target.detach(), mem_fea.t())
+        dis = -torch.mm(features_target.detach(), mem_fea.t()) # Cosine Distance
         for di in range(dis.size(0)):
-            dis[di, idx[di]] = torch.max(dis)
+            dis[di, idx[di]] = torch.max(dis) # 防止自己找自己
         _, p1 = torch.sort(dis, dim=1)
 
         w = torch.zeros(features_target.size(0), mem_fea.size(0)).cuda()
         for wi in range(w.size(0)):
             for wj in range(args.K):
                 w[wi][p1[wi, wj]] = 1/ args.K
-        weight_, pred = torch.max(w.mm(mem_cls), 1)
+        weight_, pred = torch.max(w.mm(mem_cls), 1) # pred就是Pseudo Label
 
         loss_ = nn.CrossEntropyLoss(reduction='none')(outputs_target, pred)
         classifier_loss = torch.sum(weight_ * loss_) / (torch.sum(weight_).item())   
-        pl_loss = args.tar_par * eff * classifier_loss
+        pl_loss = args.tar_par * eff * classifier_loss  # Pseudo Label Loss
         if args.pl != 'none':
-            total_loss += pl_loss
+            total_loss += pl_loss  # 加上Pseudo Label Loss
 
         if args.ifsvd:
             # svd loss
@@ -223,8 +223,9 @@ def train(args, validate=False, label=None):
             f_t = features_target
             # svd_loss = args.svd_par * eff * svd_loss_(f_s, f_t)
             svd_loss = args.svd_par * svd_loss_(f_s, f_t)
-            total_loss += svd_loss
-            
+            total_loss += svd_loss  # 加上Spectral Alignment loss
+        
+        # 反向传播
         optimizer_g.zero_grad()
         optimizer_f.zero_grad()
         if ad_flag:
@@ -235,6 +236,7 @@ def train(args, validate=False, label=None):
         if ad_flag:
             optimizer_d.step()
 
+        # 更新 Memory Bank
         base_network.eval() 
         with torch.no_grad():
             features_target, outputs_target = base_network(inputs_target)

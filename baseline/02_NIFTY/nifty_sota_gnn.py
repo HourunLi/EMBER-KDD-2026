@@ -1,28 +1,3 @@
-# 原文用了torch 1.6.0，python 3.7.9，和机器上的cuda 11.1不匹配
-# 用torch==1.10.0+cu111，torchvision==0.11.0+cu111，python3.8试一下：
-# pip install torch==1.10.0+cu111 torchvision==0.11.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
-# 改了requirements.txt，直接装
-# 装PyG：
-# pip install --no-index torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-1.10.0+cu111.html
-# 然后装主包：pip install torch-geometric==2.0.4
-# 最后调numpy：pip install numpy==1.23.5
-# 跑通了=）
-
-# python nifty_sota_gnn.py --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model gcn --dataset german --seed 1
-# 结果：
-# The AUCROC of estimator: 0.7291
-# Parity: 0.33346972176759415 | Equality: 0.22899159663865543
-# F1-score: 0.8111111111111111
-# CounterFactual Fairness: 0.08399999999999996
-# Robustness Score: 0.07999999999999996
-
-# python nifty_sota_gnn.py --drop_edge_rate_1 0.001 --drop_edge_rate_2 0.001 --drop_feature_rate_1 0.1 --drop_feature_rate_2 0.1 --dropout 0.5 --hidden 16 --lr 1e-3 --epochs 1000 --model ssf --encoder gcn --dataset german --sim_coeff 0.6 --seed 1
-# 结果：
-# The AUCROC of estimator: 0.7436
-# Parity: 0.23772504091653035 | Equality: 0.2184873949579832
-# F1-score: 0.8184281842818429
-# CounterFactual Fairness: 0.020000000000000018
-# Robustness Score: 0.06000000000000005
 
 #%%
 import dgl
@@ -112,7 +87,7 @@ parser.add_argument('--drop_feature_rate_2', type=float, default=0.1,
 parser.add_argument('--sim_coeff', type=float, default=0.5,
                     help='regularization coeff for the self-supervised task')
 parser.add_argument('--dataset', type=str, default='loan',
-                    choices=['nba','bail','loan', 'credit', 'german'])
+                    choices=['nba','bail','bailA','loan', 'credit', 'german','germanA', 'pokec_n', 'syn-1'])
 parser.add_argument("--num_heads", type=int, default=1,
                         help="number of hidden attention heads")
 parser.add_argument("--num_out_heads", type=int, default=1,
@@ -159,29 +134,82 @@ if args.dataset == 'credit':
 
 # Load german dataset
 elif args.dataset == 'german':
-	sens_attr = "Gender"  # column number after feature process is 0
-	sens_idx = 0
-	predict_attr = "GoodCustomer"
-	label_number = 100
-	path_german = "./dataset/german"
-	adj, features, labels, idx_train, idx_val, idx_test, sens = load_german(args.dataset, sens_attr,
+    sens_attr = "Gender"  # column number after feature process is 0
+    sens_idx = 0
+    predict_attr = "GoodCustomer"
+    label_number = 100
+    path_german = "./dataset/german"
+    adj, features, labels, idx_train, idx_val, idx_test, sens = load_german(args.dataset, sens_attr,
+	                                                                        predict_attr, path=path_german,
+	                                                                        label_number=label_number,
+	                                                                        )
+# 自己改的
+elif args.dataset == 'germanA':
+    sens_attr = "Gender"  # column number after feature process is 0
+    sens_idx = 0
+    predict_attr = "GoodCustomer"
+    label_number = 100
+    path_german = "./dataset/germanA"
+    adj, features, labels, idx_train, idx_val, idx_test, sens = load_german(args.dataset, sens_attr,
 	                                                                        predict_attr, path=path_german,
 	                                                                        label_number=label_number,
 	                                                                        )
 # Load bail dataset
 elif args.dataset == 'bail':
-	sens_attr = "WHITE"  # column number after feature process is 0
-	sens_idx = 0
-	predict_attr = "RECID"
-	label_number = 100
-	path_bail = "./dataset/bail"
-	adj, features, labels, idx_train, idx_val, idx_test, sens = load_bail(args.dataset, sens_attr, 
+    sens_attr = "WHITE"  # column number after feature process is 0
+    sens_idx = 0
+    predict_attr = "RECID"
+    label_number = 100
+    path_bail = "./dataset/bail"
+    adj, features, labels, idx_train, idx_val, idx_test, sens = load_bail(args.dataset, sens_attr, 
 																			predict_attr, path=path_bail,
+	                                                                        label_number=label_number,
+	                                                                        )
+    norm_features = feature_norm(features)
+    norm_features[:, sens_idx] = features[:, sens_idx]
+    features = norm_features
+
+# 自己改的
+elif args.dataset == 'bailA':
+    sens_attr = "WHITE"  # column number after feature process is 0
+    sens_idx = 0
+    predict_attr = "RECID"
+    label_number = 100
+    path_bail = "./dataset/bailA"
+    adj, features, labels, idx_train, idx_val, idx_test, sens = load_bail(args.dataset, sens_attr, 
+																			predict_attr, path=path_bail,
+	                                                                        label_number=label_number,
+	                                                                        )
+    norm_features = feature_norm(features)
+    norm_features[:, sens_idx] = features[:, sens_idx]
+    features = norm_features
+
+# Load pokec-n dataset
+elif args.dataset == 'pokec_n':
+	sens_attr = "region"  # column number after feature process is 0
+	sens_idx = 3  # 移除user_id了
+	predict_attr = "I_am_working_in_field"
+	label_number = 3000
+	path_pokec_n = "./dataset/pokec"
+	adj, features, labels, idx_train, idx_val, idx_test, sens = load_pokec_n(args.dataset, sens_attr, 
+																			predict_attr, path=path_pokec_n,
 	                                                                        label_number=label_number,
 	                                                                        )
 	norm_features = feature_norm(features)
 	norm_features[:, sens_idx] = features[:, sens_idx]
 	features = norm_features
+# 自己加的
+elif args.dataset == 'syn-1':
+    # sens_idx = features.shape[1] - 1
+    path_syn_1 = "./dataset/syn-1"
+    adj, features, labels, idx_train, idx_val, idx_test, sens = load_syn_1(args.dataset, "", 
+																			"", path = path_syn_1,
+	                                                                        label_number=-1,
+	                                                                        )
+    sens_idx = features.shape[1] - 1
+    norm_features = feature_norm(features)
+    norm_features[:, sens_idx] = features[:, sens_idx]
+    features = norm_features
 else:
 	print('Invalid dataset name!!')
 	exit(0)
@@ -190,7 +218,16 @@ edge_index = convert.from_scipy_sparse_matrix(adj)[0]
 
 #%%    
 # Model and optimizer
-num_class = labels.unique().shape[0]-1
+
+# 这里也要改，适应pokec-n
+# num_class = labels.unique().shape[0]-1
+if args.dataset in ['bail', 'bailA','credit', 'german', 'germanA', 'syn-1']:
+    num_class = labels.unique().shape[0]-1
+elif args.dataset == 'pokec_n':
+    valid_labels = labels[labels >= 0]
+    num_class = valid_labels.unique().shape[0] - 1
+
+
 if args.model == 'gcn':
 	model = GCN(nfeat=features.shape[1],
 	            nhid=args.hidden,
@@ -264,7 +301,7 @@ for epoch in range(args.epochs+1):
     if args.model in ['gcn', 'sage', 'gin', 'jk', 'infomax']:
         model.train()
         optimizer.zero_grad()
-        output = model(features, edge_index)
+        output = model(features, edge_index)  # 从这改
 
         # Binary Cross-Entropy  
         preds = (output.squeeze()>0).type_as(labels)
@@ -392,6 +429,9 @@ else:
 output_preds = (output.squeeze()>0).type_as(labels)
 counter_output_preds = (counter_output.squeeze()>0).type_as(labels)
 noisy_output_preds = (noisy_output.squeeze()>0).type_as(labels)
+# 报告accuracy
+acc_test = accuracy(output[idx_test], labels[idx_test])
+
 auc_roc_test = roc_auc_score(labels.cpu().numpy()[idx_test.cpu()], output.detach().cpu().numpy()[idx_test.cpu()])
 counterfactual_fairness = 1 - (output_preds.eq(counter_output_preds)[idx_test].sum().item()/idx_test.shape[0])
 robustness_score = 1 - (output_preds.eq(noisy_output_preds)[idx_test].sum().item()/idx_test.shape[0])
@@ -400,6 +440,7 @@ parity, equality = fair_metric(output_preds[idx_test].cpu().numpy(), labels[idx_
 f1_s = f1_score(labels[idx_test].cpu().numpy(), output_preds[idx_test].cpu().numpy())
 
 # print report
+print(f"Accuracy: {acc_test.item():.4f}") # 打印accuracy
 print("The AUCROC of estimator: {:.4f}".format(auc_roc_test))
 print(f'Parity: {parity} | Equality: {equality}')
 print(f'F1-score: {f1_s}')

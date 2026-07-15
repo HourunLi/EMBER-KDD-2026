@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 from scipy.spatial import distance_matrix
+from scipy.sparse import load_npz
 
 
 def encode_onehot(labels):
@@ -107,25 +108,9 @@ def load_bail(dataset, sens_attr="WHITE", predict_attr="RECID", path="../dataset
     header = list(idx_features_labels.columns)
     header.remove(predict_attr)
     
-    # # Normalize School
-    # idx_features_labels['SCHOOL'] = 2*(idx_features_labels['SCHOOL']-idx_features_labels['SCHOOL'].min()).div(idx_features_labels['SCHOOL'].max() - idx_features_labels['SCHOOL'].min()) - 1
-
-    # # Normalize RULE
-    # idx_features_labels['RULE'] = 2*(idx_features_labels['RULE']-idx_features_labels['RULE'].min()).div(idx_features_labels['RULE'].max() - idx_features_labels['RULE'].min()) - 1
-
-    # # Normalize AGE
-    # idx_features_labels['AGE'] = 2*(idx_features_labels['AGE']-idx_features_labels['AGE'].min()).div(idx_features_labels['AGE'].max() - idx_features_labels['AGE'].min()) - 1
-
-    # # Normalize TSERVD
-    # idx_features_labels['TSERVD'] = 2*(idx_features_labels['TSERVD']-idx_features_labels['TSERVD'].min()).div(idx_features_labels['TSERVD'].max() - idx_features_labels['TSERVD'].min()) - 1
-
-    # # Normalize FOLLOW
-    # idx_features_labels['FOLLOW'] = 2*(idx_features_labels['FOLLOW']-idx_features_labels['FOLLOW'].min()).div(idx_features_labels['FOLLOW'].max() - idx_features_labels['FOLLOW'].min()) - 1
-
-    # # Normalize TIME
-    # idx_features_labels['TIME'] = 2*(idx_features_labels['TIME']-idx_features_labels['TIME'].min()).div(idx_features_labels['TIME'].max() - idx_features_labels['TIME'].min()) - 1
-
     # build relationship
+    # 这里看一下构造的.txt有没有问题
+    # if os.path.exists(f'{path}/{dataset}_edges.txt'):
     if os.path.exists(f'{path}/{dataset}_edges.txt'):
         edges_unordered = np.genfromtxt(f'{path}/{dataset}_edges.txt').astype('int')
     else:
@@ -170,6 +155,36 @@ def load_bail(dataset, sens_attr="WHITE", predict_attr="RECID", path="../dataset
     
     return adj, features, labels, idx_train, idx_val, idx_test, sens
 
+# 重写一个
+def load_bailA(dataset, sens_attr="WHITE", predict_attr="RECID", path="../dataset/bailA/", label_number=1000):
+    idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset)))
+    header = list(idx_features_labels.columns)
+    header.remove(predict_attr)
+    # header.remove("user_id")
+    labels = idx_features_labels[predict_attr].values
+    labels = torch.LongTensor(labels)
+    sens_labels = idx_features_labels[sens_attr].values.astype(int)
+    sens_labels = torch.LongTensor(sens_labels)
+    features = idx_features_labels[header]
+    features = torch.FloatTensor(np.array(features, dtype=np.float32))
+
+    # 连边
+    adj = load_npz(f'{path}/{dataset}_edges.npz')
+
+    label_idx_0 = np.where(labels == 0)[0]
+    label_idx_1 = np.where(labels == 1)[0]
+    random.shuffle(label_idx_0)
+    random.shuffle(label_idx_1)
+    idx_train = np.append(label_idx_0[:int(0.5 * len(label_idx_0))],
+                          label_idx_1[: int(0.5 * len(label_idx_1))])
+    idx_val = np.append(label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))], 
+                        label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
+    idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):],
+                         label_idx_1[int(0.75 * len(label_idx_1)):])
+
+
+    return adj, features, labels, idx_train, idx_val, idx_test, sens
+
 
 def load_german(dataset, sens_attr="Gender", predict_attr="GoodCustomer", path="../dataset/german/", label_number=1000):
     # print('Loading {} dataset from {}'.format(dataset, path))
@@ -183,20 +198,9 @@ def load_german(dataset, sens_attr="Gender", predict_attr="GoodCustomer", path="
     idx_features_labels['Gender'][idx_features_labels['Gender'] == 'Female'] = 1
     idx_features_labels['Gender'][idx_features_labels['Gender'] == 'Male'] = 0
 
-#    for i in range(idx_features_labels['PurposeOfLoan'].unique().shape[0]):
-#        val = idx_features_labels['PurposeOfLoan'].unique()[i]
-#        idx_features_labels['PurposeOfLoan'][idx_features_labels['PurposeOfLoan'] == val] = i
-
-#    # Normalize LoanAmount
-#    idx_features_labels['LoanAmount'] = 2*(idx_features_labels['LoanAmount']-idx_features_labels['LoanAmount'].min()).div(idx_features_labels['LoanAmount'].max() - idx_features_labels['LoanAmount'].min()) - 1
-#
-#    # Normalize Age
-#    idx_features_labels['Age'] = 2*(idx_features_labels['Age']-idx_features_labels['Age'].min()).div(idx_features_labels['Age'].max() - idx_features_labels['Age'].min()) - 1
-#
-#    # Normalize LoanDuration
-#    idx_features_labels['LoanDuration'] = 2*(idx_features_labels['LoanDuration']-idx_features_labels['LoanDuration'].min()).div(idx_features_labels['LoanDuration'].max() - idx_features_labels['LoanDuration'].min()) - 1
-#
     # build relationship
+    # 这里看一下构造的.txt有没有问题
+    # if os.path.exists(f'{path}/{dataset}_edges.txt'):
     if os.path.exists(f'{path}/{dataset}_edges.txt'):
         edges_unordered = np.genfromtxt(f'{path}/{dataset}_edges.txt').astype('int')
     else:
@@ -206,6 +210,7 @@ def load_german(dataset, sens_attr="Gender", predict_attr="GoodCustomer", path="
     features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
     labels = idx_features_labels[predict_attr].values
     labels[labels == -1] = 0
+
 
     idx = np.arange(features.shape[0])
     idx_map = {j: i for i, j in enumerate(idx)}
@@ -240,6 +245,169 @@ def load_german(dataset, sens_attr="Gender", predict_attr="GoodCustomer", path="
     idx_test = torch.LongTensor(idx_test)
    
     return adj, features, labels, idx_train, idx_val, idx_test, sens
+
+# 自己改的
+def load_germanA(dataset, sens_attr="Gender", predict_attr="GoodCustomer", path="../dataset/germanA/", label_number=1000):
+    idx_features_labels = pd.read_csv(os.path.join(path,"{}.csv".format(dataset)))
+    header = list(idx_features_labels.columns)
+    header.remove(predict_attr)
+    header.remove('OtherLoansAtStore')
+    header.remove('PurposeOfLoan')
+
+    # Sensitive Attribute
+    idx_features_labels['Gender'][idx_features_labels['Gender'] == 'Female'] = 1
+    idx_features_labels['Gender'][idx_features_labels['Gender'] == 'Male'] = 0
+
+    # build relationship
+    adj = load_npz(f'{path}/{dataset}_edges.npz')
+
+    features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
+    labels = idx_features_labels[predict_attr].values
+    labels[labels == -1] = 0
+
+    features = torch.FloatTensor(np.array(features.todense()))
+    labels = torch.LongTensor(labels)
+
+    import random
+    random.seed(20)
+    label_idx_0 = np.where(labels==0)[0]
+    label_idx_1 = np.where(labels==1)[0]
+    random.shuffle(label_idx_0)
+    random.shuffle(label_idx_1)
+
+    idx_train = np.append(label_idx_0[:int(0.5 * len(label_idx_0))],
+                          label_idx_1[: int(0.5 * len(label_idx_1))])
+    idx_val = np.append(label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))], 
+                        label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
+    idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):],
+                         label_idx_1[int(0.75 * len(label_idx_1)):])
+                         
+    sens = idx_features_labels[sens_attr].values.astype(int)
+    sens = torch.FloatTensor(sens)
+    idx_train = torch.LongTensor(idx_train)
+    idx_val = torch.LongTensor(idx_val)
+    idx_test = torch.LongTensor(idx_test)
+
+    return adj, features, labels, idx_train, idx_val, idx_test, sens
+
+
+# 没招了，硬着头皮照葫芦画瓢吧=）
+# 主要借鉴了CELL
+def load_pokec_n(dataset, sens_attr="region", predict_attr="I_am_working_in_field", path="../dataset/pokec/", label_number=3000):
+    idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset)))
+    # header = list(pd.read_csv(os.path.join(path, "{}.csv".format("region_job_z"))).columns)
+    # header2 = list(pd.read_csv(os.path.join(path, "{}.csv".format("region_job_n"))).columns)
+    # header = [i for i in header if i in header2]
+
+    header = list(pd.read_csv(os.path.join(path, "{}.csv".format("pokec_n"))).columns)
+    header.remove("user_id")
+    # header.remove(sens_attr)  # 这里不需要remove
+    header.remove(predict_attr)
+    
+    features = idx_features_labels[header]
+    features = torch.FloatTensor(np.array(features, dtype=np.float32))
+    labels = idx_features_labels[predict_attr].values
+    labels = torch.LongTensor(labels)
+    labels[labels > 1] = 1
+    # labels[labels < 1] = 0
+    sens_labels = idx_features_labels[sens_attr].values.astype(int)
+    sens_labels = torch.FloatTensor(sens_labels)
+
+    # build graph
+    idx = np.array(idx_features_labels["user_id"], dtype=int)
+    idx_map = {j: i for i, j in enumerate(idx)}
+
+    # 这里看一下构造的.txt有没有问题
+    # if os.path.exists(f'{path}/{dataset}_edges.txt'):
+    if os.path.exists(f'{path}/{dataset}_relationship.txt'):
+        edges_unordered = np.genfromtxt(f'{path}/{dataset}_relationship.txt').astype('int')
+    else:
+        edges_unordered = build_relationship(idx_features_labels[header], thresh=0.8)
+        np.savetxt(f'{path}/{dataset}_relationship.txt', edges_unordered)
+
+    # edges_unordered = np.genfromtxt(os.path.join(path, f"{dataset}_relationship.txt"), dtype=int)
+    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())), dtype=int).reshape(edges_unordered.shape)
+    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])), shape=(labels.shape[0], labels.shape[0]), dtype=np.float32)
+    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+    adj = adj + sp.eye(adj.shape[0])
+    # edge_index, _ = from_scipy_sparse_matrix(adj)
+
+    # 这两句没用到
+    # label_idx = np.where(labels >= 0)[0]  # 找到label有效的集合
+    # random.shuffle(label_idx)
+    label_idx_0 = np.where(labels == 0)[0]
+    label_idx_1 = np.where(labels == 1)[0]
+    random.shuffle(label_idx_0)
+    random.shuffle(label_idx_1)
+    idx_train = np.append(label_idx_0[:int(0.5 * len(label_idx_0))],
+                          label_idx_1[:int(0.5 * len(label_idx_1))])
+    idx_val = np.append(label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))],
+                        label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
+    idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
+    # train_mask = index_to_mask(features.shape[0], torch.LongTensor(idx_train))
+    # val_mask = index_to_mask(features.shape[0], torch.LongTensor(idx_val))
+    # test_mask = index_to_mask(features.shape[0], torch.LongTensor(idx_test))
+    idx_train = torch.LongTensor(idx_train)
+    idx_val = torch.LongTensor(idx_val)
+    idx_test = torch.LongTensor(idx_test)
+
+    sens = idx_features_labels[sens_attr].values.astype(int)
+    sens = torch.FloatTensor(sens)
+   
+    return adj, features, labels, idx_train, idx_val, idx_test, sens
+
+# 自己改的，借鉴SFFGNN
+def load_syn_1(dataset, sens_attr="", predict_attr="", path="../dataset/syn-1/", label_number=3000):
+    features = pd.read_csv(os.path.join(path, "{}_feat.csv".format(dataset)), header=None)
+    # features = torch.FloatTensor(features.values.astype(np.float32))
+
+    labels = pd.read_csv(os.path.join(path, "{}_label.txt".format(dataset)), header=None)
+    labels = torch.LongTensor(labels.values.astype(int).squeeze())
+
+    sens_labels = pd.read_csv(os.path.join(path, "{}_sens.txt".format(dataset)), header=None)
+    # sens_labels = torch.LongTensor(sens_labels.values.astype(int).squeeze())
+
+    # 自己加的，适应外面的接口
+    features = np.concatenate([features.values, sens_labels.values], axis=1)
+    # features = torch.FloatTensor(features.values.astype(np.float32))  # 会报错
+    features = torch.FloatTensor(features.astype(np.float32))
+    sens_labels = torch.LongTensor(sens_labels.values.astype(int).squeeze())
+
+    if os.path.exists(os.path.join(path, "{}_edges.txt".format(dataset))):
+        edges_unordered = np.genfromtxt(os.path.join(path, "{}_edges.txt".format(dataset)), delimiter=',').astype('int')
+    else:
+        raise NotImplementedError
+
+    idx = np.arange(features.shape[0])
+    idx_map = {j: i for i, j in enumerate(idx)}
+    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())), dtype=int).reshape(edges_unordered.shape)
+    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])), shape=(labels.shape[0], labels.shape[0]), dtype=np.float32)
+    # build symmetric adjacency matrix
+    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+    adj = adj + sp.eye(adj.shape[0])
+
+    # adj_norm = sys_normalized_adjacency(adj)
+    # adj_norm_sp = sparse_mx_to_torch_sparse_tensor(adj_norm)
+    # edge_index, _ = from_scipy_sparse_matrix(adj)
+
+    label_idx_0 = np.where(labels == 0)[0]
+    label_idx_1 = np.where(labels == 1)[0]
+    random.seed(20)  # 固定随机种子，保证每次的train, val, test一致
+    random.shuffle(label_idx_0)
+    random.shuffle(label_idx_1)
+    idx_train = np.append(label_idx_0[:int(0.5 * len(label_idx_0))],
+                          label_idx_1[: int(0.5 * len(label_idx_1))])
+    idx_val = np.append(label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))], 
+                        label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
+    idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
+    # train_mask = index_to_mask(features.shape[0], torch.LongTensor(idx_train))
+    # val_mask = index_to_mask(features.shape[0], torch.LongTensor(idx_val))
+    # test_mask = index_to_mask(features.shape[0], torch.LongTensor(idx_test))
+    idx_train = torch.LongTensor(idx_train)
+    idx_val = torch.LongTensor(idx_val)
+    idx_test = torch.LongTensor(idx_test)
+
+    return adj, features, labels, idx_train, idx_val, idx_test, sens_labels
 
 def normalize(mx):
     """Row-normalize sparse matrix"""

@@ -1,1 +1,43 @@
 试一下fairsin，跑通了，下一个=）
+
+6.29
+环境：torch20pt38
+论文：https://openreview.net/forum?id=oJQWvsStNh
+代码：https://github.com/sh-qiangchen/SFG
+
+五、SFG
+(一)Bail
+命令：python sfg.py --dataset='bail' --encoder='SAGE' --d_epochs=5 --g_epochs=10 --c_epochs=5 --c_lr=0.01 --e_lr=0.001 --ratio=1 --epochs=160 --with_constraint --rho=2 --loss_alpha=0.5 --runs=5
+结果：
+======bailSAGE======
+auc_roc: 94.35752648673137 1.4432076743098625
+Acc: 89.95126086035178 1.3093457242999795
+f1: 85.99312275421389 1.7654184464059828
+parity: 5.101868280072351 1.058857422783964
+equality: 2.0689392206207624 0.6782469159593226
+
+(二)German
+命令：python sfg.py --dataset='german' --encoder='SAGE' --d_epochs=5 --g_epochs=10 --c_epochs=10 --c_lr=0.001 --e_lr=0.01 --ratio=0.5 --with_constraint --rho=2 --loss_alpha=0.5 --runs=5
+结果： 
+======germanSAGE======
+auc_roc: 67.67542857142857 4.948517408701082
+Acc: 70.32000000000001 0.7756287771866134
+f1: 82.1470612703558 0.5996930460384198
+parity: 1.944899072558648 1.5529031641817541
+equality: 1.281512605042019 0.6623480155644742
+
+(三)pokec-n 
+命令：python sfg.py --dataset='pokec_n' --encoder='SAGE' --d_epochs=5 --g_epochs=10 --c_epochs=10 --c_lr=0.001 --e_lr=0.01 --ratio=0.5 --with_constraint --rho=2 --loss_alpha=0.5 --runs=5
+结果： 
+======pokec_nSAGE======
+auc_roc: 63.53502030522375 3.7162259315964437
+Acc: 54.95454545454545 5.38424392506767
+f1: 63.69678306570011 1.4865959287939272
+parity: 6.305801539120957 3.635608098272316
+equality: 7.203777118154471 3.349267076276341
+
+(四)syn-t 
+
+
+
+

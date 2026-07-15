@@ -13,3 +13,41 @@ pip install --no-index torch_scatter torch_sparse torch_cluster -f https://data.
 pip install torch_geometric==2.2.0
 不要装pyg_lib=）
 
+6.20：
+代码：https://github.com/Landon5282/FairSIN
+环境：torch20pt38
+装pytorch：pip install torch==2.0.0 torchvision==0.15.1 torchaudio==2.0.1 --index-url https://download.pytorch.org/whl/cu118 --no-cache-dir
+pip install -r requirements.txt
+装pyg：pip install --no-index torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-2.0.0+cu118.html
+pip install torch_geometric==2.2.0
+
+四、FairSIN
+(一)Bail
+命令：python in-train.py --dataset='bail' --encoder='GCN' --c_epochs=10 --runs=5 --hidden=18 --epoch=150 --c_lr=0.1 --e_lr=0.1 --delta=0.5 --d='yes' --c_wd=0.001 --e_wd=0.001
+结果：
+======bailGCN======
+Acc:87.18±0.36
+f1:81.99±0.55
+parity:6.11±0.27
+equality:4.2±1.05
+
+(二)German
+命令：python in-train.py --dataset='german' --encoder='GCN' --c_epochs=10 --runs=5 --hidden=18 --epoch=150 --c_lr=0.1 --e_lr=0.1 --delta=0.5 --d='yes' --c_wd=0.001 --e_wd=0.001
+结果：
+======germanGCN======
+Acc:70.08±0.16
+f1:82.34±0.14
+parity:0.38±0.51
+equality:0.02±0.04
+
+(三)pokec-n（这里有pokec-n的处理代码，需要把具体的数据集找过来）
+命令：python in-train.py --dataset='pokec_n' --encoder='GCN' --c_epochs=10 --runs=5 --hidden=18 --epoch=150 --c_lr=0.1 --e_lr=0.1 --delta=0.5 --d='yes' --c_wd=0.001 --e_wd=0.001
+结果：
+======pokec_nGCN======
+Acc:67.99±0.81
+f1:66.07±1.25
+parity:2.66±1.28
+equality:2.32±1.59
+
+(四)syn-t 
+
