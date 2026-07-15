@@ -69,15 +69,25 @@ parser.add_argument('--adapt_lr',     type=float, default=1e-3)
 parser.add_argument('--tau_adjust',   type=float, default=1.0)   # Bayesian logit adjustment temperature
 parser.add_argument('--mmd_chunk_size', type=int, default=1024)
 parser.add_argument('--proto_temp',   type=float, default=0.1)   # softmax temperature for posterior sharpening
+parser.add_argument('--ablation', type=str,
+                    choices=['full', 'metaalign', 'bca', 'prior_ema', 'residual'],
+                    default='full')
+parser.add_argument('--prior_update_mode', type=str,
+                    choices=['ema', 'frozen', 'replace', 'cumulative'],
+                    default='ema')
 
 # misc
 parser.add_argument('--log_path', type=str, default=None)
+parser.add_argument('--result_path', type=str, default=None)
+parser.add_argument('--runs_override', type=int, default=None)
 parser.add_argument('--seed',     type=int, default=1111)
+parser.add_argument('--target_seed', type=int, default=None)
 parser.add_argument('--use_checkpoint',    dest='use_checkpoint', action='store_true',
                     help='load checkpoint and skip source training when available')
 parser.set_defaults(use_checkpoint=False)
 parser.add_argument('--save_visualization_embeddings', action='store_true',
                     help='export embeddings for root-level t-SNE visualization')
+parser.add_argument('--disable_embedding_export', action='store_true')
 parser.add_argument('--tune',     action='store_true')
 parser.set_defaults(tune=True)
 parser.add_argument('--verbose',  action='store_true')
@@ -97,4 +107,6 @@ else:
 
 if args.tune:
     args = read_config(args)
+if args.runs_override is not None:
+    args.runs = args.runs_override
 print(args)

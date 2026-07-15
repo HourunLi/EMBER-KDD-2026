@@ -39,16 +39,17 @@ def evaluate_per_class(args, data, encoder):
             'test':  data.test_mask.cpu().numpy(),
         }
 
-        # Save embeddings for analysis
-        labels = torch.full((test_labels.shape[0],), -1, dtype=torch.int64)
-        labels[t_idx_s0_y1] = 0
-        labels[t_idx_s1_y1] = 1
-        labels[t_idx_s0_y0] = 2
-        labels[t_idx_s1_y0] = 3
-        np.savez(f"{args.dataset}_feat.npz",
-                 representations=feat[data.test_mask].cpu().numpy())
-        np.savez(f"{args.dataset}_labels.npz",
-                 labels=labels.cpu().numpy())
+        if not getattr(args, 'disable_embedding_export', False):
+            # Save embeddings for analysis.
+            labels = torch.full((test_labels.shape[0],), -1, dtype=torch.int64)
+            labels[t_idx_s0_y1] = 0
+            labels[t_idx_s1_y1] = 1
+            labels[t_idx_s0_y0] = 2
+            labels[t_idx_s1_y0] = 3
+            np.savez(f"{args.dataset}_feat.npz",
+                     representations=feat[data.test_mask].cpu().numpy())
+            np.savez(f"{args.dataset}_labels.npz",
+                     labels=labels.cpu().numpy())
 
         result = {}
         for split_name, mask in splits.items():

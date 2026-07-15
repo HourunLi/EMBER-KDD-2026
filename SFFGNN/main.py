@@ -3,7 +3,9 @@ from models import *
 from utils import *
 from runner import *
 from config import args
+import json
 import numpy as np
+import os
 import torch
 
 if __name__ == '__main__':
@@ -38,3 +40,35 @@ if __name__ == '__main__':
     print(f"AUC-ROC:  {np.mean(ada_auc_roc):.2f} ± {np.std(ada_auc_roc):.2f}")
     print(f"Parity:   {np.mean(ada_parity):.2f} ± {np.std(ada_parity):.2f}")
     print(f"Equality: {np.mean(ada_equality):.2f} ± {np.std(ada_equality):.2f}")
+
+    if args.result_path:
+        def values(array):
+            return np.asarray(array).reshape(-1).astype(float).tolist()
+
+        payload = {
+            'dataset': args.dataset,
+            'inid': args.inid,
+            'outid': args.outid,
+            'seed': args.seed,
+            'target_seed': args.target_seed,
+            'ablation': args.ablation,
+            'prior_update_mode': args.prior_update_mode,
+            'metrics': {
+                'source': {
+                    'acc': values(src_acc), 'auc': values(src_auc_roc),
+                    'dp': values(src_parity), 'eo': values(src_equality),
+                },
+                'target_before': {
+                    'acc': values(tgt_acc), 'auc': values(tgt_auc_roc),
+                    'dp': values(tgt_parity), 'eo': values(tgt_equality),
+                },
+                'target_after': {
+                    'acc': values(ada_acc), 'auc': values(ada_auc_roc),
+                    'dp': values(ada_parity), 'eo': values(ada_equality),
+                },
+            },
+        }
+        result_dir = os.path.dirname(os.path.abspath(args.result_path))
+        os.makedirs(result_dir, exist_ok=True)
+        with open(args.result_path, 'w', encoding='utf-8') as result_file:
+            json.dump(payload, result_file, ensure_ascii=False, indent=2)

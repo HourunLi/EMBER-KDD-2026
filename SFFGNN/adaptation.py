@@ -16,6 +16,8 @@ from torch.func import functional_call
 
 
 STATE_VERSION = 2
+ABLATION_MODES = ("full", "metaalign", "bca", "prior_ema", "residual")
+PRIOR_UPDATE_MODES = ("ema", "frozen", "replace", "cumulative")
 
 
 def _safe_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
@@ -143,6 +145,30 @@ def estimate_soft_counts(
     return counts
 
 
+def update_prior_counts(
+    previous: torch.Tensor,
+    current: torch.Tensor,
+    mode: str,
+    momentum: float,
+    smoothing: float,
+) -> torch.Tensor:
+    """Update group/class soft counts using the selected online estimator."""
+    if mode == "ema":
+        return momentum * previous + (1.0 - momentum) * current
+    if mode == "frozen":
+        return previous
+    if mode == "replace":
+        return current
+    if mode == "cumulative":
+        raw_current = (current - max(float(smoothing), 1e-6)).clamp_min(0.0)
+        return previous + raw_current
+    raise ValueError(
+        "prior_update_mode must be one of {}; got {!r}".format(
+            PRIOR_UPDATE_MODES, mode
+        )
+    )
+
+
 def compute_posterior(
     features: torch.Tensor,
     prototypes: torch.Tensor,
@@ -198,6 +224,7 @@ def build_prototypes(
     selected: torch.Tensor,
     sensitive: torch.Tensor,
     previous: torch.Tensor,
+    use_sensitive_residual: bool = True,
 ) -> torch.Tensor:
     prototypes = []
     sensitive = sensitive.long()
@@ -219,13 +246,16 @@ def build_prototypes(
             fallback,
         )
 
-        weights = inverse_group[sensitive[class_mask]]
-        residual = _weighted_mean(
-            class_features - confidence_proto.unsqueeze(0),
-            weights,
-            torch.zeros_like(confidence_proto),
-        )
-        prototype = confidence_proto + residual
+        if use_sensitive_residual:
+            weights = inverse_group[sensitive[class_mask]]
+            residual = _weighted_mean(
+                class_features - confidence_proto.unsqueeze(0),
+                weights,
+                torch.zeros_like(confidence_proto),
+            )
+            prototype = confidence_proto + residual
+        else:
+            prototype = confidence_proto
 
         if not torch.isfinite(prototype).all() or prototype.detach().norm().item() < 1e-12:
             prototype = fallback
@@ -274,6 +304,22 @@ def run_target_adaptation(
 ) -> Dict:
     """Adapt the frozen source model to the target graph and return state v2."""
 
+    ablation = str(getattr(args, "ablation", "full"))
+    if ablation not in ABLATION_MODES:
+        raise ValueError(
+            "ablation must be one of {}; got {!r}".format(ABLATION_MODES, ablation)
+        )
+    prior_update_mode = str(getattr(args, "prior_update_mode", "ema"))
+    if prior_update_mode not in PRIOR_UPDATE_MODES:
+        raise ValueError(
+            "prior_update_mode must be one of {}; got {!r}".format(
+                PRIOR_UPDATE_MODES, prior_update_mode
+            )
+        )
+    use_metaalign = ablation != "metaalign"
+    use_bca = ablation != "bca"
+    use_sensitive_residual = ablation != "residual"
+
     device = args.device
     source_model.eval()
     for parameter in source_model.parameters():
@@ -297,15 +343,17 @@ def run_target_adaptation(
     prototypes = source_prototypes.detach().clone()
     smoothing = float(getattr(args, "prior_count_smoothing", 1.0))
     soft_counts = _initial_soft_counts(knowledge, device, smoothing)
+    initial_soft_counts = soft_counts.detach().clone()
     group_prior, global_prior = priors_from_counts(soft_counts)
     sensitive = target_data.sens_labels.to(device).long().view(-1)
 
     epochs = max(1, int(getattr(args, "adapt_epochs", 200)))
     keep_fraction = float(getattr(args, "tau_c", 0.2))
     temperature = float(getattr(args, "proto_temp", 0.5))
-    prior_weight = float(getattr(args, "lambda_pi", 1.0)) * float(
+    configured_prior_weight = float(getattr(args, "lambda_pi", 1.0)) * float(
         getattr(args, "tau_adjust", 1.0)
     )
+    prior_weight = configured_prior_weight if use_bca else 0.0
     alpha_p = min(max(float(getattr(args, "alpha_p", 0.9)), 0.0), 1.0)
     alpha_pi = min(max(float(getattr(args, "alpha_pi", 0.9)), 0.0), 1.0)
     lambda_cls = float(getattr(args, "lambda_s", 1.0))
@@ -323,10 +371,11 @@ def run_target_adaptation(
     last_losses = {}
     max_adapter_grad_norm = 0.0
     selected_count = 0
+    prior_update_steps = 0
 
     print(
-        "[FairMAC] target adaptation epochs={} adapter={} bottleneck={}".format(
-            epochs, dim, bottleneck
+        "[FairMAC] ablation={} prior_update={} epochs={} adapter={} bottleneck={}".format(
+            ablation, prior_update_mode, epochs, dim, bottleneck
         )
     )
 
@@ -357,6 +406,7 @@ def run_target_adaptation(
             selected,
             sensitive,
             prototypes,
+            use_sensitive_residual=use_sensitive_residual,
         )
 
         mmd_loss = compute_target_fairness_loss(
@@ -372,31 +422,38 @@ def run_target_adaptation(
         ramp = _fairness_weight(step, epochs, warmup_ratio)
         fairness_loss = ramp * lambda_fair * mmd_loss
 
-        adapter_parameters = dict(adapter.named_parameters())
-        fairness_gradients = torch.autograd.grad(
-            fairness_loss,
-            tuple(adapter_parameters.values()),
-            create_graph=True,
-            retain_graph=True,
-            allow_unused=True,
-        )
-        virtual_parameters = {
-            name: parameter - meta_lr * gradient
-            if gradient is not None
-            else parameter
-            for (name, parameter), gradient in zip(
-                adapter_parameters.items(), fairness_gradients
+        if use_metaalign:
+            adapter_parameters = dict(adapter.named_parameters())
+            fairness_gradients = torch.autograd.grad(
+                fairness_loss,
+                tuple(adapter_parameters.values()),
+                create_graph=True,
+                retain_graph=True,
+                allow_unused=True,
             )
-        }
-        virtual_features = functional_call(adapter, virtual_parameters, (base_embedding,))
-        virtual_prototypes = build_prototypes(
-            virtual_features,
-            pseudo_labels,
-            confidence,
-            selected,
-            sensitive,
-            prototypes,
-        )
+            virtual_parameters = {
+                name: parameter - meta_lr * gradient
+                if gradient is not None
+                else parameter
+                for (name, parameter), gradient in zip(
+                    adapter_parameters.items(), fairness_gradients
+                )
+            }
+            virtual_features = functional_call(
+                adapter, virtual_parameters, (base_embedding,)
+            )
+            virtual_prototypes = build_prototypes(
+                virtual_features,
+                pseudo_labels,
+                confidence,
+                selected,
+                sensitive,
+                prototypes,
+                use_sensitive_residual=use_sensitive_residual,
+            )
+        else:
+            virtual_features = student_features
+            virtual_prototypes = current_prototypes
         virtual_probabilities = compute_posterior(
             virtual_features,
             virtual_prototypes,
@@ -446,7 +503,15 @@ def run_target_adaptation(
                 sensitive,
                 smoothing,
             )
-            soft_counts = alpha_pi * soft_counts + (1.0 - alpha_pi) * new_counts
+            soft_counts = update_prior_counts(
+                soft_counts,
+                new_counts,
+                prior_update_mode,
+                alpha_pi,
+                smoothing,
+            )
+            if prior_update_mode != "frozen":
+                prior_update_steps += 1
             group_prior, global_prior = priors_from_counts(soft_counts)
 
         last_losses = {
@@ -495,6 +560,7 @@ def run_target_adaptation(
             final_selected,
             sensitive,
             prototypes,
+            use_sensitive_residual=use_sensitive_residual,
         )
         final_prototypes = _safe_normalize(
             alpha_p * prototypes + (1.0 - alpha_p) * candidate_prototypes,
@@ -503,8 +569,12 @@ def run_target_adaptation(
         candidate_counts = estimate_soft_counts(
             reference_probabilities, sensitive, smoothing
         )
-        preliminary_counts = (
-            alpha_pi * soft_counts + (1.0 - alpha_pi) * candidate_counts
+        preliminary_counts = update_prior_counts(
+            soft_counts,
+            candidate_counts,
+            prior_update_mode,
+            alpha_pi,
+            smoothing,
         )
         preliminary_group_prior, _ = priors_from_counts(preliminary_counts)
         final_reference_probabilities = compute_posterior(
@@ -518,7 +588,15 @@ def run_target_adaptation(
         refined_counts = estimate_soft_counts(
             final_reference_probabilities, sensitive, smoothing
         )
-        final_counts = alpha_pi * soft_counts + (1.0 - alpha_pi) * refined_counts
+        final_counts = update_prior_counts(
+            soft_counts,
+            refined_counts,
+            prior_update_mode,
+            alpha_pi,
+            smoothing,
+        )
+        if prior_update_mode != "frozen":
+            prior_update_steps += 1
         group_prior, global_prior = priors_from_counts(final_counts)
 
     target_joint_prior = final_counts / final_counts.sum().clamp_min(1e-8)
@@ -537,6 +615,12 @@ def run_target_adaptation(
 
     state = {
         "state_version": STATE_VERSION,
+        "ablation": ablation,
+        "use_metaalign": use_metaalign,
+        "use_bca": use_bca,
+        "use_sensitive_residual": use_sensitive_residual,
+        "prior_update_mode": prior_update_mode,
+        "configured_alpha_pi": alpha_pi,
         "adapter_config": adapter.config(),
         "adapter_state_dict": _cpu_state_dict(adapter),
         "final_protos": {
@@ -548,7 +632,7 @@ def run_target_adaptation(
         "global_prior": global_prior.detach().cpu().clone(),
         "inference_strategy": "group_conditioned",
         "proto_temp": temperature,
-        "lambda_pi": float(getattr(args, "lambda_pi", 1.0)),
+        "lambda_pi": float(getattr(args, "lambda_pi", 1.0)) if use_bca else 0.0,
         "tau_adjust": float(getattr(args, "tau_adjust", 1.0)),
         "diagnostics": {
             "mmd_steps": mmd_steps,
@@ -558,6 +642,12 @@ def run_target_adaptation(
                 not parameter.requires_grad for parameter in source_model.parameters()
             ),
             "selected_count": int(final_selected.sum().item()),
+            "prior_update_steps": prior_update_steps,
+            "prior_shift": float(
+                (
+                    priors_from_counts(initial_soft_counts)[0] - group_prior
+                ).abs().mean().item()
+            ),
         },
         # Compatibility metadata for existing analysis code.  New inference
         # relies only on the explicit v2 fields above.

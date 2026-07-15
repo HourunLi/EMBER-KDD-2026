@@ -578,6 +578,8 @@ def train_and_adapt(args, source_data, target_data):
 
         # ── Phase 2: SFDA adapt ────────────────────────────────────────────
         # knowledge was either loaded from checkpoint or extracted above
+        if getattr(args, 'target_seed', None) is not None:
+            seed_everything(args.target_seed)
         adapted_model, state = adapt_target(args, target_data, knowledge)
 
         # ── Evaluate on target (after adaptation) ──────────────────────────
