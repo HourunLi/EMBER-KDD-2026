@@ -14,6 +14,7 @@ from torch.func import functional_call
 try:
     from .adaptation import (
         load_adaptation_state,
+        class_conditional_mmd_loss,
         predict_target_proba,
         run_target_adaptation,
         save_adaptation_state,
@@ -21,6 +22,7 @@ try:
 except ImportError:
     from adaptation import (
         load_adaptation_state,
+        class_conditional_mmd_loss,
         predict_target_proba,
         run_target_adaptation,
         save_adaptation_state,
@@ -42,54 +44,6 @@ from visualization.export_utils import save_visualization_embeddings
 
 # ── Fairness losses ────────────────────────────────────────────────────────────
 
-def mmd_loss(h, s, bandwidth=1.0, chunk_size=1024):
-    """
-    MMD (Maximum Mean Discrepancy) between embeddings of sensitive group 0 and 1.
-    Measures distributional fairness in the embedding space.
-
-    MMD²(P, Q) = E[k(x,x')] + E[k(y,y')] - 2·E[k(x,y)]
-    where k is an RBF kernel.
-
-    This implementation is chunked to avoid materialising a full [n, m, D]
-    tensor, which can easily OOM on larger datasets.
-
-    Args:
-      h:          [N, D]  node embeddings
-      s:          [N]     binary sensitive attribute {0, 1}
-      bandwidth:  float   RBF kernel bandwidth σ
-      chunk_size: int     block size for pairwise kernel computation
-    Returns:
-      scalar MMD² loss (0.0 if either group is empty)
-    """
-    h0 = h[s == 0]   # [N0, D]
-    h1 = h[s == 1]   # [N1, D]
-    if h0.shape[0] == 0 or h1.shape[0] == 0:
-        return h.new_zeros(1).squeeze()
-
-    def rbf_mean_chunked(x, y):
-        # 精确计算 mean_{i,j} exp(-||x_i-y_j||^2 / (2σ^2))，
-        # 但按块处理，避免构造完整的 [n, m, D] 张量。
-        total = x.new_zeros(())
-        count = 0
-        denom = 2 * (bandwidth ** 2)
-
-        for i in range(0, x.shape[0], chunk_size):
-            xb = x[i:i + chunk_size]                                # [bx, D]
-            x_sq = xb.pow(2).sum(dim=1, keepdim=True)               # [bx, 1]
-
-            for j in range(0, y.shape[0], chunk_size):
-                yb = y[j:j + chunk_size]                            # [by, D]
-                y_sq = yb.pow(2).sum(dim=1).unsqueeze(0)            # [1, by]
-                dist2 = (x_sq + y_sq - 2.0 * xb @ yb.t()).clamp_min(0.0)
-                total = total + torch.exp(-dist2 / denom).sum()
-                count += xb.shape[0] * yb.shape[0]
-
-        return total / max(count, 1)
-
-    return rbf_mean_chunked(h0, h0) + rbf_mean_chunked(h1, h1) - 2.0 * rbf_mean_chunked(h0, h1)
-
-
-
 def _init_fair_gnn(args):
     """
     Initialise FairGNN with Adam optimiser and a two-phase LR schedule:
@@ -102,7 +56,7 @@ def _init_fair_gnn(args):
     # Optimizer starts at peak lr; LinearLR will scale it via start_factor
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.lr2_reg)
 
-    warmup_epochs  = max(1, int(args.train_epochs * 0.2))   # 10% of total epochs
+    warmup_epochs  = max(1, int(args.train_epochs * 0.1))   # 10% of total epochs
     cosine_epochs  = args.train_epochs - warmup_epochs
 
     warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
@@ -239,6 +193,11 @@ def _get_checkpoint_name(args, run_idx):
         f"lr={args.lr}",
         f"drop={args.dropout}",
         f"lfair={args.lambda_fair}",
+        f"srcmeta={getattr(args, 'ablation', 'full') != 'metaalign'}",
+        f"metalr={getattr(args, 'meta_lr', 0.01)}",
+        f"srcmmd={getattr(args, 'source_mmd_bandwidth', getattr(args, 'mmd_bandwidth', 1.0))}",
+        f"srcmmdmin={getattr(args, 'source_mmd_min_samples', 2)}",
+        f"srcmmdmax={getattr(args, 'source_mmd_max_samples', 0)}",
         f"run={run_idx}",
         f"seed={args.seed}",
     ]
@@ -367,25 +326,21 @@ def _build_source_free_eval_state(args, model, target_data, knowledge):
 
 
 # SFDA Target Adaptation
-def _adapt_target_shared(args, target_data, knowledge):
+def adapt_target(args, target_data, knowledge):
     """Load the frozen source model and run FairMAC target adaptation."""
-    dev = args.device
-    model = FairGNN(args, encoder_type=args.inter_encoder).to(dev)
-    model.load_state_dict({k: v.to(dev) for k, v in knowledge['model_state'].items()})
+    device = args.device
+    model = FairGNN(args, encoder_type=args.inter_encoder).to(device)
+    model.load_state_dict({
+        key: value.to(device)
+        for key, value in knowledge['model_state'].items()
+    })
     for parameter in model.parameters():
         parameter.requires_grad_(False)
         parameter.grad = None
     model.eval()
-    target_data = target_data.to(dev)
+    target_data = target_data.to(device)
     state = run_target_adaptation(args, model, target_data, knowledge)
     return model, state
-
-
-def adapt_target(args, target_data, knowledge):
-    """Run FairMAC target adaptation."""
-    return _adapt_target_shared(args, target_data, knowledge)
-
-
 
 
 def _build_protos(p_y, r_ys, scalers, h_mean_y, keys):
@@ -432,7 +387,6 @@ def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0, temp=0
     return q_ys, q_y
 
 
-
 # Training + Adaptation
 
 def train_and_adapt(args, source_data, target_data):
@@ -462,7 +416,8 @@ def train_and_adapt(args, source_data, target_data):
     source_data = source_data.to(args.device)
     target_data = target_data.to(args.device)
 
-    cls_labels  = source_data.y.float().to(args.device)
+    source_class_labels = source_data.y.long().to(args.device)
+    cls_labels  = source_class_labels.float()
     sens_labels = source_data.sens_labels.to(args.device)
     train_mask  = source_data.train_mask
 
@@ -486,12 +441,28 @@ def train_and_adapt(args, source_data, target_data):
             # ── Phase 1: Source training ───────────────────────────────────────
             model, optimizer, scheduler = _init_fair_gnn(args)
 
-            meta_lr_src = getattr(args, 'meta_lr_src', 0.01)
+            # MetaAlign is a source-only component.  The existing YAML
+            # ``meta_lr`` value controls its virtual classification step.
+            meta_lr = float(getattr(args, 'meta_lr', 0.01))
+            use_source_metaalign = getattr(args, 'ablation', 'full') != 'metaalign'
+            source_mmd_bandwidth = float(getattr(
+                args,
+                'source_mmd_bandwidth',
+                getattr(args, 'mmd_bandwidth', 1.0),
+            ))
+            source_mmd_min_samples = max(
+                1, int(getattr(args, 'source_mmd_min_samples', 2))
+            )
+            source_mmd_max_samples = max(
+                0, int(getattr(args, 'source_mmd_max_samples', 0))
+            )
 
             for epoch in tqdm(range(args.train_epochs), desc=f'Run {run_idx} [train]', leave=False):
                 model.train()
 
-                _, cls_logit = model(source_data.x, source_data.edge_index)
+                source_embedding, cls_logit = model(
+                    source_data.x, source_data.edge_index
+                )
 
                 # ── Classification loss (inner task) ────────────────────────────
                 L_cls = criterion(cls_logit[train_mask].view(-1), cls_labels[train_mask])
@@ -503,32 +474,41 @@ def train_and_adapt(args, source_data, target_data):
                 #
                 # This ensures cls updates stay compatible with fairness alignment:
                 # the model learns to classify in a way that doesn't hurt MMD.
-                backbone_params = list(model.backbone.parameters())
-                grad_cls = torch.autograd.grad(
-                    L_cls, backbone_params, create_graph=True, retain_graph=True
-                )
-                # Virtual inner step (functional, no in-place update)
-                params_prime = [
-                    p - meta_lr_src * g
-                    for p, g in zip(backbone_params, grad_cls)
-                ]
+                if use_source_metaalign:
+                    backbone_params = list(model.backbone.parameters())
+                    grad_cls = torch.autograd.grad(
+                        L_cls, backbone_params, create_graph=True, retain_graph=True
+                    )
+                    # Virtual inner step (functional, no in-place update)
+                    params_prime = [
+                        parameter - meta_lr * gradient
+                        for parameter, gradient in zip(backbone_params, grad_cls)
+                    ]
+                    param_dict = dict(zip(
+                        [name for name, _ in model.backbone.named_parameters()],
+                        params_prime,
+                    ))
+                    fairness_embedding = functional_call(
+                        model.backbone,
+                        param_dict,
+                        (source_data.x, source_data.edge_index),
+                    )
+                else:
+                    # The MetaAlign ablation keeps the same source fairness
+                    # objective but removes the virtual classification step.
+                    fairness_embedding = source_embedding
 
-                # Forward with θ' using functional_call
-                param_dict = dict(zip(
-                    [n for n, _ in model.backbone.named_parameters()],
-                    params_prime
-                ))
-                emb_prime = functional_call(
-                    model.backbone, param_dict,
-                    (source_data.x, source_data.edge_index)
-                )
-                emb_prime_train = emb_prime[train_mask]
-
-            # Outer fairness loss: MMD between sensitive groups in θ' embedding space
-                L_mmd = mmd_loss(
-                    emb_prime_train,
-                    sens_labels[train_mask].long(),
+                # Source fairness loss: within-class MMD between observed
+                # sensitive groups on source training nodes.
+                L_mmd, valid_source_mmd_classes = class_conditional_mmd_loss(
+                    fairness_embedding,
+                    source_class_labels,
+                    sens_labels.long(),
+                    train_mask,
+                    bandwidth=source_mmd_bandwidth,
                     chunk_size=getattr(args, 'mmd_chunk_size', 1024),
+                    min_samples=source_mmd_min_samples,
+                    max_samples=source_mmd_max_samples,
                 )
 
                 loss = L_cls + args.lambda_fair * L_mmd
@@ -542,6 +522,7 @@ def train_and_adapt(args, source_data, target_data):
                     print(f"[Run {run_idx} | Epoch {epoch+1:03d}] "
                           f"L_cls={L_cls.item():.4f}  "
                           f"L_mmd={L_mmd.item():.4f}  "
+                          f"MMD_cls={valid_source_mmd_classes}  "
                           f"Total={loss.item():.4f}")
 
             # ── Extract and save source knowledge ──────────────────────────────
@@ -609,22 +590,18 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
     Returns:
       accs, auc_rocs, paritys, equalitys  — each a dict keyed by split name
     """
-    sens_labels = data.sens_labels
-    test_labels = data.y[data.test_mask]
-
-    t_idx_s0 = sens_labels[data.test_mask] == 0
-    t_idx_s1 = sens_labels[data.test_mask] == 1
-    t_idx_s0_y1 = torch.logical_and(t_idx_s0, test_labels == 1)
-    t_idx_s1_y1 = torch.logical_and(t_idx_s1, test_labels == 1)
-    t_idx_s0_y0 = torch.logical_and(t_idx_s0, test_labels == 0)
-    t_idx_s1_y0 = torch.logical_and(t_idx_s1, test_labels == 0)
-
     accs, auc_rocs, f1s, paritys, equalitys = {}, {}, {}, {}, {}
 
     encoder.eval()
     with torch.no_grad():
-        if int(state.get('state_version', 0)) >= 2:
+        state_version = int(state.get('state_version', 0))
+        if state_version >= 3:
             feat, q_y = predict_target_proba(args, data, encoder, state)
+        elif state_version > 0:
+            raise ValueError(
+                "Legacy adaptation states depend on target sensitive labels; "
+                "rerun target adaptation to create a version-3 state"
+            )
         else:
             emb_raw, _ = encoder(data.x, data.edge_index)
             feat = F.normalize(emb_raw, p=2, dim=1)
@@ -657,6 +634,17 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
         
         # extract positive probability
         probs = q_y[:, 1].cpu().numpy()
+
+        # Target labels and sensitive attributes are accessed only after model
+        # inference, exclusively for reporting predictive/fairness metrics.
+        sens_labels = data.sens_labels
+        test_labels = data.y[data.test_mask]
+        t_idx_s0 = sens_labels[data.test_mask] == 0
+        t_idx_s1 = sens_labels[data.test_mask] == 1
+        t_idx_s0_y1 = torch.logical_and(t_idx_s0, test_labels == 1)
+        t_idx_s1_y1 = torch.logical_and(t_idx_s1, test_labels == 1)
+        t_idx_s0_y0 = torch.logical_and(t_idx_s0, test_labels == 0)
+        t_idx_s1_y0 = torch.logical_and(t_idx_s1, test_labels == 0)
 
         y_all   = data.y.cpu().numpy()
         sens_all = data.sens_labels.cpu().numpy()

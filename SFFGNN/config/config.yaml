@@ -9,6 +9,10 @@ bailA:
   use_checkpoint: true
   inter_encoder: GCN
   lambda_fair: 4.0
+  meta_lr: 0.02
+  source_mmd_bandwidth: 1.5
+  source_mmd_min_samples: 8
+  source_mmd_max_samples: 0
   # target adaptation
   adapt_epochs: 75
   adapt_lr: 0.0008
@@ -18,18 +22,15 @@ bailA:
   lambda_pi: 0.005
   tau_adjust: 1.0
   alpha_p: 0.8
-  alpha_pi: 0.98
   lambda_s: 1.0
   lambda_e: 0.0
   lambda_anchor: 5.0
   target_lambda_fair: 0.5
-  meta_lr: 0.02
-  mmd_bandwidth: 1.5
+  target_mmd_bandwidth: 1.5
   mmd_chunk_size: 256
   target_mmd_min_samples: 8
   target_mmd_max_samples: 512
   fairness_warmup_ratio: 0.2
-  prior_count_smoothing: 5.0
 germanA:
   train_epochs: 800
   lr: 0.005
@@ -41,6 +42,10 @@ germanA:
   use_checkpoint: true
   inter_encoder: GCN
   lambda_fair: 2
+  meta_lr: 0.02
+  source_mmd_bandwidth: 0.5
+  source_mmd_min_samples: 4
+  source_mmd_max_samples: 0
   # target adaptation
   adapt_epochs: 100
   adapt_lr: 0.0005
@@ -50,18 +55,15 @@ germanA:
   lambda_pi: 0.02
   tau_adjust: 1.0
   alpha_p: 0.7
-  alpha_pi: 0.9
   lambda_s: 0.5
   lambda_e: 0.05
   lambda_anchor: 5.0
   target_lambda_fair: 0.5
-  meta_lr: 0.02
-  mmd_bandwidth: 0.5
+  target_mmd_bandwidth: 0.5
   mmd_chunk_size: 256
   target_mmd_min_samples: 4
   target_mmd_max_samples: 256
   fairness_warmup_ratio: 0.1
-  prior_count_smoothing: 5.0
 pokec:
   train_epochs: 800
   lr: 0.002
@@ -73,6 +75,10 @@ pokec:
   use_checkpoint: true
   inter_encoder: GCN
   lambda_fair: 0.5
+  meta_lr: 0.0003
+  source_mmd_bandwidth: 1.5
+  source_mmd_min_samples: 8
+  source_mmd_max_samples: 0
   # target adaptation
   adapt_epochs: 100
   adapt_lr: 0.0004
@@ -82,18 +88,15 @@ pokec:
   lambda_pi: 0.01
   tau_adjust: 1.0
   alpha_p: 0.95
-  alpha_pi: 0.7
   lambda_s: 2.0
   lambda_e: 0.1
   lambda_anchor: 1.0
   target_lambda_fair: 1.0
-  meta_lr: 0.0003
-  mmd_bandwidth: 1.5
+  target_mmd_bandwidth: 1.5
   mmd_chunk_size: 256
   target_mmd_min_samples: 8
   target_mmd_max_samples: 256
   fairness_warmup_ratio: 0.2
-  prior_count_smoothing: 1.0
 syn:
   train_epochs: 800
   lr: 0.001
@@ -105,6 +108,10 @@ syn:
   use_checkpoint: true
   inter_encoder: MLP
   lambda_fair: 2.0
+  meta_lr: 0.01
+  source_mmd_bandwidth: 1.5
+  source_mmd_min_samples: 8
+  source_mmd_max_samples: 0
   # target adaptation
   adapt_epochs: 75
   adapt_lr: 0.0012
@@ -114,15 +121,12 @@ syn:
   lambda_pi: 0.1
   tau_adjust: 1.0
   alpha_p: 0.7
-  alpha_pi: 0.5
   lambda_s: 1.0
   lambda_e: 0.0
   lambda_anchor: 10.0
   target_lambda_fair: 0.1
-  meta_lr: 0.01
-  mmd_bandwidth: 1.5
+  target_mmd_bandwidth: 1.5
   mmd_chunk_size: 256
   target_mmd_min_samples: 8
   target_mmd_max_samples: 512
   fairness_warmup_ratio: 0.2
-  prior_count_smoothing: 0.1

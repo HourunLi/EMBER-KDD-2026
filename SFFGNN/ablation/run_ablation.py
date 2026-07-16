@@ -14,8 +14,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Edit these defaults, then run: python ablation/run_ablation.py
 # ---------------------------------------------------------------------------
-EXPERIMENT = "all"  # full | metaalign | bca | prior_ema | residual | all
-PRIOR_EMA_MODE = "frozen"  # frozen | replace | cumulative | all
+EXPERIMENT = "all"  # full | metaalign | bca | target_mmd | residual | all
 GPU_IDS = [0, 1, 2, 3, 4, 5, 6, 7]
 DATASETS = ["bailA", "germanA", "pokec", "syn"]
 RUN_SEEDS = [1111, 2222, 3333, 4444, 5555]
@@ -46,41 +45,21 @@ def print_status(message):
 
 
 def variant_specs():
-    if EXPERIMENT not in {"full", "metaalign", "bca", "prior_ema", "residual", "all"}:
+    if EXPERIMENT not in {"full", "metaalign", "bca", "target_mmd", "residual", "all"}:
         raise ValueError(f"Unknown EXPERIMENT: {EXPERIMENT}")
-    if PRIOR_EMA_MODE not in {"frozen", "replace", "cumulative", "all"}:
-        raise ValueError(f"Unknown PRIOR_EMA_MODE: {PRIOR_EMA_MODE}")
 
     selected = (
-        ["full", "metaalign", "bca", "prior_ema", "residual"]
+        ["full", "metaalign", "bca", "target_mmd", "residual"]
         if EXPERIMENT == "all"
         else [EXPERIMENT]
     )
-    specs = []
-    for name in selected:
-        if name == "prior_ema":
-            modes = (
-                ["frozen", "replace", "cumulative"]
-                if PRIOR_EMA_MODE == "all"
-                else [PRIOR_EMA_MODE]
-            )
-            for mode in modes:
-                specs.append(
-                    {
-                        "variant": f"prior_{mode}",
-                        "ablation": "prior_ema",
-                        "prior_update_mode": mode,
-                    }
-                )
-        else:
-            specs.append(
-                {
-                    "variant": "wo_" + name if name != "full" else "full",
-                    "ablation": name,
-                    "prior_update_mode": "ema",
-                }
-            )
-    return specs
+    return [
+        {
+            "variant": "wo_" + name if name != "full" else "full",
+            "ablation": name,
+        }
+        for name in selected
+    ]
 
 
 def gpu_status(gpu_id):
@@ -130,7 +109,6 @@ def run_variant(gpu_id, dataset, run_index, seed, spec):
         "--target_seed", str(seed + 100000),
         "--runs_override", "1",
         "--ablation", spec["ablation"],
-        "--prior_update_mode", spec["prior_update_mode"],
         "--log_path", str(log_path),
         "--result_path", str(output_path),
         "--disable_embedding_export",
@@ -199,7 +177,6 @@ def aggregate(specs):
                 "dataset": dataset,
                 "variant": spec["variant"],
                 "ablation": spec["ablation"],
-                "prior_update_mode": spec["prior_update_mode"],
                 "runs": len(records),
             }
             for stage in stages:

@@ -52,7 +52,6 @@ if __name__ == '__main__':
             'seed': args.seed,
             'target_seed': args.target_seed,
             'ablation': args.ablation,
-            'prior_update_mode': args.prior_update_mode,
             'metrics': {
                 'source': {
                     'acc': values(src_acc), 'auc': values(src_auc_roc),
