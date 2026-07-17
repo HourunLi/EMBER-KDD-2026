@@ -96,7 +96,8 @@ def evaluate_per_class(args, data, encoder):
 
     for split_name in splits:
         target_vals = result[split_name]['target_group'].values()
-        accs[split_name]     = np.nanmean([v['acc'] for v in target_vals])
+        # Keep Source and Target on the same ordinary-accuracy definition.
+        accs[split_name]     = result[split_name]['overall']['acc']
         auc_rocs[split_name] = np.nanmean([v['auc'] for v in target_vals])
         f1s[split_name]      = np.nanmean([v['f1']  for v in target_vals])
         paritys[split_name]  = result[split_name]['fairness']['dp']

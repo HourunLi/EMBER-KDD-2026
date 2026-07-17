@@ -36,7 +36,7 @@ def seed_everything(seed=0):
 
 def fair_metric(pred, labels, sens):
     """
-    Compute Demographic Parity (DP) and Equal Opportunity (EO).
+    Compute Demographic Parity (DP) and Equalized Odds (EO).
 
     Args:
       pred  : np.array  binary predictions {0,1}
@@ -47,6 +47,8 @@ def fair_metric(pred, labels, sens):
     """
     idx_s0 = sens == 0
     idx_s1 = sens == 1
+    idx_s0_y0 = np.bitwise_and(idx_s0, labels == 0)
+    idx_s1_y0 = np.bitwise_and(idx_s1, labels == 0)
     idx_s0_y1 = np.bitwise_and(idx_s0, labels == 1)
     idx_s1_y1 = np.bitwise_and(idx_s1, labels == 1)
     def safe_gap(left, right):
@@ -56,7 +58,16 @@ def fair_metric(pred, labels, sens):
         return value if np.isfinite(value) else 0.0
 
     parity = safe_gap(pred[idx_s0], pred[idx_s1])
-    equality = safe_gap(pred[idx_s0_y1], pred[idx_s1_y1])
+    # Eq. (2): average the group gap in correct predictions for y=0 and y=1.
+    y0_gap = safe_gap(
+        pred[idx_s0_y0] == 0,
+        pred[idx_s1_y0] == 0,
+    )
+    y1_gap = safe_gap(
+        pred[idx_s0_y1] == 1,
+        pred[idx_s1_y1] == 1,
+    )
+    equality = 0.5 * (y0_gap + y1_gap)
     return float(parity), float(equality)
 
 

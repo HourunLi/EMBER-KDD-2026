@@ -136,27 +136,25 @@ parser.add_argument('--device_id',     type=str, default='0')
 # fairness loss weights
 parser.add_argument('--lambda_fair',  type=float, default=1)
 parser.add_argument('--meta_lr', type=float, default=0.01)
+parser.add_argument('--lambda_coord', type=float, default=1.0)
 parser.add_argument('--source_mmd_bandwidth', type=float, default=1.0)
 parser.add_argument('--source_mmd_min_samples', type=int, default=2)
 parser.add_argument('--source_mmd_max_samples', type=int, default=0)
 
 # SFDA target adaptation
 parser.add_argument('--adapt_epochs', type=int,   default=200)
-parser.add_argument('--adapter_bottleneck', type=int, default=None)
-parser.add_argument('--tau_c',        type=float, default=0.2)   # top-tau_c fraction of nodes kept as high-confidence
-parser.add_argument('--lambda_pi',    type=float, default=1.0)
-parser.add_argument('--alpha_p',      type=float, default=0.90)
-parser.add_argument('--lambda_s',     type=float, default=1.0)
-parser.add_argument('--lambda_e',     type=float, default=0.1)
-parser.add_argument('--lambda_anchor', type=float, default=1.0)
+parser.add_argument('--tau_c',        type=float, default=0.7)   # confidence threshold delta
+parser.add_argument('--lambda_pi',    type=float, default=1.0)   # Bayesian prior strength eta
 parser.add_argument('--target_lambda_fair', type=float, default=1.0)
 parser.add_argument('--adapt_lr',     type=float, default=1e-3)
-parser.add_argument('--tau_adjust',   type=float, default=1.0)   # Bayesian logit adjustment temperature
+parser.add_argument('--residual_inner_steps', type=int, default=5)
+parser.add_argument('--lambda_residual_l2', type=float, default=1e-3)
+parser.add_argument('--prior_pseudocount', type=float, default=1.0)
+parser.add_argument('--minority_epsilon', type=float, default=1e-6)
 parser.add_argument('--target_mmd_bandwidth', type=float, default=1.0)
 parser.add_argument('--mmd_chunk_size', type=int, default=1024)
 parser.add_argument('--target_mmd_min_samples', type=int, default=2)
 parser.add_argument('--target_mmd_max_samples', type=int, default=1024)
-parser.add_argument('--fairness_warmup_ratio', type=float, default=0.1)
 parser.add_argument('--proto_temp',   type=float, default=0.1)   # softmax temperature for posterior sharpening
 parser.add_argument('--ablation', type=str,
                     choices=['full', 'metaalign', 'bca', 'target_mmd', 'residual'],

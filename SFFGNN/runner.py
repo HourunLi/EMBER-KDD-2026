@@ -13,6 +13,7 @@ from torch.func import functional_call
 
 try:
     from .adaptation import (
+        build_initial_adaptation_state,
         load_adaptation_state,
         class_conditional_mmd_loss,
         predict_target_proba,
@@ -21,6 +22,7 @@ try:
     )
 except ImportError:
     from adaptation import (
+        build_initial_adaptation_state,
         load_adaptation_state,
         class_conditional_mmd_loss,
         predict_target_proba,
@@ -87,85 +89,82 @@ def extract_source_knowledge(args, data, model):
 
     -------------------
     p_y   : {0: [D], 1: [D]}
-        Class prototype — mean of L2-normalised embeddings for each class y,
-        computed over TRAINING nodes only to stay consistent with the source
-        supervision used to train the model.
+        Group-balanced class prototype.  We first compute one normalized
+        prototype for every (y,s) group, then average sensitive groups equally
+        within each class, using TRAINING nodes only.
 
-            p_y^S = (1 / |D_y^{train}|) * sum_{i: i in train, y_i=y}  Norm(h_i)
+            p_y^S = Norm((1 / |S|) * sum_s p_{y,s}^S)
 
-    r_ys  : {(y,s): [D]}
-        Sensitive residual — difference between the joint (y,s) prototype
-        and the class prototype:
-
-            p_{y,s}^S = (1 / |D_{y,s}^{train}|) * sum_{i: i in train, y_i=y, s_i=s}  Norm(h_i)
-            r_{y,s}^S = p_{y,s}^S - p_y^S
-
-    pi_ys : {(y,s): float}
-        Empirical joint prior P(y,s) estimated from training nodes only.
+    p_ys  : {(y,s): [D]}
+        Normalized Source class-group prototypes used by Eq. (8)/(15) to
+        infer latent Target pseudo-sensitive memberships.
 
     Also saves model weights (backbone + cls_head) so the encoder can be
     reloaded without the original source data.
 
     Returns
     -------
-    dict with keys: 'p_y', 'r_ys', 'pi_ys', 'model_state'
+    dict with keys: 'knowledge_version', 'p_y', 'p_ys', 'model_state'
     """
     # 不把源数据本身带到目标域，而是把源域中已经学到的统计结构导出来：
     #
     # - p_y:   类别原型，描述“某个类别大概在表示空间的什么位置”
-    # - r_ys:  敏感属性残差，描述“同一类别里不同敏感组的偏移”
-    # - pi_ys: 联合先验，描述 (y,s) 组合在源域里出现的频率
+    # - p_ys:  类别-敏感组原型，用于目标域伪敏感组推断
     #
     # 这样后续 target 适配阶段就不需要再访问 source 原始样本，
     # 满足 source-free domain adaptation 的设定。
     model.eval()
     with torch.no_grad():
         emb, _ = model(data.x, data.edge_index)          # [N, D]
-        emb_n  = F.normalize(emb, p=2, dim=1)            # L2-normalised
+        emb = emb.detach().cpu()
 
     y  = data.y.cpu()
     s  = data.sens_labels.cpu()
-    tm = data.train_mask.cpu()
+    # Eqs. (7)/(13) define the Source prototype bank over V^so, so all
+    # labeled Source nodes contribute to the exported class-group statistics.
+    emb_stats = emb
+    y_stats   = y
+    s_stats   = s
 
-    # source model 的监督来自 train_mask，因此知识抽取也只统计训练节点，
-    # 避免把 source 保留集标签再次注入到可迁移知识中。
-    emb_stats = emb_n[tm]
-    y_stats   = y[tm]
-    s_stats   = s[tm]
-
+    # Eq. (7): construct normalized class-group prototypes first, then form
+    # each class prototype by averaging groups equally.  This prevents the
+    # numerically dominant sensitive group from determining the class center.
+    group_prototypes = {}
     p_y = {}
+    p_ys = {}
     for yv in [0, 1]:
-        mask = (y_stats == yv)
-        if mask.sum() == 0:
-            p_y[yv] = torch.zeros(emb_n.shape[1], device='cpu')
+        class_mask = y_stats == yv
+        if class_mask.any():
+            class_fallback = F.normalize(
+                emb_stats[class_mask].mean(dim=0), p=2, dim=0, eps=1e-12
+            ).cpu()
         else:
-            p_y[yv] = emb_stats[mask].mean(dim=0).cpu()
+            class_fallback = torch.zeros(emb.shape[1], device='cpu')
 
-    # joint prototypes p_ys and sensitive residuals r_ys (training nodes only)
-    # r_ys：在固定类别 y 下，敏感组 s 会让表示产生怎样的偏移。
-    # 后面在 target 域中，模型会在 class prototype 基础上再加这个 residual，形成更细粒度的 joint prototype。
-    r_ys = {}
-    for yv in [0, 1]:
         for sv in [0, 1]:
             mask = (y_stats == yv) & (s_stats == sv)
-            if mask.sum() == 0:
-                p_ys = p_y[yv].clone()
+            if mask.any():
+                group_prototype = F.normalize(
+                    emb_stats[mask].mean(dim=0), p=2, dim=0, eps=1e-12
+                ).cpu()
             else:
-                p_ys = emb_stats[mask].mean(dim=0).cpu()
-            r_ys[(yv, sv)] = p_ys - p_y[yv]
+                group_prototype = class_fallback.clone()
+            group_prototypes[(yv, sv)] = group_prototype
+            p_ys[(yv, sv)] = group_prototype
 
-    # empirical joint prior pi_ys (training nodes only)
-    n_train = tm.sum().item()
-    pi_ys = {}
-    for yv in [0, 1]:
-        for sv in [0, 1]:
-            mask = tm & (y == yv) & (s == sv)
-            pi_ys[(yv, sv)] = mask.sum().item() / max(n_train, 1)
+        p_y[yv] = F.normalize(
+            torch.stack(
+                [group_prototypes[(yv, sv)] for sv in [0, 1]], dim=0
+            ).mean(dim=0),
+            p=2,
+            dim=0,
+            eps=1e-12,
+        )
 
     return {
+        'knowledge_version': 2,
         'p_y':        p_y,
-        'r_ys':       r_ys,
-        'pi_ys':      pi_ys,
+        'p_ys':       p_ys,
         'model_state': {k: v.cpu() for k, v in model.state_dict().items()},
     }
 
@@ -195,9 +194,12 @@ def _get_checkpoint_name(args, run_idx):
         f"lfair={args.lambda_fair}",
         f"srcmeta={getattr(args, 'ablation', 'full') != 'metaalign'}",
         f"metalr={getattr(args, 'meta_lr', 0.01)}",
+        f"lcoord={getattr(args, 'lambda_coord', 1.0)}",
         f"srcmmd={getattr(args, 'source_mmd_bandwidth', getattr(args, 'mmd_bandwidth', 1.0))}",
         f"srcmmdmin={getattr(args, 'source_mmd_min_samples', 2)}",
         f"srcmmdmax={getattr(args, 'source_mmd_max_samples', 0)}",
+        "srcscope=all-vso",
+        "knowledge=groupbank-v2",
         f"run={run_idx}",
         f"seed={args.seed}",
     ]
@@ -235,94 +237,22 @@ def _load_checkpoint(args, run_idx):
         return None, None
     print(f'[Checkpoint] loading ← {path}')
     ckpt = torch.load(path, map_location=args.device)
+    knowledge = ckpt.get('knowledge', {})
+    if int(knowledge.get('knowledge_version', 0)) < 2 or 'p_ys' not in knowledge:
+        print('[Checkpoint] obsolete Source knowledge format; retraining required.')
+        return None, None
     # Reconstruct model
     model = FairGNN(args, encoder_type=args.inter_encoder).to(args.device)
     model.load_state_dict({k: v.to(args.device) for k, v in ckpt['model_state'].items()})
-    return model, ckpt['knowledge']
-
-
-# SFDA helpers
-class ResidualScaler(nn.Module):
-    """
-    Learnable per-dimension scale vector: Δ_{y,s}(h) = γ_{y,s} ⊙ h
-    init_weight > 0 gives minor-attribute groups a head-start so their
-    residuals are updated more aggressively at the start of adaptation.
-    """
-    def __init__(self, dim: int, device, init_weight: float = 0.0):
-        super().__init__()
-        self.gamma = nn.Parameter(
-            torch.full((dim,), init_weight, device=device)
-        )
-
-    def forward(self, h):
-        return self.gamma * h   # [N, D] or [D]
-
-
-def _init_residual_scalers(dim, dev, pi_ys, keys):
-    """Build safe zero-initialised scalers for legacy cold-state inference."""
-    del pi_ys
-    return {k: ResidualScaler(dim, dev, init_weight=0.0) for k in keys}
-
-
-def _build_sfda_state(args, model, target_data, p_y, r_ys, pi_ys, tau_adjust, temp, keys, scalers=None):
-    """
-    构造用于 SFDA 推断/评估的状态。
-    若提供 scalers，则使用与适配阶段一致的原型构造方式生成 final_protos。
-    """
-    state = {
-        'p_y':        {yv: p_y[yv].cpu() for yv in [0, 1]},
-        'r_ys':       {k:  v.cpu()       for k, v in r_ys.items()},
-        'pi_ys':      pi_ys,
-        'tau_adjust': tau_adjust,
-        'proto_temp': temp,
-    }
-
-    with torch.no_grad():
-        if scalers is None:
-            final_protos = {}
-            for (yv, sv) in keys:
-                raw = p_y[yv] + r_ys[(yv, sv)]
-                final_protos[(yv, sv)] = F.normalize(raw, p=2, dim=0)
-        else:
-            emb_raw, _ = model(target_data.x, target_data.edge_index)
-            h = F.normalize(emb_raw, p=2, dim=1)
-
-            coarse_mean = {yv: h.mean(0) for yv in [0, 1]}
-            protos_coarse = _build_protos(p_y, r_ys, scalers, coarse_mean, keys)
-            _, q_y_coarse = _compute_posterior(
-                h, protos_coarse, pi_ys, args.lambda_pi, keys, tau_adjust, temp
-            )
-
-            h_mean_y = {}
-            for yv in [0, 1]:
-                w = q_y_coarse[:, yv]
-                h_mean_y[yv] = (h * w.unsqueeze(1)).sum(0) / w.sum().clamp(min=1e-8)
-
-            final_protos = _build_protos(p_y, r_ys, scalers, h_mean_y, keys)
-
-    state['final_protos'] = {k: v.cpu() for k, v in final_protos.items()}
-    return state
+    return model, knowledge
 
 
 def _build_source_free_eval_state(args, model, target_data, knowledge):
     """
     构造适配前的冷启动评估状态，和 SFDA 第一次前向的口径保持一致。
     """
-    dev = args.device
-    tau_adjust = getattr(args, 'tau_adjust', 1.0)
-    temp       = getattr(args, 'proto_temp', 0.5)
-    keys       = [(0, 0), (0, 1), (1, 0), (1, 1)]
-
-    p_y = {yv: knowledge['p_y'][yv].clone().to(dev) for yv in [0, 1]}
-    r_ys = {k: v.clone().to(dev) for k, v in knowledge['r_ys'].items()}
-    pi_ys = {k: float(v) for k, v in knowledge['pi_ys'].items()}
-
-    dim = knowledge['p_y'][0].shape[0]
-    scalers = _init_residual_scalers(dim, dev, pi_ys, keys)
-
-    return _build_sfda_state(
-        args, model, target_data, p_y, r_ys, pi_ys, tau_adjust, temp, keys, scalers=scalers
-    )
+    del model, target_data
+    return build_initial_adaptation_state(args, knowledge)
 
 
 # SFDA Target Adaptation
@@ -341,50 +271,6 @@ def adapt_target(args, target_data, knowledge):
     target_data = target_data.to(device)
     state = run_target_adaptation(args, model, target_data, knowledge)
     return model, state
-
-
-def _build_protos(p_y, r_ys, scalers, h_mean_y, keys):
-    """
-    Build 4 joint prototypes with learned residual correction.
-      p̃_{y,s} = Norm( p_y^T + r_{y,s}^T + γ_{y,s} ⊙ h_mean_y )
-    where h_mean_y is the class-wise mean of target embeddings for class y.
-    Returned tensors carry grad through γ.
-    """
-    protos = {}
-    for (yv, sv) in keys:
-        delta = scalers[(yv, sv)](h_mean_y[yv])               # [D], has grad
-        raw   = p_y[yv] + r_ys[(yv, sv)] + delta
-        protos[(yv, sv)] = F.normalize(raw, p=2, dim=0)
-    return protos
-
-
-def _compute_posterior(h, protos, pi_ys, lambda_pi, keys, tau_adjust=1.0, temp=0.1):
-    """
-    BCA-style joint posterior with count-based Bayesian logit adjustment.
-
-      z_i(y,s) = cosine_sim(h_i, p̃_{y,s}) / temp + τ · λ_π · log π_{y,s}
-      q_i(y,s) = softmax_over_(y,s)( z_i )
-      q_i(y)   = Σ_s q_i(y,s)
-
-    temp: softmax temperature applied ONLY to the likelihood (cosine sim).
-          Lower temp → sharper distribution based on similarity.
-          The prior term is NOT scaled by temp to avoid prior domination.
-
-    Returns q_ys [N,4], q_y [N,2].
-    """
-    scores = []
-    for (yv, sv) in keys:
-        sim = (h * protos[(yv, sv)].unsqueeze(0)).sum(1)       # [N]
-        pi  = max(pi_ys[(yv, sv)], 1e-8)
-        # temp only scales the likelihood (sim), not the prior
-        scores.append(sim / temp + tau_adjust * lambda_pi * float(np.log(pi)))
-    scores = torch.stack(scores, dim=1)                        # [N,4]
-    q_ys   = torch.softmax(scores, dim=1)
-    q_y    = torch.stack([
-        q_ys[:, 0] + q_ys[:, 1],
-        q_ys[:, 2] + q_ys[:, 3],
-    ], dim=1)                                                  # [N,2]
-    return q_ys, q_y
 
 
 # Training + Adaptation
@@ -419,7 +305,7 @@ def train_and_adapt(args, source_data, target_data):
     source_class_labels = source_data.y.long().to(args.device)
     cls_labels  = source_class_labels.float()
     sens_labels = source_data.sens_labels.to(args.device)
-    train_mask  = source_data.train_mask
+    source_node_mask = torch.ones_like(source_class_labels, dtype=torch.bool)
 
     criterion = nn.BCEWithLogitsLoss()
 
@@ -441,9 +327,11 @@ def train_and_adapt(args, source_data, target_data):
             # ── Phase 1: Source training ───────────────────────────────────────
             model, optimizer, scheduler = _init_fair_gnn(args)
 
-            # MetaAlign is a source-only component.  The existing YAML
-            # ``meta_lr`` value controls its virtual classification step.
+            # Meta-coordination is source-only.  Following Eqs. (4)-(6), the
+            # virtual step follows the fairness gradient and classification is
+            # evaluated at the virtually updated Source-model parameters.
             meta_lr = float(getattr(args, 'meta_lr', 0.01))
+            lambda_coord = float(getattr(args, 'lambda_coord', 1.0))
             use_source_metaalign = getattr(args, 'ablation', 'full') != 'metaalign'
             source_mmd_bandwidth = float(getattr(
                 args,
@@ -460,58 +348,104 @@ def train_and_adapt(args, source_data, target_data):
             for epoch in tqdm(range(args.train_epochs), desc=f'Run {run_idx} [train]', leave=False):
                 model.train()
 
+                if use_source_metaalign:
+                    source_cpu_rng_state = torch.random.get_rng_state()
+                    source_cuda_rng_states = (
+                        torch.cuda.get_rng_state_all()
+                        if source_data.x.is_cuda
+                        else None
+                    )
+
                 source_embedding, cls_logit = model(
                     source_data.x, source_data.edge_index
                 )
 
-                # ── Classification loss (inner task) ────────────────────────────
-                L_cls = criterion(cls_logit[train_mask].view(-1), cls_labels[train_mask])
+                # Eqs. (3)-(6) define Source learning over all nodes in V^so.
+                L_cls = criterion(cls_logit.view(-1), cls_labels)
 
-                # ── Meta-learning: cls as inner task, MMD fairness as outer task ─
-                #
-                # Inner step: θ' = θ - meta_lr · ∇_θ L_cls
-                # Outer loss: L_mmd(θ') — MMD on embeddings from updated params
-                #
-                # This ensures cls updates stay compatible with fairness alignment:
-                # the model learns to classify in a way that doesn't hurt MMD.
-                if use_source_metaalign:
-                    backbone_params = list(model.backbone.parameters())
-                    grad_cls = torch.autograd.grad(
-                        L_cls, backbone_params, create_graph=True, retain_graph=True
-                    )
-                    # Virtual inner step (functional, no in-place update)
-                    params_prime = [
-                        parameter - meta_lr * gradient
-                        for parameter, gradient in zip(backbone_params, grad_cls)
-                    ]
-                    param_dict = dict(zip(
-                        [name for name, _ in model.backbone.named_parameters()],
-                        params_prime,
-                    ))
-                    fairness_embedding = functional_call(
-                        model.backbone,
-                        param_dict,
-                        (source_data.x, source_data.edge_index),
-                    )
-                else:
-                    # The MetaAlign ablation keeps the same source fairness
-                    # objective but removes the virtual classification step.
-                    fairness_embedding = source_embedding
-
-                # Source fairness loss: within-class MMD between observed
-                # sensitive groups on source training nodes.
+                # Eq. (3): class-conditional fairness loss at theta, averaged
+                # over the task classes present in the complete Source graph.
                 L_mmd, valid_source_mmd_classes = class_conditional_mmd_loss(
-                    fairness_embedding,
+                    source_embedding,
                     source_class_labels,
                     sens_labels.long(),
-                    train_mask,
+                    source_node_mask,
                     bandwidth=source_mmd_bandwidth,
                     chunk_size=getattr(args, 'mmd_chunk_size', 1024),
                     min_samples=source_mmd_min_samples,
                     max_samples=source_mmd_max_samples,
+                    reduction='mean',
                 )
 
-                loss = L_cls + args.lambda_fair * L_mmd
+                if use_source_metaalign:
+                    # Preserve randomness consumed by both the ordinary
+                    # forward and random MMD subsampling.  The virtual forward
+                    # below must not rewind either part of the training stream.
+                    post_source_step_cpu_rng_state = torch.random.get_rng_state()
+                    post_source_step_cuda_rng_states = (
+                        torch.cuda.get_rng_state_all()
+                        if source_data.x.is_cuda
+                        else None
+                    )
+                    named_model_parameters = list(model.named_parameters())
+                    model_parameters = [
+                        parameter for _, parameter in named_model_parameters
+                    ]
+                    grad_fair = torch.autograd.grad(
+                        L_mmd,
+                        model_parameters,
+                        create_graph=True,
+                        retain_graph=True,
+                        allow_unused=True,
+                    )
+                    # Eq. (4): virtually update the complete Source model.
+                    # L_fair does not depend on the classifier, so its virtual
+                    # gradient is zero and the head remains unchanged.
+                    virtual_parameters = {
+                        name: (
+                            parameter
+                            if gradient is None
+                            else parameter - meta_lr * gradient
+                        )
+                        for (name, parameter), gradient in zip(
+                            named_model_parameters, grad_fair
+                        )
+                    }
+                    # Replay the exact RNG state used by the ordinary forward,
+                    # so L_cls(theta') - L_cls(theta) is not contaminated by
+                    # a different dropout mask.  Restore the RNG state after
+                    # MMD sampling so the virtual pass consumes no additional
+                    # randomness from the training stream.
+                    torch.random.set_rng_state(source_cpu_rng_state)
+                    if source_cuda_rng_states is not None:
+                        torch.cuda.set_rng_state_all(source_cuda_rng_states)
+                    try:
+                        _, virtual_cls_logit = functional_call(
+                            model,
+                            virtual_parameters,
+                            (source_data.x, source_data.edge_index),
+                        )
+                    finally:
+                        torch.random.set_rng_state(post_source_step_cpu_rng_state)
+                        if post_source_step_cuda_rng_states is not None:
+                            torch.cuda.set_rng_state_all(
+                                post_source_step_cuda_rng_states
+                            )
+                    virtual_cls_loss = criterion(
+                        virtual_cls_logit.view(-1),
+                        cls_labels,
+                    )
+                    # Eq. (5): coordination term L_cls(theta') - L_cls(theta).
+                    L_coord = virtual_cls_loss - L_cls
+                else:
+                    L_coord = L_cls * 0.0
+
+                # Eq. (6): L_meta = L_cls + beta L_fair + gamma L_coord.
+                loss = (
+                    L_cls
+                    + args.lambda_fair * L_mmd
+                    + lambda_coord * L_coord
+                )
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -522,6 +456,7 @@ def train_and_adapt(args, source_data, target_data):
                     print(f"[Run {run_idx} | Epoch {epoch+1:03d}] "
                           f"L_cls={L_cls.item():.4f}  "
                           f"L_mmd={L_mmd.item():.4f}  "
+                          f"L_coord={L_coord.item():.4f}  "
                           f"MMD_cls={valid_source_mmd_classes}  "
                           f"Total={loss.item():.4f}")
 
@@ -559,8 +494,13 @@ def train_and_adapt(args, source_data, target_data):
 
         # ── Phase 2: SFDA adapt ────────────────────────────────────────────
         # knowledge was either loaded from checkpoint or extracted above
-        if getattr(args, 'target_seed', None) is not None:
-            seed_everything(args.target_seed)
+        configured_target_seed = getattr(args, 'target_seed', None)
+        effective_target_seed = int(
+            configured_target_seed
+            if configured_target_seed is not None
+            else getattr(args, 'seed', 1111) + run_idx
+        )
+        seed_everything(effective_target_seed)
         adapted_model, state = adapt_target(args, target_data, knowledge)
 
         # ── Evaluate on target (after adaptation) ──────────────────────────
@@ -594,43 +534,7 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
 
     encoder.eval()
     with torch.no_grad():
-        state_version = int(state.get('state_version', 0))
-        if state_version >= 3:
-            feat, q_y = predict_target_proba(args, data, encoder, state)
-        elif state_version > 0:
-            raise ValueError(
-                "Legacy adaptation states depend on target sensitive labels; "
-                "rerun target adaptation to create a version-3 state"
-            )
-        else:
-            emb_raw, _ = encoder(data.x, data.edge_index)
-            feat = F.normalize(emb_raw, p=2, dim=1)
-            p_y = {k: v.to(args.device) for k, v in state['p_y'].items()}
-            r_ys = {k: v.to(args.device) for k, v in state['r_ys'].items()}
-            pi_ys = state['pi_ys']
-            tau_adjust = state.get('tau_adjust', 1.0)
-            temp = state.get('proto_temp', 1)
-            keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
-            if 'final_protos' in state:
-                final_protos = {
-                    k: v.to(args.device) for k, v in state['final_protos'].items()
-                }
-            else:
-                final_protos = {}
-                for (yv, sv) in keys:
-                    raw = p_y[yv] + r_ys[(yv, sv)]
-                    final_protos[(yv, sv)] = F.normalize(
-                        raw, p=2, dim=0, eps=1e-12
-                    )
-            _, q_y = _compute_posterior(
-                feat,
-                final_protos,
-                pi_ys,
-                args.lambda_pi,
-                keys,
-                tau_adjust,
-                temp,
-            )
+        feat, q_y = predict_target_proba(args, data, encoder, state)
         
         # extract positive probability
         probs = q_y[:, 1].cpu().numpy()
