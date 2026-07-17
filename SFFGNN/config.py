@@ -153,7 +153,7 @@ parser.add_argument('--prior_pseudocount', type=float, default=1.0)
 parser.add_argument('--minority_epsilon', type=float, default=1e-6)
 parser.add_argument('--proto_temp',   type=float, default=0.1)   # softmax temperature for posterior sharpening
 parser.add_argument('--ablation', type=str,
-                    choices=['full', 'metaalign', 'bca', 'residual'],
+                    choices=['full', 'metaalign', 'bca', 'ema', 'residual'],
                     default='full')
 
 # misc

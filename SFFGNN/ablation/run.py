@@ -1,4 +1,8 @@
-"""Run FairMAC ablations on idle GPUs and aggregate five repeated runs."""
+"""Run four FairMAC module ablations and aggregate five repeated runs.
+
+Each experiment name means "FairMAC without this module".  In particular,
+``residual`` removes the complete minority-aware sensitive residual learner.
+"""
 
 import csv
 import json
@@ -12,9 +16,9 @@ from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
-# Edit these defaults, then run: python ablation/run_ablation.py
+# Edit these defaults, then run: python ablation/run.py
 # ---------------------------------------------------------------------------
-EXPERIMENT = "all"  # full | metaalign | bca | residual | all
+EXPERIMENT = "all"  # metaalign | bca | ema | residual | all
 GPU_IDS = [0, 1, 2, 3, 4, 5, 6, 7]
 DATASETS = ["bailA", "germanA", "pokec", "syn"]
 RUN_SEEDS = [1111, 2222, 3333, 4444, 5555]
@@ -45,17 +49,14 @@ def print_status(message):
 
 
 def variant_specs():
-    if EXPERIMENT not in {"full", "metaalign", "bca", "residual", "all"}:
+    ablations = ("metaalign", "bca", "ema", "residual")
+    if EXPERIMENT not in {*ablations, "all"}:
         raise ValueError(f"Unknown EXPERIMENT: {EXPERIMENT}")
 
-    selected = (
-        ["full", "metaalign", "bca", "residual"]
-        if EXPERIMENT == "all"
-        else [EXPERIMENT]
-    )
+    selected = ablations if EXPERIMENT == "all" else (EXPERIMENT,)
     return [
         {
-            "variant": "wo_" + name if name != "full" else "full",
+            "variant": "wo_" + name,
             "ablation": name,
         }
         for name in selected

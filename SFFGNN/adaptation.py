@@ -15,7 +15,7 @@ import torch.nn.functional as F
 
 
 JOINT_KEYS = ((0, 0), (0, 1), (1, 0), (1, 1))
-ABLATION_MODES = ("full", "metaalign", "bca", "residual")
+ABLATION_MODES = ("full", "metaalign", "bca", "ema", "residual")
 
 
 def _safe_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
@@ -315,6 +315,7 @@ def run_target_adaptation(
         )
 
     use_bca = ablation != "bca"
+    use_ema = ablation != "ema"
     use_residual = ablation != "residual"
 
     device = args.device
@@ -359,8 +360,13 @@ def run_target_adaptation(
 
     print(
         "[FairMAC] ablation={} epochs={} residual_inner={} "
-        "trainable=class_residual prior=count-aware".format(
-            ablation, epochs, residual_inner_steps
+        "residual={} ema={} prior={}".format(
+            ablation,
+            epochs,
+            residual_inner_steps,
+            use_residual,
+            use_ema,
+            "count-aware" if use_bca else "disabled",
         )
     )
 
@@ -430,13 +436,20 @@ def run_target_adaptation(
                 class_selected = selected & (pseudo_labels == class_id)
                 if not class_selected.any() or not use_residual:
                     continue
-                class_update_counts[class_id] += 1
-                mu = 1.0 / float(class_update_counts[class_id].item() + 1)
-                updated_prototypes[class_id] = _safe_normalize(
-                    (1.0 - mu) * class_prototypes[class_id]
-                    + mu * optimized_candidates[class_id],
-                    dim=0,
-                )
+                if use_ema:
+                    # Paper Eq. (9): adaptively smooth the newly optimized
+                    # residual prototype with its historical class prototype.
+                    class_update_counts[class_id] += 1
+                    mu = 1.0 / float(class_update_counts[class_id].item() + 1)
+                    updated_prototypes[class_id] = _safe_normalize(
+                        (1.0 - mu) * class_prototypes[class_id]
+                        + mu * optimized_candidates[class_id],
+                        dim=0,
+                    )
+                else:
+                    # EMA ablation: retain residual learning, but replace the
+                    # historical prototype directly with the new candidate.
+                    updated_prototypes[class_id] = optimized_candidates[class_id]
             class_prototypes = updated_prototypes
 
             # Eq. (11): cumulative counts always use the fixed q_v^ta from
