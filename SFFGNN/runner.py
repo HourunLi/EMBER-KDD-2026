@@ -195,7 +195,7 @@ def _get_checkpoint_name(args, run_idx):
         f"srcmmd={getattr(args, 'source_mmd_bandwidth', getattr(args, 'mmd_bandwidth', 1.0))}",
         f"srcmmdmin={getattr(args, 'source_mmd_min_samples', 2)}",
         f"srcmmdmax={getattr(args, 'source_mmd_max_samples', 0)}",
-        "srcscope=all-vso",
+        "srcscope=all-labeled-vso",
         "knowledge=groupbank-v2",
         f"run={run_idx}",
         f"seed={args.seed}",
@@ -305,7 +305,16 @@ def train_and_adapt(args, source_data, target_data):
     source_class_labels = source_data.y.long().to(args.device)
     cls_labels  = source_class_labels.float()
     sens_labels = source_data.sens_labels.to(args.device)
-    source_node_mask = torch.ones_like(source_class_labels, dtype=torch.bool)
+    # Source learning uses the complete graph, but label-dependent objectives
+    # must only consume nodes with valid binary annotations.  Pokec keeps -1
+    # as the missing-label sentinel so those nodes can still participate in
+    # message passing without becoming invalid BCE targets or a third MMD
+    # class.
+    source_labeled_mask = (
+        (source_class_labels == 0) | (source_class_labels == 1)
+    )
+    if not bool(source_labeled_mask.any()):
+        raise ValueError("Source graph contains no valid binary labels")
 
     criterion = nn.BCEWithLogitsLoss()
 
@@ -360,8 +369,12 @@ def train_and_adapt(args, source_data, target_data):
                     source_data.x, source_data.edge_index
                 )
 
-                # Eqs. (3)-(6) define Source learning over all nodes in V^so.
-                L_cls = criterion(cls_logit.view(-1), cls_labels)
+                # Eqs. (3)-(6) use every labeled node in V^so.  Unlabeled
+                # nodes remain in the full-graph forward pass above.
+                L_cls = criterion(
+                    cls_logit.view(-1)[source_labeled_mask],
+                    cls_labels[source_labeled_mask],
+                )
 
                 # Eq. (3): class-conditional fairness loss at theta, averaged
                 # over the task classes present in the complete Source graph.
@@ -369,7 +382,7 @@ def train_and_adapt(args, source_data, target_data):
                     source_embedding,
                     source_class_labels,
                     sens_labels.long(),
-                    source_node_mask,
+                    source_labeled_mask,
                     bandwidth=source_mmd_bandwidth,
                     chunk_size=getattr(args, 'mmd_chunk_size', 1024),
                     min_samples=source_mmd_min_samples,
@@ -432,8 +445,8 @@ def train_and_adapt(args, source_data, target_data):
                                 post_source_step_cuda_rng_states
                             )
                     virtual_cls_loss = criterion(
-                        virtual_cls_logit.view(-1),
-                        cls_labels,
+                        virtual_cls_logit.view(-1)[source_labeled_mask],
+                        cls_labels[source_labeled_mask],
                     )
                     # Eq. (5): coordination term L_cls(theta') - L_cls(theta).
                     L_coord = virtual_cls_loss - L_cls
