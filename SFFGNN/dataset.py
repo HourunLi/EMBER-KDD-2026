@@ -428,15 +428,20 @@ def get_dataset(args, inid):
             train_mask=train_mask, val_mask=val_mask, test_mask=test_mask)
     return data
 
-def process_dataset(args, data):
+def process_dataset(args, data, is_target=False):
+    args.num_node, args.num_features = data.x.shape[0], data.x.shape[1]
+    if is_target:
+        # Target labels and sensitive attributes are reserved for the final
+        # evaluator and must not be inspected during preprocessing/adaptation.
+        return data.to(args.device)
+
     args.num_classes = len(data.y.unique()) - 1
     if args.dataset == "pokec":
         args.num_classes = 1
-    args.num_node, args.num_features = data.x.shape[0], data.x.shape[1]
     # print(f"args.num_classes: {args.num_classes}")
     label_idx_0 = np.where(data.y == 0)[0]
     label_idx_1 = np.where(data.y == 1)[0]
-    print("==============the target label distribution==============")
+    print("==============the source label distribution==============")
     print(f"label = 0: {len(label_idx_0)}, ratio = {len(label_idx_0)/ len(data.y)}")
     print(f"label = 1: {len(label_idx_1)}, ratio = {len(label_idx_1)/ len(data.y)}")
 
@@ -450,17 +455,17 @@ def process_dataset(args, data):
     y0s1_idx = np.where((data.y == 0) & (data.sens_labels == 1))[0]
     y1s0_idx = np.where((data.y == 1) & (data.sens_labels == 0))[0]
     y1s1_idx = np.where((data.y == 1) & (data.sens_labels == 1))[0]
-    print("==============the sensitive label distribution in different target label group==============")
-    print(f"sens = 0 in target 0: {len(y0s0_idx)}, ratio = {len(y0s0_idx)/ len(label_idx_0)}")
-    print(f"sens = 1 in target 0: {len(y0s1_idx)}, ratio = {len(y0s1_idx)/ len(label_idx_0)}")
-    print(f"sens = 0 in target 1: {len(y1s0_idx)}, ratio = {len(y1s0_idx)/ len(label_idx_1)}")
-    print(f"sens = 1 in target 1: {len(y1s1_idx)}, ratio = {len(y1s1_idx)/ len(label_idx_1)}")
+    print("==============the sensitive label distribution in different source label group==============")
+    print(f"sens = 0 in label 0: {len(y0s0_idx)}, ratio = {len(y0s0_idx)/ len(label_idx_0)}")
+    print(f"sens = 1 in label 0: {len(y0s1_idx)}, ratio = {len(y0s1_idx)/ len(label_idx_0)}")
+    print(f"sens = 0 in label 1: {len(y1s0_idx)}, ratio = {len(y1s0_idx)/ len(label_idx_1)}")
+    print(f"sens = 1 in label 1: {len(y1s1_idx)}, ratio = {len(y1s1_idx)/ len(label_idx_1)}")
 
 
-    print("==============the target label distribution in different sensitive label group==============")
-    print(f"target = 0 in sensitive 0: {len(y0s0_idx)}, ratio = {len(y0s0_idx)/ len(sens_idx_0)}")
-    print(f"target = 1 in sensitive 0: {len(y1s0_idx)}, ratio = {len(y1s0_idx)/ len(sens_idx_0)}")
-    print(f"target = 0 in sensitive 1: {len(y0s1_idx)}, ratio = {len(y0s1_idx)/ len(sens_idx_1)}")
-    print(f"target = 1 in sensitive 1: {len(y1s1_idx)}, ratio = {len(y1s1_idx)/ len(sens_idx_1)}")
+    print("==============the source label distribution in different sensitive label group==============")
+    print(f"label = 0 in sensitive 0: {len(y0s0_idx)}, ratio = {len(y0s0_idx)/ len(sens_idx_0)}")
+    print(f"label = 1 in sensitive 0: {len(y1s0_idx)}, ratio = {len(y1s0_idx)/ len(sens_idx_0)}")
+    print(f"label = 0 in sensitive 1: {len(y0s1_idx)}, ratio = {len(y0s1_idx)/ len(sens_idx_1)}")
+    print(f"label = 1 in sensitive 1: {len(y1s1_idx)}, ratio = {len(y1s1_idx)/ len(sens_idx_1)}")
 
     return data.to(args.device)

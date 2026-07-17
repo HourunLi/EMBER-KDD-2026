@@ -2,6 +2,7 @@ from tqdm import tqdm
 import numpy as np
 import os
 import sys
+from types import SimpleNamespace
 from models import *
 from config import mprint
 from utils import *
@@ -14,20 +15,16 @@ from torch.func import functional_call
 try:
     from .adaptation import (
         build_initial_adaptation_state,
-        load_adaptation_state,
         class_conditional_mmd_loss,
         predict_target_proba,
         run_target_adaptation,
-        save_adaptation_state,
     )
 except ImportError:
     from adaptation import (
         build_initial_adaptation_state,
-        load_adaptation_state,
         class_conditional_mmd_loss,
         predict_target_proba,
         run_target_adaptation,
-        save_adaptation_state,
     )
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -91,7 +88,7 @@ def extract_source_knowledge(args, data, model):
     p_y   : {0: [D], 1: [D]}
         Group-balanced class prototype.  We first compute one normalized
         prototype for every (y,s) group, then average sensitive groups equally
-        within each class, using TRAINING nodes only.
+        within each class, using all labeled nodes in V^so.
 
             p_y^S = Norm((1 / |S|) * sum_s p_{y,s}^S)
 
@@ -268,8 +265,11 @@ def adapt_target(args, target_data, knowledge):
         parameter.requires_grad_(False)
         parameter.grad = None
     model.eval()
-    target_data = target_data.to(device)
-    state = run_target_adaptation(args, model, target_data, knowledge)
+    target_view = SimpleNamespace(
+        x=target_data.x.to(device),
+        edge_index=target_data.edge_index.to(device),
+    )
+    state = run_target_adaptation(args, model, target_view, knowledge)
     return model, state
 
 
@@ -476,8 +476,24 @@ def train_and_adapt(args, source_data, target_data):
         src_parity[run_idx]   = tmp_parity['all']
         src_equality[run_idx] = tmp_equality['all']
 
-        # ── Evaluate on target (before adaptation) ─────────────────────────
+        # Build the cold state without touching Target annotations.  Its
+        # metrics are deliberately deferred until adaptation has finished.
         cold_state = _build_source_free_eval_state(args, model, target_data, knowledge)
+
+        # ── Phase 2: SFDA adapt ────────────────────────────────────────────
+        # knowledge was either loaded from checkpoint or extracted above
+        configured_target_seed = getattr(args, 'target_seed', None)
+        effective_target_seed = int(
+            configured_target_seed
+            if configured_target_seed is not None
+            else getattr(args, 'seed', 1111) + run_idx
+        )
+        seed_everything(effective_target_seed)
+        adapted_model, state = adapt_target(args, target_data, knowledge)
+
+        # ── Final target evaluation ─────────────────────────────────────────
+        # Target labels and sensitive attributes are first accessed here,
+        # after all adaptation updates have completed.
         t_accs, t_auc_rocs, t_parity, t_equality = evaluate_after(
             args,
             target_data,
@@ -492,18 +508,6 @@ def train_and_adapt(args, source_data, target_data):
         tgt_parity[run_idx]   = t_parity['all']
         tgt_equality[run_idx] = t_equality['all']
 
-        # ── Phase 2: SFDA adapt ────────────────────────────────────────────
-        # knowledge was either loaded from checkpoint or extracted above
-        configured_target_seed = getattr(args, 'target_seed', None)
-        effective_target_seed = int(
-            configured_target_seed
-            if configured_target_seed is not None
-            else getattr(args, 'seed', 1111) + run_idx
-        )
-        seed_everything(effective_target_seed)
-        adapted_model, state = adapt_target(args, target_data, knowledge)
-
-        # ── Evaluate on target (after adaptation) ──────────────────────────
         a_accs, a_aucs, a_par, a_eq = evaluate_after(
             args,
             target_data,

@@ -17,7 +17,7 @@ if __name__ == '__main__':
     print("********************process source data********************")
     source_data = process_dataset(args, source_data)
     print("********************process target data********************")
-    target_data = process_dataset(args, target_data)
+    target_data = process_dataset(args, target_data, is_target=True)
 
     (src_acc, src_auc_roc, src_parity, src_equality,
      tgt_acc, tgt_auc_roc, tgt_parity, tgt_equality,

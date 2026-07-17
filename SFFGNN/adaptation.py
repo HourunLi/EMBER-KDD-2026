@@ -7,7 +7,6 @@ Target labels and sensitive attributes are never consumed by this module.
 
 from __future__ import annotations
 
-import os
 from typing import Dict, Mapping, Tuple
 
 import torch
@@ -15,8 +14,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-STATE_VERSION = 4
-INFERENCE_STRATEGY = "count_aware_class_prototype"
 JOINT_KEYS = ((0, 0), (0, 1), (1, 0), (1, 1))
 ABLATION_MODES = ("full", "metaalign", "bca", "target_mmd", "residual")
 
@@ -290,35 +287,17 @@ def _initial_count_prior(
 def _base_state(
     args,
     class_prototypes: torch.Tensor,
-    class_residuals: torch.Tensor,
-    source_group_prototypes: torch.Tensor,
-    class_counts: torch.Tensor,
     class_prior: torch.Tensor,
-    diagnostics: Mapping,
-    adapted: bool,
 ) -> Dict:
     ablation = str(getattr(args, "ablation", "full"))
     use_bca = ablation != "bca"
     return {
-        "state_version": STATE_VERSION,
-        "inference_strategy": INFERENCE_STRATEGY,
-        "ablation": ablation,
-        "adapted": bool(adapted),
-        "source_metaalign_enabled": ablation != "metaalign",
-        "use_bca": use_bca,
-        "use_target_mmd": ablation != "target_mmd" and ablation != "residual",
-        "use_residual": ablation != "residual",
         "class_prototypes": class_prototypes.detach().cpu().clone(),
-        "class_residuals": class_residuals.detach().cpu().clone(),
-        "source_group_prototypes": source_group_prototypes.detach().cpu().clone(),
-        "class_counts": class_counts.detach().cpu().clone(),
         "class_prior": class_prior.detach().cpu().clone(),
         "proto_temp": float(getattr(args, "proto_temp", 1.0)),
         "prior_strength": (
             float(getattr(args, "lambda_pi", 1.0)) if use_bca else 0.0
         ),
-        "confidence_threshold": float(getattr(args, "tau_c", 0.7)),
-        "diagnostics": dict(diagnostics),
     }
 
 
@@ -326,26 +305,10 @@ def build_initial_adaptation_state(args, knowledge: Mapping) -> Dict:
     """Build the t=0 Source-prototype state without touching Target labels."""
     device = args.device
     class_prototypes = _source_class_prototypes(knowledge, device)
-    group_prototypes = _source_group_prototypes(knowledge, device)
-    class_counts, class_prior = _initial_count_prior(
+    _, class_prior = _initial_count_prior(
         getattr(args, "prior_pseudocount", 1.0), device
     )
-    residuals = torch.zeros_like(class_prototypes)
-    return _base_state(
-        args,
-        class_prototypes,
-        residuals,
-        group_prototypes,
-        class_counts,
-        class_prior,
-        diagnostics={
-            "source_encoder_frozen": True,
-            "selected_count": 0,
-            "mmd_steps": 0,
-            "prior_shift": 0.0,
-        },
-        adapted=False,
-    )
+    return _base_state(args, class_prototypes, class_prior)
 
 
 def run_target_adaptation(
@@ -381,7 +344,6 @@ def run_target_adaptation(
     source_class_prototypes = _source_class_prototypes(knowledge, device)
     source_group_prototypes = _source_group_prototypes(knowledge, device)
     class_prototypes = source_class_prototypes.detach().clone()
-    last_class_residuals = torch.zeros_like(class_prototypes)
 
     class_counts, class_prior = _initial_count_prior(
         getattr(args, "prior_pseudocount", 1.0), device
@@ -410,18 +372,12 @@ def run_target_adaptation(
     min_mmd_samples = max(2, int(getattr(args, "target_mmd_min_samples", 2)))
     max_mmd_samples = max(0, int(getattr(args, "target_mmd_max_samples", 1024)))
 
-    # Eq. (8): the first task pseudo-labels come from the frozen Source head.
-    confidence, pseudo_labels = source_probabilities.max(dim=1)
-    selected = select_high_confidence(confidence, threshold)
-
-    mmd_steps = 0
-    mmd_valid_class_steps = 0
-    max_residual_grad_norm = 0.0
-    last_losses = {}
-    last_group_counts = torch.zeros((2, 2), device=device)
-    residual_initial_norms = []
-    count_confidence_sources = []
-    count_confidence_means = []
+    # Eq. (8): q_v^ta is produced once by the frozen Source classifier and
+    # remains fixed throughout adaptation.  Bayesian confidence is introduced
+    # separately by Eqs. (13)-(14) only to refresh subsequent confident sets.
+    source_confidence, pseudo_labels = source_probabilities.max(dim=1)
+    source_confidence = source_confidence.detach()
+    selected = select_high_confidence(source_confidence, threshold)
 
     print(
         "[FairMAC] ablation={} epochs={} residual_inner={} "
@@ -436,34 +392,28 @@ def run_target_adaptation(
                 features, pseudo_labels, source_group_prototypes
             )
 
-        inverse_group_weights, group_counts = minority_aware_weights(
+        inverse_group_weights, _ = minority_aware_weights(
             pseudo_labels,
             pseudo_sensitive,
             selected,
             minority_epsilon,
         )
-        last_group_counts = group_counts
 
         # Eq. (9)/(16): every adaptation step owns an independent R^(t),
         # initialized at zero and discarded after updating the prototypes.
         step_residuals = nn.Parameter(
             torch.zeros_like(class_prototypes), requires_grad=use_residual
         )
-        residual_initial_norms.append(float(step_residuals.detach().norm().item()))
         step_optimizer = (
             torch.optim.Adam([step_residuals], lr=adapt_lr)
             if use_residual
             else None
         )
         optimization_steps = residual_inner_steps if use_residual else 1
-        count_confidence = confidence.detach()
-        count_confidence_sources.append(
-            "source_classifier" if step == 0 else "bayesian_corrected"
-        )
-        count_confidence_means.append(float(count_confidence.mean().item()))
-        node_weights = count_confidence * inverse_group_weights
+        # Eq. (9): q_v^ta is the fixed Source-classifier confidence, while
+        # only the inverse pseudo-group-frequency term changes with t.
+        node_weights = source_confidence * inverse_group_weights
         normalizer = node_weights[selected].sum()
-        grad_norm = 0.0
 
         for _ in range(optimization_steps):
             candidate_prototypes = _safe_normalize(
@@ -515,17 +465,7 @@ def run_target_adaptation(
             if step_optimizer is not None:
                 step_optimizer.zero_grad()
                 total_loss.backward()
-                if step_residuals.grad is not None:
-                    grad_norm = float(step_residuals.grad.detach().norm().item())
-                    max_residual_grad_norm = max(
-                        max_residual_grad_norm, grad_norm
-                    )
                 step_optimizer.step()
-
-        if valid_mmd_classes > 0:
-            mmd_steps += 1
-            mmd_valid_class_steps += valid_mmd_classes
-        last_class_residuals = step_residuals.detach().clone()
 
         with torch.no_grad():
             optimized_candidates = _safe_normalize(
@@ -545,23 +485,25 @@ def run_target_adaptation(
                 )
             class_prototypes = updated_prototypes
 
-            # Eq. (11): step 0 uses Source-head confidence; after Eq. (12),
-            # subsequent steps use the Bayesian-corrected confidence carried
-            # in ``count_confidence`` from the preceding posterior refresh.
+            # Eq. (11): cumulative counts always use the fixed q_v^ta from
+            # Eq. (8).  The prototype-induced label and confident set remain
+            # iteration-dependent.
             likelihood = prototype_probabilities(
                 features, class_prototypes, temperature
             )
             count_labels = likelihood.argmax(dim=1)
             for class_id in (0, 1):
                 class_count_mask = selected & (count_labels == class_id)
-                class_counts[class_id] += count_confidence[
+                class_counts[class_id] += source_confidence[
                     class_count_mask
                 ].sum()
             class_prior = (class_counts + 1e-8) / (
                 class_counts + 1e-8
             ).sum().clamp_min(1e-8)
 
-            # Eqs. (12)-(14): Bayesian correction refreshes the next set.
+            # Eqs. (12)-(14): Bayesian confidence refreshes only the next
+            # pseudo-labels and confident set; it never replaces q_v^ta in
+            # either the residual objective or cumulative counting.
             corrected_probabilities = bayesian_class_posterior(
                 features,
                 class_prototypes,
@@ -569,85 +511,26 @@ def run_target_adaptation(
                 temperature,
                 prior_strength,
             )
-            confidence, pseudo_labels = corrected_probabilities.max(dim=1)
-            selected = select_high_confidence(confidence, threshold)
+            bayesian_confidence, pseudo_labels = corrected_probabilities.max(dim=1)
+            selected = select_high_confidence(bayesian_confidence, threshold)
 
-        last_losses = {
-            "total": float(total_loss.detach().item()),
-            "residual_nll": float(residual_nll.detach().item()),
-            "residual_l2": float(residual_l2.detach().item()),
-            "mmd": float(target_mmd.detach().item()),
-        }
         if step == 0 or (step + 1) % 50 == 0 or step + 1 == epochs:
             print(
                 "  [Adapt {:3d}] hc={}/{} res={:.4f} l2={:.4f} "
-                "mmd={:.4f} mmd_cls={} prior=({:.3f},{:.3f}) grad={:.4e}".format(
+                "mmd={:.4f} mmd_cls={} prior=({:.3f},{:.3f})".format(
                     step,
                     int(selected.sum().item()),
                     features.shape[0],
-                    last_losses["residual_nll"],
-                    last_losses["residual_l2"],
-                    last_losses["mmd"],
+                    float(residual_nll.detach().item()),
+                    float(residual_l2.detach().item()),
+                    float(target_mmd.detach().item()),
                     valid_mmd_classes,
                     float(class_prior[0].item()),
                     float(class_prior[1].item()),
-                    grad_norm,
                 )
             )
 
-    diagnostics = {
-        "source_encoder_frozen": all(
-            not parameter.requires_grad for parameter in source_model.parameters()
-        ),
-        "initial_pseudo_labels_from_source_classifier": True,
-        "selected_count": int(selected.sum().item()),
-        "mmd_steps": mmd_steps,
-        "mmd_valid_class_steps": mmd_valid_class_steps,
-        "residual_grad_norm_max": max_residual_grad_norm,
-        "residual_inner_steps": residual_inner_steps,
-        "residual_initial_norms": residual_initial_norms,
-        "count_confidence_strategy": "source_then_bayesian_corrected",
-        "count_confidence_sources": count_confidence_sources,
-        "count_confidence_means": count_confidence_means,
-        "class_update_counts": class_update_counts.detach().cpu().clone(),
-        "last_group_counts": last_group_counts.detach().cpu().clone(),
-        "last_losses": last_losses,
-        "prior_shift": float((class_prior - 0.5).abs().sum().item()),
-    }
-    return _base_state(
-        args,
-        class_prototypes,
-        last_class_residuals,
-        source_group_prototypes,
-        class_counts,
-        class_prior,
-        diagnostics,
-        adapted=True,
-    )
-
-
-def predict_from_adaptation_state(
-    base_embedding: torch.Tensor,
-    state: Mapping,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    if int(state.get("state_version", 0)) < STATE_VERSION:
-        raise ValueError(
-            "Legacy adaptation state detected; rerun Source extraction and "
-            "Target adaptation with the count-aware prototype implementation"
-        )
-    if state.get("inference_strategy") != INFERENCE_STRATEGY:
-        raise ValueError("The adaptation state uses an unsupported inference strategy")
-
-    device = base_embedding.device
-    features = _safe_normalize(base_embedding, dim=1)
-    probabilities = bayesian_class_posterior(
-        features,
-        state["class_prototypes"].to(device),
-        state["class_prior"].to(device),
-        float(state.get("proto_temp", 1.0)),
-        float(state.get("prior_strength", 1.0)),
-    )
-    return features, probabilities
+    return _base_state(args, class_prototypes, class_prior)
 
 
 def predict_target_proba(
@@ -661,15 +544,13 @@ def predict_target_proba(
     encoder.eval()
     with torch.no_grad():
         base_embedding, _ = encoder(data.x, data.edge_index)
-        return predict_from_adaptation_state(base_embedding, state)
-
-
-def save_adaptation_state(state: Mapping, path: str) -> None:
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    torch.save(dict(state), path)
-
-
-def load_adaptation_state(path: str, map_location="cpu") -> Dict:
-    return torch.load(path, map_location=map_location)
+        device = base_embedding.device
+        features = _safe_normalize(base_embedding, dim=1)
+        probabilities = bayesian_class_posterior(
+            features,
+            state["class_prototypes"].to(device),
+            state["class_prior"].to(device),
+            float(state["proto_temp"]),
+            float(state["prior_strength"]),
+        )
+        return features, probabilities
