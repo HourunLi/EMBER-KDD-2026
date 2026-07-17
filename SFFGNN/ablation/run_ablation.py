@@ -14,7 +14,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Edit these defaults, then run: python ablation/run_ablation.py
 # ---------------------------------------------------------------------------
-EXPERIMENT = "all"  # full | metaalign | bca | target_mmd | residual | all
+EXPERIMENT = "all"  # full | metaalign | bca | residual | all
 GPU_IDS = [0, 1, 2, 3, 4, 5, 6, 7]
 DATASETS = ["bailA", "germanA", "pokec", "syn"]
 RUN_SEEDS = [1111, 2222, 3333, 4444, 5555]
@@ -45,11 +45,11 @@ def print_status(message):
 
 
 def variant_specs():
-    if EXPERIMENT not in {"full", "metaalign", "bca", "target_mmd", "residual", "all"}:
+    if EXPERIMENT not in {"full", "metaalign", "bca", "residual", "all"}:
         raise ValueError(f"Unknown EXPERIMENT: {EXPERIMENT}")
 
     selected = (
-        ["full", "metaalign", "bca", "target_mmd", "residual"]
+        ["full", "metaalign", "bca", "residual"]
         if EXPERIMENT == "all"
         else [EXPERIMENT]
     )

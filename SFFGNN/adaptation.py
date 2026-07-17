@@ -15,7 +15,7 @@ import torch.nn.functional as F
 
 
 JOINT_KEYS = ((0, 0), (0, 1), (1, 0), (1, 1))
-ABLATION_MODES = ("full", "metaalign", "bca", "target_mmd", "residual")
+ABLATION_MODES = ("full", "metaalign", "bca", "residual")
 
 
 def _safe_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
@@ -261,16 +261,6 @@ def minority_aware_weights(
     return weights, counts
 
 
-def class_centered_features(
-    features: torch.Tensor,
-    pseudo_labels: torch.Tensor,
-    candidate_prototypes: torch.Tensor,
-) -> torch.Tensor:
-    """Residual-dependent Target representation used by the added MMD term."""
-    centers = candidate_prototypes[pseudo_labels.long()]
-    return _safe_normalize(features - centers, dim=1)
-
-
 def _initial_count_prior(
     pseudocount: float,
     device: torch.device,
@@ -326,7 +316,6 @@ def run_target_adaptation(
 
     use_bca = ablation != "bca"
     use_residual = ablation != "residual"
-    use_target_mmd = ablation != "target_mmd" and use_residual
 
     device = args.device
     source_model.eval()
@@ -360,17 +349,6 @@ def run_target_adaptation(
     prior_strength = float(getattr(args, "lambda_pi", 1.0)) if use_bca else 0.0
     residual_l2_weight = float(getattr(args, "lambda_residual_l2", 1e-3))
     minority_epsilon = float(getattr(args, "minority_epsilon", 1e-6))
-    target_mmd_weight = float(getattr(args, "target_lambda_fair", 1.0))
-    bandwidth = float(
-        getattr(
-            args,
-            "target_mmd_bandwidth",
-            getattr(args, "mmd_bandwidth", 1.0),
-        )
-    )
-    chunk_size = int(getattr(args, "mmd_chunk_size", 1024))
-    min_mmd_samples = max(2, int(getattr(args, "target_mmd_min_samples", 2)))
-    max_mmd_samples = max(0, int(getattr(args, "target_mmd_max_samples", 1024)))
 
     # Eq. (8): q_v^ta is produced once by the frozen Source classifier and
     # remains fixed throughout adaptation.  Bayesian confidence is introduced
@@ -381,8 +359,8 @@ def run_target_adaptation(
 
     print(
         "[FairMAC] ablation={} epochs={} residual_inner={} "
-        "trainable=class_residual prior=count-aware target_mmd={}".format(
-            ablation, epochs, residual_inner_steps, use_target_mmd
+        "trainable=class_residual prior=count-aware".format(
+            ablation, epochs, residual_inner_steps
         )
     )
 
@@ -436,31 +414,7 @@ def run_target_adaptation(
                 residual_nll = _graph_zero(candidate_prototypes)
 
             residual_l2 = step_residuals.square().sum()
-
-            if use_target_mmd:
-                centered_features = class_centered_features(
-                    features, pseudo_labels, candidate_prototypes
-                )
-                target_mmd, valid_mmd_classes = class_conditional_mmd_loss(
-                    centered_features,
-                    pseudo_labels,
-                    pseudo_sensitive,
-                    selected,
-                    bandwidth=bandwidth,
-                    chunk_size=chunk_size,
-                    min_samples=min_mmd_samples,
-                    max_samples=max_mmd_samples,
-                    reduction="sum",
-                )
-            else:
-                target_mmd = _graph_zero(candidate_prototypes)
-                valid_mmd_classes = 0
-
-            total_loss = (
-                residual_nll
-                + residual_l2_weight * residual_l2
-                + target_mmd_weight * target_mmd
-            )
+            total_loss = residual_nll + residual_l2_weight * residual_l2
 
             if step_optimizer is not None:
                 step_optimizer.zero_grad()
@@ -517,14 +471,12 @@ def run_target_adaptation(
         if step == 0 or (step + 1) % 50 == 0 or step + 1 == epochs:
             print(
                 "  [Adapt {:3d}] hc={}/{} res={:.4f} l2={:.4f} "
-                "mmd={:.4f} mmd_cls={} prior=({:.3f},{:.3f})".format(
+                "prior=({:.3f},{:.3f})".format(
                     step,
                     int(selected.sum().item()),
                     features.shape[0],
                     float(residual_nll.detach().item()),
                     float(residual_l2.detach().item()),
-                    float(target_mmd.detach().item()),
-                    valid_mmd_classes,
                     float(class_prior[0].item()),
                     float(class_prior[1].item()),
                 )

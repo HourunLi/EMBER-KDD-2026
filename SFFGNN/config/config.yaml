@@ -14,6 +14,7 @@ bailA:
   source_mmd_bandwidth: 1.5
   source_mmd_min_samples: 8
   source_mmd_max_samples: 0
+  mmd_chunk_size: 256
   # target adaptation
   adapt_epochs: 75
   adapt_lr: 0.0008
@@ -24,11 +25,6 @@ bailA:
   lambda_residual_l2: 0.001
   prior_pseudocount: 1.0
   minority_epsilon: 0.000001
-  target_lambda_fair: 0.5
-  target_mmd_bandwidth: 1.5
-  mmd_chunk_size: 256
-  target_mmd_min_samples: 8
-  target_mmd_max_samples: 512
 germanA:
   train_epochs: 800
   lr: 0.005
@@ -45,6 +41,7 @@ germanA:
   source_mmd_bandwidth: 0.5
   source_mmd_min_samples: 4
   source_mmd_max_samples: 0
+  mmd_chunk_size: 256
   # target adaptation
   adapt_epochs: 100
   adapt_lr: 0.0005
@@ -55,11 +52,6 @@ germanA:
   lambda_residual_l2: 0.001
   prior_pseudocount: 1.0
   minority_epsilon: 0.000001
-  target_lambda_fair: 0.5
-  target_mmd_bandwidth: 0.5
-  mmd_chunk_size: 256
-  target_mmd_min_samples: 4
-  target_mmd_max_samples: 256
 pokec:
   train_epochs: 800
   lr: 0.002
@@ -76,6 +68,7 @@ pokec:
   source_mmd_bandwidth: 1.5
   source_mmd_min_samples: 8
   source_mmd_max_samples: 0
+  mmd_chunk_size: 256
   # target adaptation
   adapt_epochs: 100
   adapt_lr: 0.0004
@@ -86,11 +79,6 @@ pokec:
   lambda_residual_l2: 0.001
   prior_pseudocount: 1.0
   minority_epsilon: 0.000001
-  target_lambda_fair: 1.0
-  target_mmd_bandwidth: 1.5
-  mmd_chunk_size: 256
-  target_mmd_min_samples: 8
-  target_mmd_max_samples: 256
 syn:
   train_epochs: 800
   lr: 0.001
@@ -107,6 +95,7 @@ syn:
   source_mmd_bandwidth: 1.5
   source_mmd_min_samples: 8
   source_mmd_max_samples: 0
+  mmd_chunk_size: 256
   # target adaptation
   adapt_epochs: 75
   adapt_lr: 0.0012
@@ -117,8 +106,3 @@ syn:
   lambda_residual_l2: 0.001
   prior_pseudocount: 1.0
   minority_epsilon: 0.000001
-  target_lambda_fair: 0.1
-  target_mmd_bandwidth: 1.5
-  mmd_chunk_size: 256
-  target_mmd_min_samples: 8
-  target_mmd_max_samples: 512
