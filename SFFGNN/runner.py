@@ -499,7 +499,7 @@ def train_and_adapt(args, source_data, target_data):
         effective_target_seed = int(
             configured_target_seed
             if configured_target_seed is not None
-            else getattr(args, 'seed', 1111) + run_idx
+            else getattr(args, 'seed', 1111) + run_idx * 1111
         )
         seed_everything(effective_target_seed)
         adapted_model, state = adapt_target(args, target_data, knowledge)
