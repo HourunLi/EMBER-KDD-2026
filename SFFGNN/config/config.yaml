@@ -8,21 +8,21 @@ bailA:
   n_layers: 1
   use_checkpoint: true
   inter_encoder: GCN
-  lambda_fair: 4.0
-  meta_lr: 0.02
-  lambda_coord: 1.0
-  source_mmd_bandwidth: 1.5
+  lambda_fair: 8.0
+  meta_lr: 0.03
+  lambda_coord: 3.0
+  source_mmd_bandwidth: 0.5
   source_mmd_min_samples: 8
   source_mmd_max_samples: 0
   mmd_chunk_size: 256
   # target adaptation
-  adapt_epochs: 75
+  adapt_epochs: 100
   adapt_lr: 0.0008
-  residual_inner_steps: 5
-  tau_c: 0.7
-  proto_temp: 1.0
-  lambda_pi: 1.0
-  lambda_residual_l2: 0.001
+  residual_inner_steps: 60
+  tau_c: 0.75
+  proto_temp: 0.75
+  lambda_pi: 0.01
+  lambda_residual_l2: 0.0001
   prior_pseudocount: 1.0
   minority_epsilon: 0.000001
 germanA:
@@ -81,28 +81,28 @@ pokec:
   minority_epsilon: 0.000001
 syn:
   train_epochs: 800
-  lr: 0.001
+  lr: 0.005
   lr2_reg: 0.001
-  dropout: 0.1
-  runs: 5
+  dropout: 0.4
+  runs: 3
   hidden_dim: 128
   n_layers: 3
   use_checkpoint: true
   inter_encoder: MLP
-  lambda_fair: 2.0
-  meta_lr: 0.01
-  lambda_coord: 1.0
-  source_mmd_bandwidth: 1.5
-  source_mmd_min_samples: 8
+  lambda_fair: 4.0
+  meta_lr: 0.02
+  lambda_coord: 3.0
+  source_mmd_bandwidth: 0.75
+  source_mmd_min_samples: 4
   source_mmd_max_samples: 0
   mmd_chunk_size: 256
   # target adaptation
-  adapt_epochs: 75
-  adapt_lr: 0.0012
-  residual_inner_steps: 5
-  tau_c: 0.7
-  proto_temp: 0.2
-  lambda_pi: 1.0
+  adapt_epochs: 25
+  adapt_lr: 0.0005
+  residual_inner_steps: 20
+  tau_c: 0.75
+  proto_temp: 0.5
+  lambda_pi: 0.2
   lambda_residual_l2: 0.001
   prior_pseudocount: 1.0
   minority_epsilon: 0.000001
