@@ -62,22 +62,22 @@ pokec:
   n_layers: 4
   use_checkpoint: true
   inter_encoder: GCN
-  lambda_fair: 0.5
-  meta_lr: 0.0003
-  lambda_coord: 1.0
-  source_mmd_bandwidth: 1.5
+  lambda_fair: 2.0
+  meta_lr: 0.01
+  lambda_coord: 2.0
+  source_mmd_bandwidth: 2.0
   source_mmd_min_samples: 8
   source_mmd_max_samples: 0
   mmd_chunk_size: 256
   # target adaptation
-  adapt_epochs: 100
-  adapt_lr: 0.0004
-  residual_inner_steps: 5
-  tau_c: 0.7
-  proto_temp: 0.7
-  lambda_pi: 1.0
+  adapt_epochs: 50
+  adapt_lr: 0.001
+  residual_inner_steps: 20
+  tau_c: 0.35
+  proto_temp: 1.0
+  lambda_pi: 0.1
   lambda_residual_l2: 0.001
-  prior_pseudocount: 1.0
+  prior_pseudocount: 10.0
   minority_epsilon: 0.000001
 syn:
   train_epochs: 800
