@@ -84,25 +84,25 @@ syn:
   lr: 0.005
   lr2_reg: 0.001
   dropout: 0.4
-  runs: 3
+  runs: 5
   hidden_dim: 128
-  n_layers: 3
+  n_layers: 1
   use_checkpoint: true
   inter_encoder: MLP
-  lambda_fair: 4.0
-  meta_lr: 0.02
+  lambda_fair: 8.0
+  meta_lr: 0.003
   lambda_coord: 3.0
-  source_mmd_bandwidth: 0.75
+  source_mmd_bandwidth: 0.25
   source_mmd_min_samples: 4
   source_mmd_max_samples: 0
   mmd_chunk_size: 256
   # target adaptation
-  adapt_epochs: 25
+  adapt_epochs: 150
   adapt_lr: 0.0005
-  residual_inner_steps: 20
-  tau_c: 0.75
-  proto_temp: 0.5
-  lambda_pi: 0.2
-  lambda_residual_l2: 0.001
-  prior_pseudocount: 1.0
+  residual_inner_steps: 40
+  tau_c: 0.5
+  proto_temp: 0.1
+  lambda_pi: 0.5
+  lambda_residual_l2: 0.00001
+  prior_pseudocount: 25.0
   minority_epsilon: 0.000001
