@@ -35,7 +35,7 @@ datasets:
     enabled: false
 
 methods:
-  - name: SFFGNN
+  - name: EMBER
     enabled: true
   - name: DGSDA
     enabled: false
@@ -61,7 +61,7 @@ sampling:
   random_state: 42
 
 tsne:
-  random_state: 42
+  random_state: 0
   perplexity: 30
   init: pca
   learning_rate: auto
@@ -72,23 +72,25 @@ tsne:
 plot:
   formats: [png, pdf]
   dpi: 300
-  figure_width: 5.35
-  figure_height: 4.35
-  point_size: 34
+  figure_width: 6.4
+  figure_height: 4.8
+  point_size: 20
+  marker_line_width: 0.3
   alpha: 1.0
   axis_margin: 0.05
-  tick_label_size: 28
-  tick_length: 5.0
-  tick_width: 1.1
-  tick_pad: 5.0
-  axis_label_size: 34
-  axis_label_pad: 6.0
-  spine_color: "#7F7F7F"
-  spine_width: 1.3
-  tight_layout_pad: 0.2
+  tick_label_size: 18
+  tick_length: 3.5
+  tick_width: 0.8
+  tick_pad: 3.5
+  axis_label_size: 20
+  axis_label_pad: 3.4
+  spine_color: "#808080"
+  spine_width: 1.0
+  tight_layout: false
+  savefig_pad_inches: 0.1
   show_legend: false
-  font_family: serif
+  font_family: "Times New Roman"
   font_serif: ["Times New Roman", "DejaVu Serif"]
   xlabel_template: "{method} {dataset} t-SNE result"
   group_order: [0, 1, 2, 3]
-  colors: ["#5B8DE8", "#FF7043", "#86B889", "#FFB6C8"]
+  colors: ["#FF7F50", "#6495ED", "#8FBC8F", "#FFC0CB"]

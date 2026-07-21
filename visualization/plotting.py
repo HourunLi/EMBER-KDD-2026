@@ -82,10 +82,18 @@ def plot_panels(
         raise ValueError("No panels to plot.")
 
     plt = require_matplotlib()
+    spine_color = plot_cfg.get("spine_color", "#808080")
+    spine_width = float(plot_cfg.get("spine_width", 1.0))
     plt.rcParams.update(
         {
-            "font.family": plot_cfg.get("font_family", "serif"),
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+            "font.family": plot_cfg.get("font_family", "Times New Roman"),
             "font.serif": plot_cfg.get("font_serif", ["Times New Roman", "DejaVu Serif"]),
+            "font.style": "normal",
+            "font.weight": "normal",
+            "axes.edgecolor": spine_color,
+            "axes.linewidth": spine_width,
             "axes.unicode_minus": False,
         }
     )
@@ -94,28 +102,30 @@ def plot_panels(
     coords = np.asarray(panel["coords"])
     panel_labels = np.asarray(panel["labels"]).astype(int)
 
-    fig_width = float(plot_cfg.get("figure_width", 5.35))
-    fig_height = float(plot_cfg.get("figure_height", 4.35))
+    fig_width = float(plot_cfg.get("figure_width", 6.4))
+    fig_height = float(plot_cfg.get("figure_height", 4.8))
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
-    colors = plot_cfg.get("colors") or ["#5B8DE8", "#FF7043", "#86B889", "#FFB6C8"]
-    point_size = float(plot_cfg.get("point_size", 34))
+    colors = plot_cfg.get("colors") or ["#FF7F50", "#6495ED", "#8FBC8F", "#FFC0CB"]
+    point_size = float(plot_cfg.get("point_size", 20))
     alpha = float(plot_cfg.get("alpha", 1.0))
     group_order = [int(item) for item in plot_cfg.get("group_order", sorted(group_names))]
+    color_by_group = {
+        group: colors[group_idx % len(colors)] for group_idx, group in enumerate(group_order)
+    }
+    unknown_groups = sorted(set(panel_labels) - set(color_by_group))
+    if unknown_groups:
+        raise ValueError(f"No plot color configured for groups: {unknown_groups}")
 
-    for group_idx, group in enumerate(group_order):
-        mask = panel_labels == group
-        if not mask.any():
-            continue
-        ax.scatter(
-            coords[mask, 0],
-            coords[mask, 1],
-            s=point_size,
-            c=colors[group_idx % len(colors)],
-            marker="o",
-            alpha=alpha,
-            linewidths=0,
-        )
+    ax.scatter(
+        coords[:, 0],
+        coords[:, 1],
+        s=point_size,
+        c=[color_by_group[label] for label in panel_labels],
+        marker="o",
+        alpha=alpha,
+        linewidths=float(plot_cfg.get("marker_line_width", 0.3)),
+    )
 
     margin = float(plot_cfg.get("axis_margin", 0.05))
     ax.set_xlim(0.0 - margin, 1.0 + margin)
@@ -127,19 +137,17 @@ def plot_panels(
     ax.xaxis.set_major_formatter(FormatStrFormatter("%.1f"))
     ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
 
-    tick_label_size = int(plot_cfg.get("tick_label_size", 28))
+    tick_label_size = int(plot_cfg.get("tick_label_size", 18))
     ax.tick_params(
         axis="both",
         which="major",
         labelsize=tick_label_size,
-        length=float(plot_cfg.get("tick_length", 5.0)),
-        width=float(plot_cfg.get("tick_width", 1.1)),
+        length=float(plot_cfg.get("tick_length", 3.5)),
+        width=float(plot_cfg.get("tick_width", 0.8)),
         direction="out",
-        pad=float(plot_cfg.get("tick_pad", 5.0)),
+        pad=float(plot_cfg.get("tick_pad", 3.5)),
     )
 
-    spine_color = plot_cfg.get("spine_color", "#7F7F7F")
-    spine_width = float(plot_cfg.get("spine_width", 1.3))
     for spine in ax.spines.values():
         spine.set_color(spine_color)
         spine.set_linewidth(spine_width)
@@ -152,8 +160,8 @@ def plot_panels(
     )
     ax.set_xlabel(
         xlabel,
-        fontsize=int(plot_cfg.get("axis_label_size", 34)),
-        labelpad=float(plot_cfg.get("axis_label_pad", 6.0)),
+        fontsize=int(plot_cfg.get("axis_label_size", 20)),
+        labelpad=float(plot_cfg.get("axis_label_pad", 3.4)),
     )
     ax.set_ylabel("")
     ax.set_title("")
@@ -162,8 +170,14 @@ def plot_panels(
     if plot_cfg.get("show_legend", False):
         ax.legend(frameon=False, fontsize=int(plot_cfg.get("legend_size", 12)))
 
-    fig.tight_layout(pad=float(plot_cfg.get("tight_layout_pad", 0.2)))
+    if plot_cfg.get("tight_layout", False):
+        fig.tight_layout(pad=float(plot_cfg.get("tight_layout_pad", 0.2)))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=int(plot_cfg.get("dpi", 300)), bbox_inches="tight")
+    fig.savefig(
+        output_path,
+        dpi=int(plot_cfg.get("dpi", 300)),
+        bbox_inches="tight",
+        pad_inches=float(plot_cfg.get("savefig_pad_inches", 0.1)),
+    )
     plt.close(fig)

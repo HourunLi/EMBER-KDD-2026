@@ -114,7 +114,7 @@ visualization/results/SFFGNN_pokec/tsne.png
 visualization/results/SFFGNN_pokec/tsne.pdf
 ```
 
-图形样式参考 `visualization_CELL_pokec.pdf`：单张 t-SNE 散点图、无标题、无图例、坐标轴归一化到 0.0-1.0、大号 serif 字体、灰色坐标轴边框，底部标签格式为：
+图形样式与 `../../paper/tsne/CELL_pokec.pdf` 一致：单张 t-SNE 散点图、无标题、无图例、坐标轴归一化到 0.0-1.0；使用 Times New Roman，刻度为 18 pt，底部标签为 20 pt，散点大小为 20、边宽为 0.3，坐标轴边框为 1 pt 灰色。四类颜色依次为 coral、cornflowerblue、darkseagreen 和 pink。底部标签格式为：
 
 ```text
 <method> <dataset> t-SNE result
