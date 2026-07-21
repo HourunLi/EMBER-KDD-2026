@@ -32,6 +32,8 @@ except ImportError:  # 服务器若缺少 sklearn，AUC 会被置为 NaN，Acc/D
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
+from visualization.export_utils import save_visualization_embeddings
+
 
 N_RUNS = 5
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -217,6 +219,28 @@ def stage2_adapt_target(dataset, target_id, run_idx, ckpt_path, args, device):
                 f"L_align_SF={theta_loss.item():.6f} L_target={target_loss.item():.6f}"
             )
 
+    if args.save_visualization_embeddings and run_idx == args.visualization_run_idx:
+        model.eval()
+        with torch.no_grad():
+            target_features = model.get_props(
+                target_data.x,
+                target_data.edge_index,
+                is_source_domain=False,
+            )
+        all_mask = (
+            target_data.train_mask | target_data.val_mask | target_data.test_mask
+        ) & (target_data.y >= 0)
+        feat_path, labels_path = save_visualization_embeddings(
+            REPO_ROOT / "visualization" / "embeddings",
+            "DGSDA",
+            dataset,
+            target_features[all_mask].detach().cpu().numpy(),
+            y=target_data.y[all_mask].detach().cpu().numpy(),
+            sens=target_data.sens_labels[all_mask].detach().cpu().numpy(),
+        )
+        print(f"[saved] {feat_path}")
+        print(f"[saved] {labels_path}")
+
     return evaluate_target(model, target_data)
 
 
@@ -364,6 +388,8 @@ def parse_gpu_ids(gpus):
 
 def launch_parallel(args):
     """父进程：将 4 个数据集 x 3 次运行分配到可用 GPU 上并行执行。"""
+    if args.save_visualization_embeddings and not 0 <= args.visualization_run_idx < N_RUNS:
+        raise ValueError(f"visualization_run_idx must be in [0, {N_RUNS - 1}]")
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -412,6 +438,12 @@ def launch_parallel(args):
         ]
         if args.verbose:
             cmd.append("--verbose")
+        if args.save_visualization_embeddings and run_idx == args.visualization_run_idx:
+            cmd.extend([
+                "--save_visualization_embeddings",
+                "--visualization_run_idx",
+                str(args.visualization_run_idx),
+            ])
         log_file = open(log_path, "w", encoding="utf-8")
         proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT)
         running[proc] = {"dataset": dataset, "run_idx": run_idx, "gpu": gpu_id, "log": log_file}
@@ -457,6 +489,8 @@ def get_args():
     parser.add_argument("--dataset", type=str, default="syn", choices=list(DATASET_ID_MAP.keys()))
     parser.add_argument("--datasets", nargs="+", default=["bailA", "germanA", "pokec", "syn"])
     parser.add_argument("--run_idx", type=int, default=0)
+    parser.add_argument("--save_visualization_embeddings", action="store_true")
+    parser.add_argument("--visualization_run_idx", type=int, default=0)
     parser.add_argument("--gpus", type=str, default="0,1,2,4,5,6,7")
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--seed", type=int, default=1111)

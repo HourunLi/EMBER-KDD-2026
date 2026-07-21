@@ -189,6 +189,35 @@ save_visualization_embeddings(
 
 target 节点范围统一为 train、validation 和 test 的并集，并排除 Pokec 中标签为 `-1` 的节点。模型应先在完整 target 图上计算表示，再使用同一个 `all_mask` 截取 feature、`y` 和 `sens`。
 
+### Export From Baselines
+
+五个 SFDA runner 均支持直接导出。以下命令运行正常的多次实验，但只有 `run_idx=0` 会写入可视化目录：
+
+```bash
+python baseline/DGSDA/dgsda_sf.py --save_visualization_embeddings --visualization_run_idx 0
+python baseline/GRADE/grade_sf.py --save_visualization_embeddings --visualization_run_idx 0
+python baseline/HGDA/hgda_sf.py --save_visualization_embeddings --visualization_run_idx 0
+python baseline/UDAGCN/udagcn_sf.py --save_visualization_embeddings --visualization_run_idx 0
+python baseline/GraphAny/run_sfda.py --save_visualization_embeddings --visualization_run_idx 0
+```
+
+各方法导出的最终 target 表示为：
+
+```text
+DGSDA    -> target Bern filter 隐藏表示
+GRADE    -> 最后一层 GCN 隐藏表示（分类器之前）
+HGDA     -> 三个谱分支的加权 combined 表示
+UDAGCN   -> GCN/PPMI attention 融合编码
+GraphAny -> attention 加权后、通道求和前的预测表示
+```
+
+输出统一写入：
+
+```text
+visualization/embeddings/<method>/<dataset>/feat.npz
+visualization/embeddings/<method>/<dataset>/labels.npz
+```
+
 这会写出：
 
 ```text

@@ -50,7 +50,7 @@ class GraphAny(nn.Module):
         dist = torch.from_numpy(dist).to(y_feat.device)
         return dist
 
-    def forward(self, logit_dict, dist=None, **kwargs):
+    def forward(self, logit_dict, dist=None, return_representation=False, **kwargs):
         # logit_dict: key: channel, value: prediction of shape (batch_size, n_classes)
         y_feat = torch.stack([logit_dict[c] for c in self.feat_channels], dim=1)
         y_pred = torch.stack([logit_dict[c] for c in self.pred_channels], dim=1)
@@ -60,9 +60,11 @@ class GraphAny(nn.Module):
         # Project pairwise differences to the attention scores (batch_size, n_channels)
         attention = self.mlp(dist)
         attention = th.softmax(attention / self.att_temperature, dim=-1)
-        fused_y = th.sum(
-            rearrange(attention, "n n_channels -> n n_channels 1") * y_pred, dim=1
-        )  # Sum over channels, resulting in (batch_size, n_classes)
+        weighted_y = rearrange(attention, "n n_channels -> n n_channels 1") * y_pred
+        fused_y = th.sum(weighted_y, dim=1)
+        if return_representation:
+            representation = weighted_y.flatten(start_dim=1)
+            return fused_y, attention.mean(0).tolist(), representation
         return fused_y, attention.mean(0).tolist()
 
 

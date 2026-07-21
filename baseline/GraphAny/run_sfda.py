@@ -21,13 +21,15 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-sys.path.insert(0, os.path.dirname(__file__))
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parents[1]
+for import_path in (SCRIPT_DIR, REPO_ROOT):
+    if str(import_path) not in sys.path:
+        sys.path.insert(0, str(import_path))
 
 from graphany.sfda_data import FairGraphDataset
 from graphany.model import GraphAny
-
-
-SCRIPT_DIR = Path(__file__).resolve().parent
+from visualization.export_utils import save_visualization_embeddings
 
 
 DATASET_PAIRS = {
@@ -209,6 +211,45 @@ def evaluate_target(model, ds, channel_weights, cfg, args, device):
     return {"Acc": acc, "AUC": auc, "DP": dp, "EO": eo}
 
 
+@torch.no_grad()
+def export_target_embeddings(model, ds, channel_weights, cfg, args, device):
+    model.eval()
+    all_mask = (
+        ds.train_mask | ds.val_mask | ds.test_mask
+    ) & (ds.label >= 0)
+    idx = all_mask.nonzero(as_tuple=False).view(-1)
+    if idx.numel() == 0:
+        raise ValueError("Target all split has no valid labels for visualization export")
+
+    channels = set(cfg.feat_channels + cfg.pred_channels)
+    weights = {channel: channel_weights[channel].to(device) for channel in channels}
+    representations = []
+    for start in range(0, len(idx), args.eval_batch):
+        batch_cpu = idx[start : start + args.eval_batch]
+        logit_slice = {
+            channel: ds.features[channel][batch_cpu].to(device) @ weights[channel]
+            for channel in channels
+        }
+        _, _, batch_representation = model(
+            logit_slice,
+            dist=None,
+            return_representation=True,
+        )
+        representations.append(batch_representation.cpu())
+
+    target_features = torch.cat(representations, dim=0).numpy()
+    feat_path, labels_path = save_visualization_embeddings(
+        REPO_ROOT / "visualization" / "embeddings",
+        "GraphAny",
+        args.dataset,
+        target_features,
+        y=ds.label[idx].detach().cpu().numpy(),
+        sens=ds.sens_labels[idx].detach().cpu().numpy(),
+    )
+    print(f"[saved] {feat_path}", flush=True)
+    print(f"[saved] {labels_path}", flush=True)
+
+
 def checkpoint_path(dataset, run_idx):
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     return CHECKPOINT_DIR / f"GraphAny-SF_{dataset}_run{run_idx}.pt"
@@ -346,6 +387,11 @@ def run_single(args):
         preprocess_device=device,
     )
     metrics = evaluate_target(model, target_ds, channel_weights, cfg, args, device)
+    if (
+        args.save_visualization_embeddings
+        and args.run_idx == args.visualization_run_idx
+    ):
+        export_target_embeddings(model, target_ds, channel_weights, cfg, args, device)
     out_path = write_run_result(args.dataset, args.run_idx, metrics, args)
     print(f"[GraphAny-SF] run result saved: {out_path}", flush=True)
     print(json.dumps(metrics, indent=2, ensure_ascii=False), flush=True)
@@ -413,6 +459,8 @@ def parse_gpu_ids(gpus):
 
 def launch_parallel(args):
     """父进程调度所有数据集和 run，尽量填满可用 GPU。"""
+    if args.save_visualization_embeddings and not 0 <= args.visualization_run_idx < N_RUNS:
+        raise ValueError(f"visualization_run_idx must be in [0, {N_RUNS - 1}]")
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -482,6 +530,12 @@ def launch_parallel(args):
             cmd.append("--no_to_bidirected")
         if args.verbose:
             cmd.append("--verbose")
+        if args.save_visualization_embeddings and run_idx == args.visualization_run_idx:
+            cmd.extend([
+                "--save_visualization_embeddings",
+                "--visualization_run_idx",
+                str(args.visualization_run_idx),
+            ])
 
         log_file = open(log_path, "w", encoding="utf-8")
         proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT)
@@ -538,6 +592,8 @@ def get_args():
         choices=list(DATASET_PAIRS.keys()),
     )
     parser.add_argument("--run_idx", type=int, default=0)
+    parser.add_argument("--save_visualization_embeddings", action="store_true")
+    parser.add_argument("--visualization_run_idx", type=int, default=0)
     parser.add_argument("--gpus", type=str, default="0,1,2,4,5,6,7")
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)

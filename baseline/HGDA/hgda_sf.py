@@ -41,6 +41,7 @@ if str(SFFGNN_DIR) not in sys.path:
     sys.path.insert(0, str(SFFGNN_DIR))
 
 from SFFGNN.dataset import get_dataset
+from visualization.export_utils import save_visualization_embeddings
 
 
 DATASET_ID_MAP = {
@@ -423,6 +424,26 @@ def stage2_adapt_target(dataset, target_id, run_idx, ckpt_path, args, device):
                 f"L_align_SF={align_loss.item():.6f} L_target={entropy_loss.item():.6f}"
             )
 
+    if args.save_visualization_embeddings and run_idx == args.visualization_run_idx:
+        model.eval()
+        with torch.no_grad():
+            target_features, _, _, _ = model(
+                target_data.x,
+                target_data.edge_index,
+                target_data.x.size(0),
+            )
+        all_mask = eval_mask(target_data, "all")
+        feat_path, labels_path = save_visualization_embeddings(
+            REPO_ROOT / "visualization" / "embeddings",
+            "HGDA",
+            dataset,
+            target_features[all_mask].detach().cpu().numpy(),
+            y=target_data.y[all_mask].detach().cpu().numpy(),
+            sens=target_data.sens_labels[all_mask].detach().cpu().numpy(),
+        )
+        print(f"[saved] {feat_path}")
+        print(f"[saved] {labels_path}")
+
     return evaluate_target(model, target_data, args.eval_split)
 
 
@@ -577,6 +598,8 @@ def parse_gpu_ids(gpus):
 
 def launch_parallel(args):
     """父进程：把不同数据集和不同 run 分配到可用 GPU 上并行执行。"""
+    if args.save_visualization_embeddings and not 0 <= args.visualization_run_idx < args.runs:
+        raise ValueError(f"visualization_run_idx must be in [0, {args.runs - 1}]")
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     datasets = args.datasets
@@ -627,6 +650,12 @@ def launch_parallel(args):
         ]
         if args.verbose:
             cmd.append("--verbose")
+        if args.save_visualization_embeddings and run_idx == args.visualization_run_idx:
+            cmd.extend([
+                "--save_visualization_embeddings",
+                "--visualization_run_idx",
+                str(args.visualization_run_idx),
+            ])
 
         log_file = open(log_path, "w", encoding="utf-8")
         proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT)
@@ -681,6 +710,8 @@ def get_args():
     )
     parser.add_argument("--run_idx", type=int, default=0)
     parser.add_argument("--runs", type=int, default=5)
+    parser.add_argument("--save_visualization_embeddings", action="store_true")
+    parser.add_argument("--visualization_run_idx", type=int, default=0)
     parser.add_argument("--gpus", type=str, default="0,1,2,4,5,6,7")
     parser.add_argument("--cuda", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1111)

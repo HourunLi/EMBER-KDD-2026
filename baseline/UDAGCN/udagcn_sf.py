@@ -22,6 +22,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
 SFFGNN_DIR = REPO_ROOT / "SFFGNN"
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 RUN = 5
 DEFAULT_GPUS = "0,1,2,4,5,6,7"
 DEFAULT_DATASETS = ("bailA", "germanA", "pokec", "syn")
@@ -61,6 +64,8 @@ def parse_args():
     parser.add_argument("--target_id", type=str, default=None)
     parser.add_argument("--run_idx", type=int, default=0)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--save_visualization_embeddings", action="store_true")
+    parser.add_argument("--visualization_run_idx", type=int, default=0)
     return parser.parse_args()
 
 
@@ -166,6 +171,8 @@ def write_summary(result_dir, datasets, runs):
 
 
 def launch_all(args):
+    if args.save_visualization_embeddings and not 0 <= args.visualization_run_idx < args.runs:
+        raise ValueError(f"visualization_run_idx must be in [0, {args.runs - 1}]")
     result_dir = Path(args.result_dir)
     log_dir = result_dir / "logs"
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -233,6 +240,12 @@ def launch_all(args):
             ]
             if not args.use_udagcn:
                 cmd.append("--no_udagcn")
+            if args.save_visualization_embeddings and job["run_idx"] == args.visualization_run_idx:
+                cmd.extend([
+                    "--save_visualization_embeddings",
+                    "--visualization_run_idx",
+                    str(args.visualization_run_idx),
+                ])
 
             env = os.environ.copy()
             if gpu.lower() != "cpu":
@@ -332,6 +345,7 @@ def run_worker(args):
     sys.path.insert(0, str(SFFGNN_DIR))
     from dataset import get_dataset
     from utils import fair_metric
+    from visualization.export_utils import save_visualization_embeddings
 
     # dual_gnn 仍使用 UDAGCN 原始实现。
     from dual_gnn.cached_gcn_conv import CachedGCNConv
@@ -588,6 +602,25 @@ def run_worker(args):
     freeze_classifier(model)
     target_optimizer = build_optimizer(model, trainable_only=True)
     adapt_target(model, target_optimizer, target_data, args.epochs, source_prior)
+
+    if (
+        args.save_visualization_embeddings
+        and args.run_idx == args.visualization_run_idx
+    ):
+        model.eval()
+        with torch.no_grad():
+            target_features = model.encode(target_data, "target")
+        all_mask = all_valid_mask(target_data)
+        feat_path, labels_path = save_visualization_embeddings(
+            REPO_ROOT / "visualization" / "embeddings",
+            "UDAGCN",
+            args.dataset,
+            target_features[all_mask].detach().cpu().numpy(),
+            y=target_data.y[all_mask].detach().cpu().numpy(),
+            sens=target_data.sens_labels[all_mask].detach().cpu().numpy(),
+        )
+        print(f"[saved] {feat_path}")
+        print(f"[saved] {labels_path}")
 
     # final-epoch checkpoint 策略：不使用 target 指标选最佳轮次，直接评估最终模型。
     target_metrics = evaluate_target(model, target_data)
