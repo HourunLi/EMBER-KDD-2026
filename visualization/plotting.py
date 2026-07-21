@@ -152,7 +152,9 @@ def plot_panels(
         spine.set_color(spine_color)
         spine.set_linewidth(spine_width)
 
-    xlabel_template = plot_cfg.get("xlabel_template", "{method} {dataset} t-SNE result")
+    xlabel_template = plot_cfg.get(
+        "xlabel_template", "{method} {dataset_title} t-SNE result"
+    )
     xlabel = xlabel_template.format(
         method=panel.get("method", ""),
         dataset=panel.get("dataset", dataset_title),

@@ -22,17 +22,17 @@ defaults:
 
 datasets:
   - name: bailA
-    title: Bail-A
-    enabled: false
+    title: BailA
+    enabled: true
   - name: germanA
-    title: German-A
-    enabled: false
+    title: GermanA
+    enabled: true
   - name: pokec
     title: Pokec
     enabled: true
   - name: syn
-    title: Synthetic
-    enabled: false
+    title: Syn
+    enabled: true
 
 methods:
   - name: EMBER
@@ -91,6 +91,6 @@ plot:
   show_legend: false
   font_family: "Times New Roman"
   font_serif: ["Times New Roman", "DejaVu Serif"]
-  xlabel_template: "{method} {dataset} t-SNE result"
+  xlabel_template: "{method} {dataset_title} t-SNE result"
   group_order: [0, 1, 2, 3]
   colors: ["#FF7F50", "#6495ED", "#8FBC8F", "#FFC0CB"]
