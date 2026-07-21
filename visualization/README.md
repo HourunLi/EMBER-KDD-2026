@@ -173,15 +173,21 @@ SFFGNN 或 baseline 可以复用 `export_utils.py`：
 ```python
 from visualization.export_utils import save_visualization_embeddings
 
+all_mask = (
+    data.train_mask | data.val_mask | data.test_mask
+) & (data.y >= 0)
+
 save_visualization_embeddings(
     "visualization/embeddings",
     method="SFFGNN",
     dataset=args.dataset,
-    representations=feat[data.test_mask].cpu().numpy(),
-    y=data.y[data.test_mask].cpu().numpy(),
-    sens=data.sens_labels[data.test_mask].cpu().numpy(),
+    representations=feat[all_mask].cpu().numpy(),
+    y=data.y[all_mask].cpu().numpy(),
+    sens=data.sens_labels[all_mask].cpu().numpy(),
 )
 ```
+
+target 节点范围统一为 train、validation 和 test 的并集，并排除 Pokec 中标签为 `-1` 的节点。模型应先在完整 target 图上计算表示，再使用同一个 `all_mask` 截取 feature、`y` 和 `sens`。
 
 这会写出：
 

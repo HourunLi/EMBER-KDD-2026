@@ -556,39 +556,33 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
         # extract positive probability
         probs = q_y[:, 1].cpu().numpy()
 
-        # Target labels and sensitive attributes are accessed only after model
-        # inference, exclusively for reporting predictive/fairness metrics.
-        sens_labels = data.sens_labels
-        test_labels = data.y[data.test_mask]
-        t_idx_s0 = sens_labels[data.test_mask] == 0
-        t_idx_s1 = sens_labels[data.test_mask] == 1
-        t_idx_s0_y1 = torch.logical_and(t_idx_s0, test_labels == 1)
-        t_idx_s1_y1 = torch.logical_and(t_idx_s1, test_labels == 1)
-        t_idx_s0_y0 = torch.logical_and(t_idx_s0, test_labels == 0)
-        t_idx_s1_y0 = torch.logical_and(t_idx_s1, test_labels == 0)
-
+        # Target annotations are accessed only after adaptation and inference,
+        # for metric reporting and visualization export.
         y_all   = data.y.cpu().numpy()
         sens_all = data.sens_labels.cpu().numpy()
-        all_mask = data.train_mask | data.val_mask | data.test_mask
+        valid_label_mask = data.y >= 0
+        all_mask = (data.train_mask | data.val_mask | data.test_mask) & valid_label_mask
 
         splits = {
             'all':   all_mask.cpu().numpy(),
-            'train': data.train_mask.cpu().numpy(),
-            'val':   data.val_mask.cpu().numpy(),
-            'test':  data.test_mask.cpu().numpy(),
+            'train': (data.train_mask & valid_label_mask).cpu().numpy(),
+            'val':   (data.val_mask & valid_label_mask).cpu().numpy(),
+            'test':  (data.test_mask & valid_label_mask).cpu().numpy(),
         }
 
         # Save embeddings only when explicitly requested.  Random-tune workers
         # otherwise race while overwriting the same dataset-level NPZ files.
-        labels = torch.full((test_labels.shape[0],), -1, dtype=torch.int64)
-        labels[t_idx_s0_y1] = 0
-        labels[t_idx_s1_y1] = 1
-        labels[t_idx_s0_y0] = 2
-        labels[t_idx_s1_y0] = 3
+        export_y = data.y[all_mask]
+        export_sens = data.sens_labels[all_mask]
+        labels = torch.full_like(export_y, -1, dtype=torch.int64)
+        labels[(export_y == 1) & (export_sens == 0)] = 0
+        labels[(export_y == 1) & (export_sens == 1)] = 1
+        labels[(export_y == 0) & (export_sens == 0)] = 2
+        labels[(export_y == 0) & (export_sens == 1)] = 3
         export_embeddings = not getattr(args, 'disable_embedding_export', False)
         if export_embeddings:
             np.savez(f"{args.dataset}_feat.npz",
-                     representations=feat[data.test_mask].cpu().numpy())
+                     representations=feat[all_mask].cpu().numpy())
             np.savez(f"{args.dataset}_labels.npz",
                      labels=labels.cpu().numpy())
         if (export_embeddings and save_visualization
@@ -596,9 +590,9 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
             embeddings_root = os.path.join(PROJECT_ROOT, 'visualization', 'embeddings')
             save_visualization_embeddings(
                 embeddings_root,
-                'SFFGNN',
+                'EMBER',
                 args.dataset,
-                feat[data.test_mask].cpu().numpy(),
+                feat[all_mask].cpu().numpy(),
                 labels=labels.cpu().numpy(),
             )
 
