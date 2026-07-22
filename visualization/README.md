@@ -114,10 +114,12 @@ visualization/results/SFFGNN_pokec/tsne.png
 visualization/results/SFFGNN_pokec/tsne.pdf
 ```
 
-图形样式与 `../../paper/tsne/CELL_pokec.pdf` 一致：单张 t-SNE 散点图、无标题、无图例、坐标轴归一化到 0.0-1.0；使用 Times New Roman，刻度为 18 pt，底部标签为 20 pt，散点大小为 20、边宽为 0.3，坐标轴边框为 1 pt 灰色。四类颜色依次为 coral、cornflowerblue、darkseagreen 和 pink。底部标签格式为：
+图形采用面向论文投稿的简洁样式：坐标归一化到 0.0-1.0，并使用参考图中的蓝红双系配色（`#003566`、`#669BBC`、`#E29578`、`#9E2A2B`）；所有类别统一使用小型半透明圆点，不加描边，避免密集区域出现杂乱的“拼贴感”。默认关闭没有解释意义的 t-SNE 刻度和边框，使用 Times 系列字体、轻量标题和坐标轴外单行图例。
+
+标题格式为：
 
 ```text
-<method> <dataset title> t-SNE result
+<method> on <dataset title>
 ```
 
 其中 `<dataset title>` 读取 `config.yaml` 中对应数据集的 `title` 字段；输入路径和结果目录仍使用 `name` 字段。

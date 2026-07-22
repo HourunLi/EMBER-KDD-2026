@@ -17,7 +17,7 @@ Two supplementary one-dimensional groups are also available:
 
 Every subprocess writes one raw JSON result.  This script adds experiment
 metadata, supports safe resume, aggregates repeated seeds into CSV/JSON, and
-then calls ``pilot/parameter_analysis.py`` to generate CELL-style PDF figures
+then calls ``pilot/parameter_analysis.py`` to generate polished PDF figures
 under ``SFFGNN/parameter/results``.
 
 Typical usage
@@ -785,7 +785,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run SFFGNN parameter analysis and generate CELL-style PDFs."
+        description="Run SFFGNN parameter analysis and generate publication-ready PDFs."
     )
     parser.add_argument(
         "--groups",

@@ -1,4 +1,4 @@
-# CELL-style t-SNE visualization config.
+# Publication-style t-SNE visualization config.
 #
 # Input convention:
 #   visualization/embeddings/<method>/<dataset>/feat.npz
@@ -23,30 +23,40 @@ defaults:
 datasets:
   - name: bailA
     title: BailA
-    enabled: true
+    enabled: false
   - name: germanA
     title: GermanA
-    enabled: true
+    enabled: false
   - name: pokec
     title: Pokec
     enabled: true
   - name: syn
     title: Syn
-    enabled: true
+    enabled: false
 
 methods:
   - name: EMBER
     enabled: true
   - name: DGSDA
-    enabled: false
+    enabled: true
   - name: GRADE
-    enabled: false
+    enabled: true
   - name: GraphAny
-    enabled: false
+    enabled: true
   - name: HGDA
-    enabled: false
+    enabled: true
   - name: UDAGCN
-    enabled: false
+    enabled: true
+  - name: GCN
+    enabled: true
+  - name: NIFTY
+    enabled: true
+  - name: FairVGNN
+    enabled: true
+  - name: FairSIN
+    enabled: true
+  - name: SFG
+    enabled: true
 
 labels:
   groups:
@@ -56,7 +66,7 @@ labels:
     3: "Y=0, S=1"
 
 sampling:
-  max_points: 5000
+  max_points: 3000
   stratify: true
   random_state: 42
 
@@ -72,25 +82,38 @@ tsne:
 plot:
   formats: [png, pdf]
   dpi: 300
-  figure_width: 6.4
+  figure_width: 5.2
   figure_height: 4.8
-  point_size: 20
-  marker_line_width: 0.3
-  alpha: 1.0
-  axis_margin: 0.05
+  point_size: 11
+  marker_line_width: 0.0
+  marker_edge_color: "none"
+  alpha: 0.70
+  axis_margin: 0.04
   tick_label_size: 18
   tick_length: 3.5
   tick_width: 0.8
   tick_pad: 3.5
   axis_label_size: 20
   axis_label_pad: 3.4
-  spine_color: "#808080"
-  spine_width: 1.0
+  spine_color: "#4D4D4D"
+  spine_width: 0.8
+  axes_facecolor: "#FFFFFF"
+  equal_aspect: true
+  show_ticks: false
+  show_spines: false
   tight_layout: false
   savefig_pad_inches: 0.1
-  show_legend: false
-  font_family: "Times New Roman"
-  font_serif: ["Times New Roman", "DejaVu Serif"]
-  xlabel_template: "{method} {dataset_title} t-SNE result"
+  show_legend: true
+  legend_size: 9.5
+  legend_ncol: 4
+  legend_marker_scale: 1.25
+  font_family: "serif"
+  font_serif: ["Times New Roman", "Times", "DejaVu Serif"]
+  title_template: "{method} t-SNE result on {dataset_title}"
+  title_size: 16
+  title_pad: 8
+  xlabel_template: ""
   group_order: [0, 1, 2, 3]
-  colors: ["#FF7F50", "#6495ED", "#8FBC8F", "#FFC0CB"]
+  # Blue-red pairing sampled from the supplied scientific-colour reference.
+  colors: ["#2A6F97", "#E58D5B", "#8EC5E8", "#F6C8A8"]
+  markers: ["o", "o", "o", "o"]

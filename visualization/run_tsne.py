@@ -27,7 +27,10 @@ from plotting import compute_tsne, plot_panels  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create CELL-style t-SNE visualizations for SFFGNN and baseline embeddings."
+        description=(
+            "Create publication-style t-SNE visualizations for SFFGNN "
+            "and baseline embeddings."
+        )
     )
     parser.add_argument(
         "--config",
@@ -163,7 +166,7 @@ def main() -> int:
             method_cfg = methods_by_name[method]
             try:
                 loaded = load_method_dataset(config, config_path, method_cfg, dataset)
-                max_points = int(sampling_cfg.get("max_points", 5000))
+                max_points = int(sampling_cfg.get("max_points", 3000))
                 emb, labels, source_indices = sample_points(
                     loaded.embeddings,
                     loaded.labels,

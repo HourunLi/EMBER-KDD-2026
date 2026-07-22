@@ -88,11 +88,17 @@ def plot_panels(
         {
             "pdf.fonttype": 42,
             "ps.fonttype": 42,
-            "font.family": plot_cfg.get("font_family", "Times New Roman"),
-            "font.serif": plot_cfg.get("font_serif", ["Times New Roman", "DejaVu Serif"]),
+            "font.family": plot_cfg.get("font_family", "serif"),
+            "font.serif": plot_cfg.get(
+                "font_serif", ["Times New Roman", "Times", "DejaVu Serif"]
+            ),
+            "font.sans-serif": plot_cfg.get(
+                "font_sans_serif", ["DejaVu Sans", "Arial", "Liberation Sans"]
+            ),
             "font.style": "normal",
             "font.weight": "normal",
             "axes.edgecolor": spine_color,
+            "axes.facecolor": plot_cfg.get("axes_facecolor", "#FAFAFA"),
             "axes.linewidth": spine_width,
             "axes.unicode_minus": False,
         }
@@ -106,51 +112,98 @@ def plot_panels(
     fig_height = float(plot_cfg.get("figure_height", 4.8))
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
-    colors = plot_cfg.get("colors") or ["#FF7F50", "#6495ED", "#8FBC8F", "#FFC0CB"]
-    point_size = float(plot_cfg.get("point_size", 20))
-    alpha = float(plot_cfg.get("alpha", 1.0))
+    colors = plot_cfg.get("colors") or ["#003566", "#9E2A2B", "#669BBC", "#E29578"]
+    markers = plot_cfg.get("markers") or ["o", "o", "o", "o"]
+    point_size = float(plot_cfg.get("point_size", 11))
+    alpha = float(plot_cfg.get("alpha", 0.70))
     group_order = [int(item) for item in plot_cfg.get("group_order", sorted(group_names))]
     color_by_group = {
         group: colors[group_idx % len(colors)] for group_idx, group in enumerate(group_order)
+    }
+    marker_by_group = {
+        group: markers[group_idx % len(markers)] for group_idx, group in enumerate(group_order)
     }
     unknown_groups = sorted(set(panel_labels) - set(color_by_group))
     if unknown_groups:
         raise ValueError(f"No plot color configured for groups: {unknown_groups}")
 
-    ax.scatter(
-        coords[:, 0],
-        coords[:, 1],
-        s=point_size,
-        c=[color_by_group[label] for label in panel_labels],
-        marker="o",
-        alpha=alpha,
-        linewidths=float(plot_cfg.get("marker_line_width", 0.3)),
-    )
+    marker_line_width = float(plot_cfg.get("marker_line_width", 0.0))
+    marker_edge_color = plot_cfg.get("marker_edge_color", "none")
+    legend_handles = None
+    if len(set(marker_by_group.values())) == 1:
+        draw_order = np.random.default_rng(0).permutation(panel_labels.shape[0])
+        ordered_labels = panel_labels[draw_order]
+        ax.scatter(
+            coords[draw_order, 0],
+            coords[draw_order, 1],
+            s=point_size,
+            c=[color_by_group[label] for label in ordered_labels],
+            marker=next(iter(marker_by_group.values())),
+            alpha=alpha,
+            linewidths=marker_line_width,
+            edgecolors=marker_edge_color,
+        )
+        from matplotlib.lines import Line2D
+
+        legend_handles = [
+            Line2D(
+                [],
+                [],
+                linestyle="none",
+                marker=marker_by_group[group],
+                markersize=5.5,
+                markerfacecolor=color_by_group[group],
+                markeredgecolor="none",
+                label=group_names.get(group, str(group)),
+            )
+            for group in group_order
+            if np.any(panel_labels == group)
+        ]
+    else:
+        for group in group_order:
+            mask = panel_labels == group
+            if not np.any(mask):
+                continue
+            ax.scatter(
+                coords[mask, 0],
+                coords[mask, 1],
+                s=point_size,
+                color=color_by_group[group],
+                marker=marker_by_group[group],
+                alpha=alpha,
+                linewidths=marker_line_width,
+                edgecolors=marker_edge_color,
+                label=group_names.get(group, str(group)),
+            )
 
     margin = float(plot_cfg.get("axis_margin", 0.05))
     ax.set_xlim(0.0 - margin, 1.0 + margin)
     ax.set_ylim(0.0 - margin, 1.0 + margin)
-    ax.set_xticks(np.linspace(0, 1, 6))
-    ax.set_yticks(np.linspace(0, 1, 6))
-    from matplotlib.ticker import FormatStrFormatter
+    if plot_cfg.get("show_ticks", False):
+        ax.set_xticks(np.linspace(0, 1, 6))
+        ax.set_yticks(np.linspace(0, 1, 6))
+        from matplotlib.ticker import FormatStrFormatter
 
-    ax.xaxis.set_major_formatter(FormatStrFormatter("%.1f"))
-    ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
-
-    tick_label_size = int(plot_cfg.get("tick_label_size", 18))
-    ax.tick_params(
-        axis="both",
-        which="major",
-        labelsize=tick_label_size,
-        length=float(plot_cfg.get("tick_length", 3.5)),
-        width=float(plot_cfg.get("tick_width", 0.8)),
-        direction="out",
-        pad=float(plot_cfg.get("tick_pad", 3.5)),
-    )
+        ax.xaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+        ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+        tick_label_size = int(plot_cfg.get("tick_label_size", 18))
+        ax.tick_params(
+            axis="both",
+            which="major",
+            labelsize=tick_label_size,
+            length=float(plot_cfg.get("tick_length", 3.5)),
+            width=float(plot_cfg.get("tick_width", 0.8)),
+            direction="out",
+            pad=float(plot_cfg.get("tick_pad", 3.5)),
+        )
+    else:
+        ax.set_xticks([])
+        ax.set_yticks([])
 
     for spine in ax.spines.values():
         spine.set_color(spine_color)
         spine.set_linewidth(spine_width)
+        spine.set_visible(bool(plot_cfg.get("show_spines", False)))
 
     xlabel_template = plot_cfg.get(
         "xlabel_template", "{method} {dataset_title} t-SNE result"
@@ -166,14 +219,39 @@ def plot_panels(
         labelpad=float(plot_cfg.get("axis_label_pad", 3.4)),
     )
     ax.set_ylabel("")
-    ax.set_title("")
+    title_template = plot_cfg.get("title_template", "{method} on {dataset_title}")
+    title = title_template.format(
+        method=panel.get("method", ""),
+        dataset=panel.get("dataset", dataset_title),
+        dataset_title=dataset_title,
+    )
+    ax.set_title(
+        title,
+        fontsize=int(plot_cfg.get("title_size", 14)),
+        pad=float(plot_cfg.get("title_pad", 8)),
+    )
     ax.grid(False)
+    if plot_cfg.get("equal_aspect", True):
+        ax.set_aspect("equal", adjustable="box")
 
     if plot_cfg.get("show_legend", False):
-        ax.legend(frameon=False, fontsize=int(plot_cfg.get("legend_size", 12)))
+        ax.legend(
+            handles=legend_handles,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.015),
+            ncol=int(plot_cfg.get("legend_ncol", 4)),
+            frameon=False,
+            fontsize=float(plot_cfg.get("legend_size", 9.5)),
+            markerscale=float(plot_cfg.get("legend_marker_scale", 1.25)),
+            handletextpad=0.35,
+            columnspacing=1.1,
+            borderaxespad=0.0,
+        )
 
     if plot_cfg.get("tight_layout", False):
         fig.tight_layout(pad=float(plot_cfg.get("tight_layout_pad", 0.2)))
+    elif plot_cfg.get("show_legend", False):
+        fig.subplots_adjust(top=0.89, bottom=0.12, left=0.03, right=0.98)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(

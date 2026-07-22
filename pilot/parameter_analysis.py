@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
-"""Plot SFFGNN parameter-analysis results in the style used by CELL.
+"""Plot SFFGNN parameter-analysis results with a polished publication style.
 
-The original scripts in ``pilot/`` demonstrate several paper-figure styles,
-but keep their data and output paths hard-coded.  This module retains those
-visual conventions while providing a reusable command-line interface:
-
-* one-dimensional sweeps reproduce ``topk_Bail.pdf``;
-* ``tau_eta`` reproduces ``threshold_bailA_dp.pdf`` and writes DP/EO as
-  separate PDFs;
-* ``beta_gamma`` reproduces ``bail_dp.pdf`` and likewise writes DP/EO as
-  separate PDFs.
+The figures use the supplied scientific colour references, compact typography,
+subtle grids, and legends outside the data region.  Beta-gamma grids are
+written as shaded 3D bars.
 
 The input is the aggregate ``summary.csv`` written by
 ``SFFGNN/parameter/run.py``.  All generated figures are PDF files with
@@ -29,7 +23,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.ticker import FormatStrFormatter, MaxNLocator
+from matplotlib.transforms import Bbox
 
 
 GROUPS = (
@@ -74,51 +70,59 @@ for _stage in ("source", "target_before", "target_after"):
 NUMERIC_COLUMNS.update({"composite_mean", "composite_std"})
 
 
-# Exact colors recovered from the three CELL reference PDFs.
-CELL_LINE_STYLES = (
-    ("target_after_dp", "Demographic Parity", "#ADD8E6", "s", "-", 10),
-    ("target_after_eo", "Equal Odds", "#FFD700", "*", "-", 13),
-    ("target_after_acc", "Accuracy", "#90EE90", "v", "--", 12),
-    ("target_after_auc", "ROC-AUC", "#FFDAB9", "o", "--", 12),
+# Unified low-saturation "sea breeze" scientific palette.
+DUSK_COLORS = (
+    "#51999F",
+    "#4198AC",
+    "#7BCCCD",
+    "#BFDFD2",
+    "#DBCB92",
+    "#ECB66C",
+    "#ED8D5A",
 )
 
-CELL_THRESHOLD_COLORS = (
-    "#8491B4",
-    "#91D1C2",
-    "#3C5488",
-    "#00A087",
-    "#4DBBD5",
-    "#8FBC8F",
-    # EMBER has seven eta values while CELL has six threshold values.  The
-    # additional muted purple extends the same low-saturation paper palette.
-    "#B7A6C7",
+LINE_STYLES = (
+    ("target_after_dp", "DP", "#67B7C7", "D", "-"),
+    ("target_after_eo", "EO", "#8FD3C8", "s", "-"),
+    ("target_after_acc", "Accuracy", "#F2D27A", "o", "--"),
+    ("target_after_auc", "ROC-AUC", "#F39A6B", "v", "--"),
 )
 
-# Front (small beta) to back (large beta), matching bail_dp.pdf exactly.
-CELL_3D_ROW_COLORS = (
-    "#EBB789",
-    "#F8DFA8",
-    "#E9F2F3",
-    "#9BBEDE",
-    "#5473AC",
+SEA_BREEZE_CMAP = LinearSegmentedColormap.from_list(
+    "sea_breeze",
+    (
+        "#4198AC",
+        "#51999F",
+        "#7BCCCD",
+        "#BFDFD2",
+        "#DBCB92",
+        "#ECB66C",
+        "#EA9E58",
+        "#ED8D5A",
+    ),
 )
+
+BETA_GAMMA_3D_COLORS = ("#51999F", "#7BCCCD", "#BFDFD2", "#DBCB92", "#ECB66C")
 
 
 def configure_style() -> None:
-    """Apply the paper-style defaults shared by the legacy pilot scripts."""
+    """Apply restrained serif defaults for all parameter figures."""
 
     matplotlib.rcParams.update(
         {
-            "font.family": "Times New Roman",
+            "font.family": "serif",
+            "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
             "mathtext.fontset": "stix",
             "pdf.fonttype": 42,
             "ps.fonttype": 42,
             "axes.linewidth": 0.8,
-            "axes.edgecolor": "black",
-            "axes.labelsize": 26,
-            "xtick.labelsize": 25,
-            "ytick.labelsize": 25,
-            "legend.fontsize": 15,
+            "axes.edgecolor": "#333333",
+            "axes.labelsize": 15,
+            "axes.titlesize": 16,
+            "xtick.labelsize": 11,
+            "ytick.labelsize": 11,
+            "legend.fontsize": 9.5,
+            "savefig.facecolor": "white",
         }
     )
 
@@ -188,6 +192,20 @@ def _metric_array(
     )
 
 
+def _row_major_legend_entries(axis, ncol: int):
+    """Reorder handles so a multi-row Matplotlib legend reads left to right."""
+
+    handles, labels = axis.get_legend_handles_labels()
+    nrows = int(math.ceil(len(handles) / ncol))
+    order = [
+        row * ncol + column
+        for column in range(ncol)
+        for row in range(nrows)
+        if row * ncol + column < len(handles)
+    ]
+    return [handles[index] for index in order], [labels[index] for index in order]
+
+
 def _padded_limits(values: Sequence[float], minimum_padding: float = 0.1):
     finite = np.asarray(values, dtype=float)
     finite = finite[np.isfinite(finite)]
@@ -206,7 +224,7 @@ def _padded_limits(values: Sequence[float], minimum_padding: float = 0.1):
     return lower, upper
 
 
-def _cell_line_ticks(axis, values: Sequence[float]) -> None:
+def _line_ticks(axis, values: Sequence[float]) -> None:
     limits = _padded_limits(values, minimum_padding=0.25)
     if limits is not None:
         axis.set_ylim(*limits)
@@ -226,24 +244,23 @@ def plot_single_parameter(
     x_key: str,
     output_path: Path,
 ) -> None:
-    """Draw CELL-style utility/fairness curves for a one-dimensional sweep."""
+    """Draw the legacy framed utility/fairness curves for a one-dimensional sweep."""
 
     x_values = _sorted_values(rows, x_key)
     if not x_values:
         return
     positions = np.asarray(x_values, dtype=float)
 
-    # topk_Bail.pdf was created from a 5 x 4 inch canvas and cropped tightly.
-    fig, fairness_ax = plt.subplots(figsize=(5, 4))
+    # Use a fixed canvas and fixed axes rectangle so datasets with wider tick
+    # labels do not produce differently cropped/scaled data frames.
+    fig, fairness_ax = plt.subplots(figsize=(6, 4))
     utility_ax = fairness_ax.twinx()
 
     handles = []
     labels = []
     fairness_values = []
     utility_values = []
-    for series_index, (prefix, label, color, marker, linestyle, marker_size) in enumerate(
-        CELL_LINE_STYLES
-    ):
+    for series_index, (prefix, label, color, marker, linestyle) in enumerate(LINE_STYLES):
         axis = fairness_ax if series_index < 2 else utility_ax
         means = _metric_array(rows, x_key, x_values, f"{prefix}_mean")
         if series_index < 2:
@@ -256,27 +273,31 @@ def plot_single_parameter(
             color=color,
             marker=marker,
             linestyle=linestyle,
-            linewidth=1.5,
-            markersize=marker_size,
+            linewidth=1.8,
+            markersize=10.5,
+            markerfacecolor=color,
             markeredgecolor="black",
-            markeredgewidth=0.05,
+            markeredgewidth=0.6,
             label=label,
             zorder=3,
         )
         handles.append(handle)
         labels.append(label)
 
-    fairness_ax.set_xlabel(PARAMETER_LABELS[x_key], fontsize=22)
-    fairness_ax.set_ylabel("DP/EO", fontsize=22)
-    utility_ax.set_ylabel("Acc/ROC-AUC", fontsize=22)
+    fairness_ax.set_xlabel(PARAMETER_LABELS[x_key], fontsize=24)
+    fairness_ax.set_ylabel("DP/EO", fontsize=24)
+    utility_ax.set_ylabel("Acc/ROC-AUC", fontsize=24)
     fairness_ax.set_xticks(positions)
     fairness_ax.set_xticklabels([_format_value(value) for value in x_values])
     if len(x_values) > 1:
         x_span = x_values[-1] - x_values[0]
-        fairness_ax.set_xlim(x_values[0] - 0.05 * x_span, x_values[-1] + 0.05 * x_span)
-    fairness_ax.tick_params(axis="x", labelsize=15)
-    fairness_ax.tick_params(axis="y", labelsize=20)
-    utility_ax.tick_params(axis="y", labelsize=20)
+        fairness_ax.set_xlim(
+            x_values[0] - 0.05 * x_span,
+            x_values[-1] + 0.05 * x_span,
+        )
+    fairness_ax.tick_params(axis="x", labelsize=16, colors="#333333")
+    fairness_ax.tick_params(axis="y", labelsize=22, colors="#333333")
+    utility_ax.tick_params(axis="y", labelsize=22, colors="#333333")
     fairness_ax.grid(
         color="darkgrey",
         linestyle="--",
@@ -284,25 +305,36 @@ def plot_single_parameter(
         linewidth=0.8,
         alpha=0.3,
     )
-    _cell_line_ticks(fairness_ax, fairness_values)
-    _cell_line_ticks(utility_ax, utility_values)
-    # ``twinx`` creates ``utility_ax`` after ``fairness_ax``.  An axes-level
-    # legend attached to the left axis can therefore be overpainted by right-
-    # axis curves even when the legend itself has a high local z-order.  Attach
-    # the merged legend to the later axis and raise it above every line artist.
-    legend = utility_ax.legend(
+    fairness_ax.set_axisbelow(True)
+    for spine in fairness_ax.spines.values():
+        spine.set_visible(True)
+        spine.set_color("black")
+    utility_ax.spines["top"].set_visible(False)
+    utility_ax.spines["bottom"].set_visible(False)
+    utility_ax.spines["left"].set_visible(False)
+    utility_ax.spines["right"].set_visible(True)
+    utility_ax.spines["right"].set_color("black")
+    _line_ticks(fairness_ax, fairness_values)
+    _line_ticks(utility_ax, utility_values)
+    legend = fig.legend(
         handles,
         labels,
-        loc="lower right",
-        ncol=1,
-        frameon=True,
-        framealpha=0.8,
-        prop={"family": "Times New Roman", "size": 10},
+        loc="lower left",
+        bbox_to_anchor=(0.15, 0.845, 0.60, 0.10),
+        mode="expand",
+        ncol=4,
+        frameon=False,
+        fontsize=15,
+        borderaxespad=0.0,
+        borderpad=0.0,
+        columnspacing=0.25,
+        handlelength=0.85,
+        handletextpad=0.25,
     )
     legend.set_zorder(1000)
-    fig.tight_layout()
+    fig.subplots_adjust(top=0.84, bottom=0.18, left=0.15, right=0.75)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, bbox_inches="tight")
+    fig.savefig(output_path)
     plt.close(fig)
 
 
@@ -333,30 +365,24 @@ def plot_grouped_fairness_bars(
     ylabel: str,
     output_path: Path,
 ) -> None:
-    """Reproduce CELL's one-metric threshold grouped-bar PDF."""
+    """Draw a polished grouped-bar chart for a two-parameter sweep."""
 
     x_values = _sorted_values(rows, x_key)
     series_values = _sorted_values(rows, series_key)
-    # The CELL threshold panel contains six legend entries.  EMBER's seventh
-    # point is eta=1 (the full Bayesian boundary); it remains in CSV/JSON but
-    # is omitted from this paper panel to preserve the supplied six-bar layout.
-    if len(series_values) > 6:
-        series_values = series_values[:6]
     if not x_values or not series_values:
         return
     lookup = _row_lookup(rows, (x_key, series_key))
     positions = np.arange(len(x_values), dtype=float)
-    epsilon = 0.02
-    total_width = 0.82
+    epsilon = 0.012
+    total_width = 0.86
     bar_width = (
         total_width - epsilon * max(0, len(series_values) - 1)
     ) / max(1, len(series_values))
     colors = [
-        CELL_THRESHOLD_COLORS[index % len(CELL_THRESHOLD_COLORS)]
+        DUSK_COLORS[index % len(DUSK_COLORS)]
         for index in range(len(series_values))
     ]
 
-    # threshold_bailA_dp.pdf uses an uncropped 5 x 4 inch canvas.
     fig, axis = plt.subplots(figsize=(5, 4))
     all_values = []
     for series_index, series_value in enumerate(series_values):
@@ -375,9 +401,10 @@ def plot_grouped_fairness_bars(
             means,
             width=bar_width,
             color=colors[series_index],
-            alpha=0.8,
-            edgecolor="none",
-            label=rf"$\eta$={_format_value(series_value)}",
+            alpha=1.0,
+            edgecolor="white",
+            linewidth=0.6,
+            label=_format_value(series_value),
             zorder=3,
         )
 
@@ -389,46 +416,69 @@ def plot_grouped_fairness_bars(
     axis.set_xticks(positions + group_center)
     axis.set_xticklabels([_format_value(value) for value in x_values])
     axis.set_xlim(-0.15, len(x_values) - 1 + total_width + 0.15)
-    axis.tick_params(axis="both", labelsize=25)
+    axis.tick_params(axis="both", colors="#333333", labelsize=25)
     axis.set_axisbelow(True)
-    axis.grid(color="darkgrey", linestyle="-", axis="y", alpha=0.3)
+    axis.grid(color="#E4E6EA", linestyle="-", axis="y", linewidth=0.7, alpha=0.9)
+    for spine in axis.spines.values():
+        spine.set_visible(True)
+        spine.set_color("#333333")
+        spine.set_linewidth(0.8)
     limits = _padded_limits(all_values, minimum_padding=0.1)
     if limits is not None:
         axis.set_ylim(*limits)
     axis.yaxis.set_major_locator(MaxNLocator(nbins=4))
     axis.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
-    axis.legend(
-        prop={"family": "Times New Roman", "size": 15},
-        ncol=2,
-        loc="upper right",
-        frameon=True,
+    legend_columns = len(series_values)
+    legend_handles, legend_labels = _row_major_legend_entries(axis, legend_columns)
+    legend = axis.legend(
+        legend_handles,
+        legend_labels,
+        title=rf"Prior strength $\eta$",
+        ncol=legend_columns,
+        loc="lower left",
+        bbox_to_anchor=(0.0, 1.02, 1.0, 0.16),
+        mode="expand",
+        frameon=False,
+        fontsize=18,
+        borderaxespad=0.0,
+        handlelength=0.60,
+        handleheight=0.8,
+        handletextpad=0,
+        columnspacing=0.15,
+        borderpad=0.0,
     )
-    fig.tight_layout()
+    legend.get_title().set_fontsize(20)
+    fig.subplots_adjust(top=0.72, bottom=0.22, left=0.17, right=0.98)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path)
+    fig.savefig(output_path, bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
 
 
-def _plot_3d_metric(
-    axis,
-    matrix: np.ndarray,
-    x_values: Sequence[float],
-    y_values: Sequence[float],
+def plot_3d_fairness_bars(
+    rows: Sequence[Mapping[str, object]],
+    dataset: str,
     x_key: str,
     y_key: str,
-    z_label: str,
+    metric: str,
+    metric_label: str,
+    output_path: Path,
 ) -> None:
+    """Draw the beta-gamma grid with the legacy 3D geometry and typography."""
+
+    x_values = _sorted_values(rows, x_key)
+    y_values = _sorted_values(rows, y_key)
+    if not x_values or not y_values:
+        return
+    matrix = _pair_matrix(
+        rows, x_key, y_key, x_values, y_values, f"{metric}_mean"
+    )
     finite = matrix[np.isfinite(matrix)]
     if finite.size == 0:
         return
+
     low = float(finite.min())
     high = float(finite.max())
     data_span = high - low
-
-    # Keep the tallest bar visually prominent, as in CELL.  A fixed +/-0.5
-    # margin makes narrow sweeps (for example Bail) look artificially flat.
-    # Use a human-readable tick step, place the baseline just below the lowest
-    # value, and reserve roughly 12% of the vertical range above the maximum.
     scale_span = max(data_span, max(abs(low), abs(high), 1.0) * 0.02)
     rough_step = scale_span / 3.0
     exponent = math.floor(math.log10(rough_step))
@@ -454,10 +504,6 @@ def _plot_3d_metric(
         bar_height = max(high - bottom, tick_step)
     upper = bottom + bar_height / 0.88
 
-    # CELL's legacy code submits all bars in one call.  Besides reproducing
-    # its front-to-back color distribution, this lets mplot3d depth-sort every
-    # face globally.  Small beta values are warm in front and large beta
-    # values transition through white to blue toward the back.
     x_positions, y_positions = np.meshgrid(
         np.arange(len(x_values), dtype=float),
         np.arange(len(y_values), dtype=float),
@@ -467,9 +513,16 @@ def _plot_3d_metric(
     valid = np.isfinite(flat_values)
     flat_y = y_positions.ravel()[valid]
     colors = [
-        CELL_3D_ROW_COLORS[int(y_index) % len(CELL_3D_ROW_COLORS)]
+        BETA_GAMMA_3D_COLORS[int(y_index) % len(BETA_GAMMA_3D_COLORS)]
         for y_index in flat_y
     ]
+
+    fig = plt.figure(figsize=(12, 10.5))
+    # Keep the projected axes at exactly the same physical size for every
+    # dataset.  German previously used a smaller rectangle for its wider
+    # z-range, which made that PDF look smaller after tight cropping.
+    axes_rect = (0.14, 0.07, 0.81, 0.88)
+    axis = fig.add_axes(axes_rect, projection="3d")
     axis.bar3d(
         x_positions.ravel()[valid],
         flat_y,
@@ -488,47 +541,38 @@ def _plot_3d_metric(
     axis.set_xticklabels([_format_value(value) for value in x_values])
     axis.set_yticks(np.arange(len(y_values)) + 0.25)
     axis.set_yticklabels([_format_value(value) for value in y_values])
-    short_labels = {
-        "lambda_coord": r"$\gamma$",
-        "lambda_fair": r"$\beta$",
-        "proto_temp": r"$\tau$",
-        "lambda_pi": r"$\eta$",
-    }
     axis.xaxis.set_rotate_label(False)
     axis.yaxis.set_rotate_label(False)
     axis.zaxis.set_rotate_label(False)
-    axis.set_xlabel(
-        short_labels.get(x_key, PARAMETER_LABELS[x_key]),
+    axis.set_xlabel(r"$\gamma$", fontsize=50, rotation=0, labelpad=25)
+    axis.set_ylabel(r"$\beta$", fontsize=50, rotation=0, labelpad=25)
+    axis.set_zlabel(
+        f"{DATASET_LABELS.get(dataset, dataset)} {metric_label}",
         fontsize=50,
-        rotation=0,
-        labelpad=25,
+        rotation=90,
+        labelpad=30,
     )
-    axis.set_ylabel(
-        short_labels.get(y_key, PARAMETER_LABELS[y_key]),
-        fontsize=50,
-        rotation=0,
-        labelpad=25,
-    )
-    axis.set_zlabel(z_label, fontsize=50, rotation=90, labelpad=30)
     axis.set_zlim(bottom, upper)
     tick_count = int(math.floor((upper - bottom) / tick_step + 1e-9))
     axis.set_zticks(bottom + tick_step * np.arange(tick_count + 1))
     decimals = max(0, int(-math.floor(math.log10(tick_step))))
     axis.zaxis.set_major_formatter(FormatStrFormatter(f"%.{decimals}f"))
-    # Leave enough space between the large tick numerals and projected axis /
-    # grid lines.  The legacy CELL padding is too tight at the larger paper
-    # font sizes used here, especially after raising the camera slightly.
     axis.tick_params(axis="x", pad=10, labelsize=45)
     axis.tick_params(axis="y", pad=10, labelsize=45)
     axis.tick_params(axis="z", pad=13, labelsize=45)
-    # Match CELL's projection: the smallest gamma and beta meet at the front
-    # corner; gamma recedes to the right, beta recedes to the left, and the z
-    # axis stays on the left.
     axis.view_init(elev=30, azim=-145)
     axis.set_box_aspect((1, 1, 0.75))
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Preserve the complete coloured 3D pane at the top, while bringing the
+    # left, right, and bottom edges close to their outermost visible content.
+    # The shared CropBox keeps all eight PDFs identically sized.
+    output_bbox = Bbox.from_bounds(0.85, 0.58, 10.10, 8.87)
+    fig.savefig(output_path, bbox_inches=output_bbox, pad_inches=0.0)
+    plt.close(fig)
 
-def plot_3d_fairness_bars(
+
+def plot_parameter_heatmap(
     rows: Sequence[Mapping[str, object]],
     dataset: str,
     x_key: str,
@@ -537,7 +581,7 @@ def plot_3d_fairness_bars(
     metric_label: str,
     output_path: Path,
 ) -> None:
-    """Reproduce CELL's one-metric 3D loss-weight PDF."""
+    """Draw a readable two-dimensional map of a parameter grid."""
 
     x_values = _sorted_values(rows, x_key)
     y_values = _sorted_values(rows, y_key)
@@ -546,23 +590,59 @@ def plot_3d_fairness_bars(
     matrix = _pair_matrix(
         rows, x_key, y_key, x_values, y_values, f"{metric}_mean"
     )
-
-    # The reference CropBox is approximately 12 x 10.5 inches.  An explicit
-    # axes rectangle avoids Matplotlib's 3D tight-bbox bug clipping the z label.
-    fig = plt.figure(figsize=(12, 10.5))
     finite = matrix[np.isfinite(matrix)]
-    wide_z_range = bool(finite.size and float(finite.max() - finite.min()) > 2.0)
-    axes_rect = (0.18, 0.16, 0.68, 0.72) if wide_z_range else (0.14, 0.07, 0.81, 0.88)
-    axis = fig.add_axes(axes_rect, projection="3d")
-    _plot_3d_metric(
-        axis,
-        matrix,
-        x_values,
-        y_values,
-        x_key,
-        y_key,
-        f"{DATASET_LABELS.get(dataset, dataset)} {metric_label}",
+    if finite.size == 0:
+        return
+
+    fig, axis = plt.subplots(figsize=(12, 10.5))
+    masked = np.ma.masked_invalid(matrix)
+    image = axis.imshow(
+        masked,
+        cmap=SEA_BREEZE_CMAP,
+        aspect="equal",
+        origin="lower",
+        interpolation="nearest",
     )
+    axis.set_xticks(np.arange(len(x_values)))
+    axis.set_xticklabels([_format_value(value) for value in x_values])
+    axis.set_yticks(np.arange(len(y_values)))
+    axis.set_yticklabels([_format_value(value) for value in y_values])
+    axis.set_xlabel(PARAMETER_LABELS[x_key], fontsize=50)
+    axis.set_ylabel(PARAMETER_LABELS[y_key], fontsize=50)
+    axis.set_title(
+        f"{DATASET_LABELS.get(dataset, dataset)} {metric_label}",
+        fontsize=50,
+    )
+    axis.tick_params(length=0, labelsize=45)
+    axis.set_xticks(np.arange(-0.5, len(x_values), 1), minor=True)
+    axis.set_yticks(np.arange(-0.5, len(y_values), 1), minor=True)
+    axis.grid(which="minor", color="white", linestyle="-", linewidth=1.1)
+    axis.tick_params(which="minor", bottom=False, left=False)
+
+    low = float(finite.min())
+    high = float(finite.max())
+    span = max(high - low, 1e-12)
+    for y_index in range(len(y_values)):
+        for x_index in range(len(x_values)):
+            value = matrix[y_index, x_index]
+            if not np.isfinite(value):
+                continue
+            relative = (float(value) - low) / span
+            axis.text(
+                x_index,
+                y_index,
+                f"{value:.1f}",
+                ha="center",
+                va="center",
+                fontsize=45,
+                color="white" if relative >= 0.55 else "#26334A",
+            )
+
+    colorbar = fig.colorbar(image, ax=axis, fraction=0.047, pad=0.035)
+    colorbar.set_label(f"{metric_label} (lower is better)", fontsize=50)
+    colorbar.outline.set_visible(False)
+    colorbar.ax.tick_params(labelsize=45, length=2)
+    fig.tight_layout(pad=3.0)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path)
     plt.close(fig)
@@ -588,7 +668,7 @@ def plot_composite_heatmap(
         return
 
     fig, axis = plt.subplots(figsize=(4.7, 3.55))
-    image = axis.imshow(matrix, cmap="RdYlBu", aspect="auto", origin="lower")
+    image = axis.imshow(matrix, cmap=SEA_BREEZE_CMAP, aspect="auto", origin="lower")
     axis.set_xticks(np.arange(len(x_values)))
     axis.set_xticklabels([_format_value(value) for value in x_values])
     axis.set_yticks(np.arange(len(y_values)))
@@ -694,8 +774,8 @@ def generate_figures(
                 )
                 generated.extend((dp_path, eo_path))
             elif group == "beta_gamma":
-                dp_path = output_dir / f"beta_gamma_{dataset}_dp.pdf"
-                eo_path = output_dir / f"beta_gamma_{dataset}_eo.pdf"
+                dp_3d_path = output_dir / f"beta_gamma_{dataset}_dp.pdf"
+                eo_3d_path = output_dir / f"beta_gamma_{dataset}_eo.pdf"
                 plot_3d_fairness_bars(
                     group_rows,
                     dataset,
@@ -703,7 +783,7 @@ def generate_figures(
                     "lambda_fair",
                     "target_after_dp",
                     "DP",
-                    dp_path,
+                    dp_3d_path,
                 )
                 plot_3d_fairness_bars(
                     group_rows,
@@ -712,9 +792,9 @@ def generate_figures(
                     "lambda_fair",
                     "target_after_eo",
                     "EO",
-                    eo_path,
+                    eo_3d_path,
                 )
-                generated.extend((dp_path, eo_path))
+                generated.extend((dp_3d_path, eo_3d_path))
 
     return [path for path in generated if path.exists()]
 
