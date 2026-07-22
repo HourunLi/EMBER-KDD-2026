@@ -128,7 +128,7 @@ def load_credit(dataset, id, sens_attr="Age", predict_attr="NoDefaultNextMonth",
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
 def load_bail(dataset, id, sens_attr="WHITE", predict_attr="RECID", path="../dataset/bail/"):
-    path = f"/home/disk2/lhr/fairDomainAdaption/mine/dataset/{dataset}"
+    path = f"/home1/zhangyutong/dataset/{dataset}"
     # path = f"/home/disk2/lhr/fairDomainAdaption/nifty/dataset/bail"
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(idx_features_labels.columns)
@@ -179,7 +179,7 @@ def load_bail(dataset, id, sens_attr="WHITE", predict_attr="RECID", path="../dat
 
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
-def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_field", path="/home/disk2/lhr/fairDomainAdaption/mine/dataset_bak/pokec/"):
+def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_field", path="/home1/zhangyutong/dataset/pokec/"):
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(pd.read_csv(os.path.join(path, "{}.csv".format("region_job_z"))).columns)
     header2 = list(pd.read_csv(os.path.join(path, "{}.csv".format("region_job_n"))).columns)
@@ -225,7 +225,7 @@ def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_fi
 
 def load_german(dataset, id, sens_attr="Gender", predict_attr="GoodCustomer", path="../dataset/german/"):
     # print('Loading {} dataset from {}'.format(dataset, path))
-    path = f"/home/disk2/lhr/fairDomainAdaption/mine/dataset/{dataset}"
+    path = f"/home1/zhangyutong/dataset/{dataset}"
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(idx_features_labels.columns)
     # header.remove('user_id')
@@ -301,7 +301,7 @@ def load_german(dataset, id, sens_attr="Gender", predict_attr="GoodCustomer", pa
    
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
-def load_syn(dataset, id, path="/home/disk2/lhr/fairDomainAdaption/mine/dataset/syn"):
+def load_syn(dataset, id, path="/home1/zhangyutong/dataset/syn"):
     features = pd.read_csv(os.path.join(path, "{}_feat.csv".format(dataset + id)), header=None)
     features = torch.FloatTensor(features.values.astype(np.float32))
 
