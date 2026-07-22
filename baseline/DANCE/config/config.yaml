@@ -1,0 +1,84 @@
+g:
+  bailA:
+    # encoder: MLP
+    epochs: 500
+    cla_epochs: 1
+    dic_epochs: 1
+    g_epochs: 1
+    con_epochs: 1
+    dropout: 0.3
+    e_lr: 0.0003
+    e_wd: 0
+    c_lr: 0.0003
+    c_wd: 0
+    g_lr: 0.0003
+    p_lr: 0.0003
+    activation: LeakyReLU
+    runs: 5
+    hidden: 32
+    feature_dim: 32
+    tau: 0.1
+  creditA:
+    epochs: 500
+    cla_epochs: 15
+    dic_epochs: 10
+    g_epochs: 10
+    con_epochs: 5
+    c_lr: 0.0003
+    e_lr: 0.0003
+    g_lr: 0.0003
+    p_lr: 0.0003
+    dropout: 0.5
+    activation: LeakyReLU
+    runs: 5
+    hidden: 32
+    feature_dim: 32
+    tau: 1
+  pokec:
+    epochs: 500
+    cla_epochs: 5
+    dic_epochs: 10
+    g_epochs: 10
+    con_epochs: 5
+    c_lr: 0.0003
+    e_lr: 0.0003
+    g_lr: 0.0003
+    p_lr: 0.0003
+    dropout: 0.5
+    activation: LeakyReLU
+    runs: 5
+    hidden: 32
+    feature_dim: 32
+    tau: 1
+  syn:
+    epochs: 500
+    cla_epochs: 5
+    dic_epochs: 10
+    g_epochs: 10
+    con_epochs: 5
+    c_lr: 0.0003
+    e_lr: 0.0003
+    g_lr: 0.0003
+    p_lr: 0.0003
+    dropout: 0.5
+    activation: LeakyReLU
+    runs: 5
+    hidden: 32
+    feature_dim: 32
+    tau: 1
+  german:
+    epochs: 500
+    cla_epochs: 5
+    dic_epochs: 10
+    g_epochs: 10
+    con_epochs: 5
+    c_lr: 0.0003
+    e_lr: 0.0003
+    g_lr: 0.0003
+    p_lr: 0.0003
+    dropout: 0.5
+    activation: LeakyReLU
+    runs: 5
+    hidden: 32
+    feature_dim: 32
+    tau: 1
