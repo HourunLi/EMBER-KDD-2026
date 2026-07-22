@@ -674,10 +674,14 @@ def get_args():
         description="FatraGNN source-only direct target evaluation runner"
     )
     parser.add_argument("--worker", action="store_true", help="run one dataset/seed")
-    parser.add_argument("--launch", action="store_true", help="run all tasks in parallel")
+    parser.add_argument(
+        "--launch",
+        action="store_true",
+        help="run all tasks in parallel (this is already the default mode)",
+    )
     parser.add_argument("--aggregate_only", action="store_true")
     parser.add_argument(
-        "--dataset", choices=list(DATASET_ID_MAP), default="syn"
+        "--dataset", choices=list(DATASET_ID_MAP), default=None
     )
     parser.add_argument(
         "--datasets",
@@ -687,7 +691,7 @@ def get_args():
     )
     parser.add_argument("--seed", type=int, default=1111)
     parser.add_argument(
-        "--seeds", nargs="+", type=int, default=[1111, 1112, 1113, 1114, 1115]
+        "--seeds", nargs="+", type=int, default=[1111, 2222, 3333, 4444, 5555]
     )
     parser.add_argument("--cuda", "--gpu", dest="cuda", type=int, default=0)
     parser.add_argument("--gpus", type=str, default="0,1,2,3,4,5,6,7")
@@ -724,12 +728,13 @@ def main() -> None:
     if args.aggregate_only:
         summary = aggregate_all(args.datasets, args.seeds)
         print(f"[summary] {summary}")
-    elif args.launch:
-        launch_parallel(args)
-    else:
-        # A normal invocation is deliberately a single run controlled by
-        # --dataset and --seed; --worker is accepted for launcher clarity.
+    elif args.worker:
+        if args.dataset is None:
+            raise ValueError("--worker requires --dataset")
         run_single_with_log(args)
+    else:
+        # Default invocation: four datasets x five seeds via the device pool.
+        launch_parallel(args)
 
 
 if __name__ == "__main__":

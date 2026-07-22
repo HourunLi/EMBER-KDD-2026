@@ -55,7 +55,7 @@ METHOD_NAME = "DANCE-SF"
 EMBEDDING_METHOD_NAME = "DANCE"
 DEFAULT_DATASETS = ("bailA", "germanA", "pokec", "syn")
 # Match the five-run convention used by the existing SFDA baseline launchers.
-DEFAULT_SEEDS = (1111, 1112, 1113, 1114, 1115)
+DEFAULT_SEEDS = (1111, 2222, 3333, 4444, 5555)
 DATASET_PAIRS = {
     "bailA": ("_2", "_1"),
     "germanA": ("_2", "_1"),
