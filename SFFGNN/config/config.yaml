@@ -16,8 +16,6 @@ bailA:
   disentangle_temp: 0.1
   disentangle_batch_size: 512
   source_mmd_bandwidth: 0.5
-  source_mmd_min_samples: 8
-  source_mmd_max_samples: 0
   mmd_chunk_size: 256
   # target adaptation
   adapt_epochs: 100
@@ -49,8 +47,6 @@ germanA:
   disentangle_temp: 0.1
   disentangle_batch_size: 512
   source_mmd_bandwidth: 0.75
-  source_mmd_min_samples: 4
-  source_mmd_max_samples: 0
   mmd_chunk_size: 256
   # target adaptation
   adapt_epochs: 25
@@ -82,8 +78,6 @@ pokec:
   disentangle_temp: 0.1
   disentangle_batch_size: 512
   source_mmd_bandwidth: 2.0
-  source_mmd_min_samples: 8
-  source_mmd_max_samples: 0
   mmd_chunk_size: 256
   # target adaptation
   adapt_epochs: 50
@@ -115,8 +109,6 @@ syn:
   disentangle_temp: 0.1
   disentangle_batch_size: 512
   source_mmd_bandwidth: 0.25
-  source_mmd_min_samples: 4
-  source_mmd_max_samples: 0
   mmd_chunk_size: 256
   # target adaptation
   adapt_epochs: 150
