@@ -37,25 +37,25 @@ datasets:
 methods:
   - name: EMBER
     enabled: true
-  - name: DGSDA
-    enabled: true
-  - name: GRADE
-    enabled: true
-  - name: GraphAny
-    enabled: true
-  - name: HGDA
-    enabled: true
-  - name: UDAGCN
-    enabled: true
   - name: GCN
     enabled: true
   - name: NIFTY
     enabled: true
-  - name: FairVGNN
-    enabled: true
   - name: FairSIN
     enabled: true
   - name: SFG
+    enabled: true
+  - name: GraphAny
+    enabled: true
+  - name: DGSDA
+    enabled: true
+  - name: UDAGCN
+    enabled: true
+  - name: GRADE
+    enabled: true
+  - name: FatraGNN
+    enabled: true
+  - name: DANCE
     enabled: true
 
 labels:
