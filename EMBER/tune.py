@@ -479,9 +479,8 @@ def write_manifest(
         "sampler_seed": args.sampler_seed,
         "devices": list(devices),
         "objective": {
-            "utility_metric": args.utility_metric,
-            "fairness_weight": args.fairness_weight,
-            "formula": "utility - fairness_weight * mean(DP, EO)",
+            "formula": "ACC + AUC - DP - EO",
+            "direction": "maximize",
         },
         "search_spaces": {dataset: SEARCH_SPACES[dataset] for dataset in args.datasets},
         "trials": [
@@ -505,7 +504,8 @@ def _metric(payload: Mapping[str, Any], metric: str) -> float:
     return float(values[0])
 
 
-def _pareto_flags(rows: Sequence[Mapping[str, Any]], utility_key: str) -> List[bool]:
+def _pareto_flags(rows: Sequence[Mapping[str, Any]]) -> List[bool]:
+    """Maximize ACC/AUC and minimize DP/EO simultaneously."""
     flags: List[bool] = []
     for row in rows:
         dominated = False
@@ -513,12 +513,14 @@ def _pareto_flags(rows: Sequence[Mapping[str, Any]], utility_key: str) -> List[b
             if other is row:
                 continue
             no_worse = (
-                other[utility_key] >= row[utility_key]
+                other["acc"] >= row["acc"]
+                and other["auc"] >= row["auc"]
                 and other["dp"] <= row["dp"]
                 and other["eo"] <= row["eo"]
             )
             strictly_better = (
-                other[utility_key] > row[utility_key]
+                other["acc"] > row["acc"]
+                or other["auc"] > row["auc"]
                 or other["dp"] < row["dp"]
                 or other["eo"] < row["eo"]
             )
@@ -545,8 +547,7 @@ def aggregate(
         auc = _metric(payload, "auc")
         dp = _metric(payload, "dp")
         eo = _metric(payload, "eo")
-        utility = auc if args.utility_metric == "auc" else acc
-        score = utility - args.fairness_weight * (dp + eo) / 2.0
+        score = acc + auc - dp - eo
         tuning = payload.get("tuning", {})
         rows.append(
             {
@@ -567,7 +568,7 @@ def aggregate(
     for dataset in args.datasets:
         dataset_rows = [row for row in rows if row["dataset"] == dataset]
         dataset_rows.sort(key=lambda row: (-row["score"], row["trial_id"]))
-        pareto = _pareto_flags(dataset_rows, args.utility_metric)
+        pareto = _pareto_flags(dataset_rows)
         for rank, (row, is_pareto) in enumerate(zip(dataset_rows, pareto), 1):
             row["rank"] = rank
             row["is_pareto"] = is_pareto
@@ -639,8 +640,6 @@ def print_dry_run(
 def validate_args(args: argparse.Namespace) -> None:
     if args.trials < 1:
         raise ValueError("--trials must be at least 1")
-    if args.fairness_weight < 0.0:
-        raise ValueError("--fairness-weight must be non-negative")
     if len(set(args.datasets)) != len(args.datasets):
         raise ValueError("--datasets must not contain duplicates")
     unknown = set(args.datasets) - set(DATASET_DOMAINS)
@@ -681,18 +680,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=1111)
     parser.add_argument("--target-seed-offset", type=int, default=100000)
     parser.add_argument("--sampler-seed", type=int, default=2027)
-    parser.add_argument(
-        "--utility-metric",
-        choices=("auc", "acc"),
-        default="auc",
-        help="utility term in the ranking objective",
-    )
-    parser.add_argument(
-        "--fairness-weight",
-        type=float,
-        default=1.0,
-        help="weight on mean(DP, EO); 1.0 equally weights utility and fairness quality",
-    )
     parser.add_argument(
         "--results-dir",
         type=Path,
