@@ -1,23 +1,19 @@
+# Only dataset-sensitive, result-critical hyperparameters belong here.
+# Shared method constants, runtime controls, and memory/chunking options use
+# the documented defaults in config.py.
+
 bailA:
-  train_epochs: 800
-  lr: 0.006
-  lr2_reg: 0.001
-  dropout: 0.6
-  runs: 5
+  # Backbone and source optimization
+  inter_encoder: GCN
   hidden_dim: 64
   n_layers: 1
-  use_checkpoint: true
-  inter_encoder: GCN
+  lr: 0.006
+  dropout: 0.6
+  # Meta-coordinated source alignment (Eqs. 6-9)
   lambda_fair: 8.0
   meta_lr: 0.03
-  lambda_coord: 1.0
-  lambda_sen: 1.0
-  lambda_dec: 1.0
-  disentangle_temp: 0.1
-  disentangle_batch_size: 512
   source_mmd_bandwidth: 0.5
-  mmd_chunk_size: 256
-  # target adaptation
+  # Prototype evolution and Bayesian correction (Eqs. 12-18)
   adapt_epochs: 100
   adapt_lr: 0.0008
   residual_inner_steps: 60
@@ -25,30 +21,18 @@ bailA:
   proto_temp: 0.75
   lambda_pi: 0.01
   lambda_residual_l2: 0.0001
-  group_pseudocount: 1.0
   prior_confidence_threshold: 0.75
   prior_pseudocount: 1.0
-  prior_discount: 0.9
+
 germanA:
-  train_epochs: 800
-  lr: 0.005
-  lr2_reg: 0.001
-  dropout: 0.4
-  runs: 5
+  inter_encoder: GCN
   hidden_dim: 128
   n_layers: 3
-  use_checkpoint: true
-  inter_encoder: GCN
+  lr: 0.005
+  dropout: 0.4
   lambda_fair: 4.0
   meta_lr: 0.02
-  lambda_coord: 1.0
-  lambda_sen: 1.0
-  lambda_dec: 1.0
-  disentangle_temp: 0.1
-  disentangle_batch_size: 512
   source_mmd_bandwidth: 0.75
-  mmd_chunk_size: 256
-  # target adaptation
   adapt_epochs: 25
   adapt_lr: 0.0005
   residual_inner_steps: 20
@@ -56,30 +40,18 @@ germanA:
   proto_temp: 0.5
   lambda_pi: 0.2
   lambda_residual_l2: 0.001
-  group_pseudocount: 1.0
   prior_confidence_threshold: 0.75
   prior_pseudocount: 1.0
-  prior_discount: 0.9
+
 pokec:
-  train_epochs: 800
-  lr: 0.002
-  lr2_reg: 0.001
-  dropout: 0.4
-  runs: 5
+  inter_encoder: GCN
   hidden_dim: 64
   n_layers: 4
-  use_checkpoint: true
-  inter_encoder: GCN
+  lr: 0.002
+  dropout: 0.4
   lambda_fair: 2.0
   meta_lr: 0.01
-  lambda_coord: 1.0
-  lambda_sen: 1.0
-  lambda_dec: 1.0
-  disentangle_temp: 0.1
-  disentangle_batch_size: 512
   source_mmd_bandwidth: 2.0
-  mmd_chunk_size: 256
-  # target adaptation
   adapt_epochs: 50
   adapt_lr: 0.001
   residual_inner_steps: 20
@@ -87,30 +59,17 @@ pokec:
   proto_temp: 1.0
   lambda_pi: 0.1
   lambda_residual_l2: 0.001
-  group_pseudocount: 1.0
   prior_confidence_threshold: 0.35
   prior_pseudocount: 10.0
-  prior_discount: 0.9
+
 syn:
-  train_epochs: 800
-  lr: 0.005
-  lr2_reg: 0.001
-  dropout: 0.4
-  runs: 5
-  hidden_dim: 128
-  n_layers: 1
-  use_checkpoint: true
   inter_encoder: MLP
+  hidden_dim: 128
+  lr: 0.005
+  dropout: 0.4
   lambda_fair: 8.0
   meta_lr: 0.003
-  lambda_coord: 1.0
-  lambda_sen: 1.0
-  lambda_dec: 1.0
-  disentangle_temp: 0.1
-  disentangle_batch_size: 512
   source_mmd_bandwidth: 0.25
-  mmd_chunk_size: 256
-  # target adaptation
   adapt_epochs: 150
   adapt_lr: 0.0005
   residual_inner_steps: 40
@@ -118,7 +77,5 @@ syn:
   proto_temp: 0.1
   lambda_pi: 0.5
   lambda_residual_l2: 0.00001
-  group_pseudocount: 1.0
   prior_confidence_threshold: 0.5
   prior_pseudocount: 25.0
-  prior_discount: 0.9

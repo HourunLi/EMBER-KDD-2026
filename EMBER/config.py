@@ -26,7 +26,8 @@ _RUNTIME_OVERRIDE_KEYS = {
     'dataset', 'inid', 'outid', 'device_id', 'device',
     'log_path', 'result_path', 'runs_override', 'seed', 'target_seed',
     'ablation', 'disable_embedding_export',
-    'save_visualization_embeddings', 'override', 'tune', 'verbose',
+    'save_visualization_embeddings', 'use_checkpoint',
+    'disable_checkpoint_save', 'override', 'tune', 'verbose',
 }
 
 
@@ -150,7 +151,7 @@ parser.add_argument('--disentangle_batch_size', type=int, default=512)
 parser.add_argument('--source_mmd_bandwidth', type=float, default=1.0)
 parser.add_argument('--source_mmd_min_samples', type=int, default=1)
 parser.add_argument('--source_mmd_max_samples', type=int, default=0)
-parser.add_argument('--mmd_chunk_size', type=int, default=1024)
+parser.add_argument('--mmd_chunk_size', type=int, default=256)
 
 # SFDA target adaptation
 parser.add_argument('--adapt_epochs', type=int,   default=200)
@@ -178,9 +179,25 @@ parser.add_argument(
 )
 parser.add_argument('--seed',     type=int, default=1111)
 parser.add_argument('--target_seed', type=int, default=None)
-parser.add_argument('--use_checkpoint',    dest='use_checkpoint', action='store_true',
-                    help='load checkpoint and skip source training when available')
-parser.set_defaults(use_checkpoint=False)
+checkpoint_group = parser.add_mutually_exclusive_group()
+checkpoint_group.add_argument(
+    '--use_checkpoint', '--use-checkpoint',
+    dest='use_checkpoint',
+    action='store_true',
+    help='load a matching source checkpoint when available (default)',
+)
+checkpoint_group.add_argument(
+    '--no_checkpoint', '--no-checkpoint',
+    dest='use_checkpoint',
+    action='store_false',
+    help='always retrain the source model',
+)
+parser.set_defaults(use_checkpoint=True)
+parser.add_argument(
+    '--disable_checkpoint_save', '--disable-checkpoint-save',
+    action='store_true',
+    help='do not write source checkpoints (useful for parallel one-run tuning)',
+)
 parser.add_argument('--save_visualization_embeddings', action='store_true',
                     help='export embeddings for root-level t-SNE visualization')
 parser.add_argument('--disable_embedding_export', action='store_true')

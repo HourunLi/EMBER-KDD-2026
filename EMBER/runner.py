@@ -531,7 +531,8 @@ def train_and_adapt(args, source_data, target_data):
                           f"Total={loss.item():.4f}")
 
             knowledge = extract_source_knowledge(source_data, model)
-            _save_checkpoint(args, run_idx, model, knowledge)
+            if not getattr(args, 'disable_checkpoint_save', False):
+                _save_checkpoint(args, run_idx, model, knowledge)
 
         accs, auc_rocs, tmp_parity, tmp_equality = evaluate_per_class(
             args, source_data, model
