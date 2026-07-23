@@ -43,10 +43,10 @@ SOURCE_EPOCHS = TARGET_EPOCHS = 1000
 PATIENCE = 100
 # Edit these values directly. 0 disables the GPU-memory wait for that dataset.
 DATASET_MIN_FREE_MIB = {
-    "bailA": 0,
-    "germanA": 0,
-    "pokec": 44544,  # 43.5 GiB; replace with your preferred MiB threshold.
-    "syn": 0,
+    "bailA": 500,
+    "germanA": 10,
+    "pokec": 1000,
+    "syn": 100,
 }
 GPU_POLL_SECONDS = 60
 
