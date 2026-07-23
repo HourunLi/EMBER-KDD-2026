@@ -7,11 +7,12 @@ The search space follows the method in Sections 1-3 of the EMBER paper:
 * confidence-filtered residual prototype evolution, and
 * smoothed, discounted Bayesian class-prior correction.
 
-This is a deterministic balanced random search over dataset-specific discrete
-ranges.  It deliberately runs exactly one training run for every sampled
-combination (``--runs_override 1``).  Different trials are dispatched in
+This is a deterministic local-neighborhood plus balanced random search over
+dataset-specific discrete ranges.  It deliberately runs exactly one training
+run for every sampled combination (``--runs_override 1``).  Different trials are dispatched in
 parallel with one worker per GPU, so a GPU never hosts two EMBER trials from
-this script at the same time.
+this script at the same time.  Before every Pokec launch, the worker also waits
+for a configurable amount of free VRAM and low GPU utilization.
 
 Examples
 --------
@@ -43,7 +44,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 import yaml
 
@@ -51,7 +52,8 @@ import yaml
 SCRIPT_DIR = Path(__file__).resolve().parent
 MAIN_SCRIPT = SCRIPT_DIR / "main.py"
 CONFIG_PATH = SCRIPT_DIR / "config" / "config.yaml"
-DEFAULT_RESULTS_DIR = SCRIPT_DIR / "tune_results"
+SEARCH_ROUND = 2
+DEFAULT_RESULTS_DIR = SCRIPT_DIR / "tune_results_round2"
 
 DATASET_DOMAINS: Dict[str, Tuple[str, str]] = {
     "bailA": ("_2", "_1"),
@@ -71,102 +73,179 @@ SHARED_DEFAULTS: Dict[str, Any] = {
     "prior_discount": 0.9,
 }
 
-# The ranges are centered on the clean baseline configuration but reflect the
-# role and scale of each dataset.  Bail and German use stricter confidence
-# filtering; Pokec uses lower thresholds because its shift/noise leaves fewer
-# confident nodes; the synthetic MLP setting permits a sharper prototype
-# temperature.  German receives stronger count smoothing because it is small,
-# whereas Pokec can support broader class-prior pseudo-counts.
+# Second-round ranges are local neighborhoods around the best completed trial
+# in paper/tune/summary.csv.  They retain a few adjacent values on either side
+# of a boundary so the search can still discover a nearby improvement.  Bail
+# and German use stricter confidence filtering; Pokec uses lower thresholds;
+# the synthetic MLP setting permits a sharper prototype temperature.
 SEARCH_SPACES: Dict[str, Dict[str, Tuple[Any, ...]]] = {
     "bailA": {
-        "hidden_dim": (32, 64, 128),
+        "hidden_dim": (64, 128),
         "n_layers": (1, 2),
-        "lr": (0.003, 0.006, 0.01),
+        "lr": (0.003, 0.0045, 0.006),
         "dropout": (0.4, 0.5, 0.6),
-        "lambda_fair": (2.0, 4.0, 8.0, 12.0),
+        "lambda_fair": (2.0, 4.0, 6.0, 8.0),
         "meta_lr": (0.005, 0.01, 0.02, 0.03),
-        "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.05, 0.1, 0.2),
-        "source_mmd_bandwidth": (0.25, 0.5, 1.0),
-        "adapt_epochs": (50, 100, 150),
-        "adapt_lr": (0.0003, 0.0008, 0.0015),
-        "residual_inner_steps": (20, 40, 60),
-        "tau_c": (0.65, 0.75, 0.85),
-        "prior_confidence_threshold": (0.65, 0.75, 0.85),
-        "proto_temp": (0.25, 0.5, 0.75, 1.0),
+        "lambda_coord": (0.75, 1.0),
+        "disentangle_temp": (0.03, 0.05, 0.1, 0.2),
+        "source_mmd_bandwidth": (0.25, 0.5, 1.0, 1.5),
+        "adapt_epochs": (75, 100, 125, 150),
+        "adapt_lr": (0.0003, 0.0005, 0.0008),
+        "residual_inner_steps": (20, 30, 40),
+        "tau_c": (0.7, 0.75, 0.8),
+        "prior_confidence_threshold": (0.6, 0.65, 0.7),
+        "proto_temp": (0.5, 0.75, 1.0, 1.25),
         "lambda_pi": (0.0, 0.01, 0.05, 0.1, 0.25),
-        "lambda_residual_l2": (0.00001, 0.0001, 0.001),
-        "group_pseudocount": (0.5, 1.0, 2.0),
-        "prior_pseudocount": (0.5, 1.0, 5.0, 10.0),
-        "prior_discount": (0.0, 0.5, 0.75, 0.9),
+        "lambda_residual_l2": (0.0001, 0.001, 0.003),
+        "group_pseudocount": (0.25, 0.5, 0.75, 1.0),
+        "prior_pseudocount": (5.0, 10.0, 20.0),
+        "prior_discount": (0.5, 0.75, 0.9, 0.95),
     },
     "germanA": {
         "hidden_dim": (32, 64, 128),
-        "n_layers": (1, 2, 3),
-        "lr": (0.002, 0.005, 0.01),
-        "dropout": (0.2, 0.4, 0.6),
+        "n_layers": (1, 2),
+        "lr": (0.005, 0.0075, 0.01),
+        "dropout": (0.2, 0.3, 0.4),
         "lambda_fair": (1.0, 2.0, 4.0, 8.0),
-        "meta_lr": (0.005, 0.01, 0.02, 0.03),
+        "meta_lr": (0.01, 0.02, 0.03),
         "lambda_coord": (0.5, 0.75, 1.0),
         "disentangle_temp": (0.05, 0.1, 0.2),
         "source_mmd_bandwidth": (0.25, 0.5, 0.75, 1.5),
-        "adapt_epochs": (15, 25, 50, 75),
+        "adapt_epochs": (10, 15, 25, 50),
         "adapt_lr": (0.0002, 0.0005, 0.001),
-        "residual_inner_steps": (10, 20, 40),
-        "tau_c": (0.65, 0.75, 0.85, 0.9),
-        "prior_confidence_threshold": (0.65, 0.75, 0.85, 0.9),
-        "proto_temp": (0.25, 0.5, 0.75, 1.0),
-        "lambda_pi": (0.0, 0.1, 0.2, 0.4, 0.6),
-        "lambda_residual_l2": (0.0001, 0.001, 0.01),
-        "group_pseudocount": (1.0, 2.0, 5.0, 10.0),
-        "prior_pseudocount": (1.0, 2.0, 5.0, 10.0),
-        "prior_discount": (0.0, 0.5, 0.75, 0.9),
+        "residual_inner_steps": (20, 40, 60),
+        "tau_c": (0.6, 0.65, 0.7, 0.9),
+        "prior_confidence_threshold": (0.6, 0.65, 0.7, 0.75),
+        "proto_temp": (0.1, 0.15, 0.25, 0.5),
+        "lambda_pi": (0.1, 0.4, 0.6, 0.8),
+        "lambda_residual_l2": (0.001, 0.01, 0.03),
+        "group_pseudocount": (1.0, 2.0, 5.0),
+        "prior_pseudocount": (1.0, 5.0, 10.0),
+        "prior_discount": (0.5, 0.75, 0.9),
     },
     "pokec": {
-        "hidden_dim": (32, 64, 128),
+        "hidden_dim": (64, 128),
         "n_layers": (2, 3, 4),
-        "lr": (0.001, 0.002, 0.004),
-        "dropout": (0.2, 0.4, 0.5),
+        "lr": (0.001, 0.003, 0.004),
+        "dropout": (0.1, 0.2, 0.3, 0.4),
         "lambda_fair": (0.5, 1.0, 2.0, 4.0),
-        "meta_lr": (0.003, 0.005, 0.01, 0.02),
+        "meta_lr": (0.005, 0.01, 0.02),
         "lambda_coord": (0.5, 0.75, 1.0),
         "disentangle_temp": (0.05, 0.1, 0.2),
-        "source_mmd_bandwidth": (0.5, 1.0, 2.0, 4.0),
-        "adapt_epochs": (25, 50, 75),
-        "adapt_lr": (0.0005, 0.001, 0.002),
+        "source_mmd_bandwidth": (0.5, 1.0, 2.0),
+        "adapt_epochs": (20, 25, 50, 75),
+        "adapt_lr": (0.0003, 0.0005, 0.001),
         "residual_inner_steps": (10, 20, 30),
-        "tau_c": (0.25, 0.35, 0.45, 0.55),
-        "prior_confidence_threshold": (0.25, 0.35, 0.45, 0.55),
-        "proto_temp": (0.5, 0.75, 1.0, 1.5),
-        "lambda_pi": (0.0, 0.05, 0.1, 0.2, 0.4),
-        "lambda_residual_l2": (0.0001, 0.001, 0.01),
+        "tau_c": (0.2, 0.25, 0.35, 0.45),
+        "prior_confidence_threshold": (0.2, 0.25, 0.35, 0.45),
+        "proto_temp": (0.35, 0.5, 0.75, 1.0),
+        "lambda_pi": (0.1, 0.2, 0.3, 0.4),
+        "lambda_residual_l2": (0.0001, 0.001, 0.003),
         "group_pseudocount": (0.5, 1.0, 2.0, 5.0),
-        "prior_pseudocount": (1.0, 10.0, 50.0, 100.0),
-        "prior_discount": (0.0, 0.5, 0.75, 0.9),
+        "prior_pseudocount": (10.0, 50.0, 100.0),
+        "prior_discount": (0.0, 0.25, 0.5, 0.9),
     },
     "syn": {
         # n_layers is intentionally absent: the MLP backbone ignores it.
-        "hidden_dim": (64, 128, 256),
-        "lr": (0.002, 0.005, 0.01),
-        "dropout": (0.2, 0.4, 0.6),
+        "hidden_dim": (128, 256),
+        "lr": (0.002, 0.0035, 0.005),
+        "dropout": (0.2, 0.3, 0.4),
         "lambda_fair": (2.0, 4.0, 8.0, 12.0),
         "meta_lr": (0.001, 0.003, 0.005, 0.01),
         "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.05, 0.1, 0.2),
-        "source_mmd_bandwidth": (0.1, 0.25, 0.5, 1.0),
-        "adapt_epochs": (75, 100, 150, 200),
+        "disentangle_temp": (0.05, 0.1),
+        "source_mmd_bandwidth": (0.25, 0.5, 1.0, 1.5),
+        "adapt_epochs": (75, 100, 150),
         "adapt_lr": (0.0002, 0.0005, 0.001),
         "residual_inner_steps": (20, 40, 60),
-        "tau_c": (0.4, 0.5, 0.6, 0.7),
-        "prior_confidence_threshold": (0.4, 0.5, 0.6, 0.7),
+        "tau_c": (0.35, 0.4, 0.45, 0.5),
+        "prior_confidence_threshold": (0.35, 0.4, 0.45, 0.5),
         "proto_temp": (0.05, 0.1, 0.2, 0.5),
-        "lambda_pi": (0.1, 0.25, 0.5, 0.75, 1.0),
-        "lambda_residual_l2": (0.000001, 0.00001, 0.0001, 0.001),
+        "lambda_pi": (0.1, 0.5, 0.75, 1.0),
+        "lambda_residual_l2": (0.0000003, 0.000001, 0.000003, 0.00001),
         "group_pseudocount": (0.5, 1.0, 2.0),
         "prior_pseudocount": (5.0, 10.0, 25.0, 50.0),
-        "prior_discount": (0.5, 0.75, 0.9, 0.95),
+        "prior_discount": (0.75, 0.9, 0.95),
     },
 }
+
+# Keep the best completed first-round configuration as trial 0000.  This
+# makes the second round monotone with respect to the observed baseline even
+# if the new random samples all land below it.
+SEARCH_ANCHORS: Dict[str, Dict[str, Any]] = {
+    "bailA": {
+        "hidden_dim": 64, "n_layers": 2, "lr": 0.003, "dropout": 0.6,
+        "lambda_fair": 2.0, "meta_lr": 0.02, "lambda_coord": 1.0,
+        "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.25,
+        "adapt_epochs": 150, "adapt_lr": 0.0003,
+        "residual_inner_steps": 40, "tau_c": 0.75,
+        "prior_confidence_threshold": 0.65, "proto_temp": 1.0,
+        "lambda_pi": 0.01, "lambda_residual_l2": 0.001,
+        "group_pseudocount": 1.0, "prior_pseudocount": 10.0,
+        "prior_discount": 0.75,
+    },
+    "germanA": {
+        "hidden_dim": 128, "n_layers": 2, "lr": 0.01, "dropout": 0.4,
+        "lambda_fair": 8.0, "meta_lr": 0.02, "lambda_coord": 1.0,
+        "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.5,
+        "adapt_epochs": 15, "adapt_lr": 0.0002,
+        "residual_inner_steps": 40, "tau_c": 0.65,
+        "prior_confidence_threshold": 0.75, "proto_temp": 0.25,
+        "lambda_pi": 0.6, "lambda_residual_l2": 0.01,
+        "group_pseudocount": 2.0, "prior_pseudocount": 1.0,
+        "prior_discount": 0.75,
+    },
+    "pokec": {
+        "hidden_dim": 128, "n_layers": 4, "lr": 0.004, "dropout": 0.2,
+        "lambda_fair": 4.0, "meta_lr": 0.01, "lambda_coord": 0.5,
+        "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.5,
+        "adapt_epochs": 25, "adapt_lr": 0.0005,
+        "residual_inner_steps": 20, "tau_c": 0.25,
+        "prior_confidence_threshold": 0.35, "proto_temp": 0.5,
+        "lambda_pi": 0.2, "lambda_residual_l2": 0.001,
+        "group_pseudocount": 0.5, "prior_pseudocount": 50.0,
+        "prior_discount": 0.0,
+    },
+    "syn": {
+        "hidden_dim": 256, "lr": 0.005, "dropout": 0.4,
+        "lambda_fair": 8.0, "meta_lr": 0.01, "lambda_coord": 1.0,
+        "disentangle_temp": 0.1, "source_mmd_bandwidth": 1.0,
+        "adapt_epochs": 150, "adapt_lr": 0.0005,
+        "residual_inner_steps": 40, "tau_c": 0.4,
+        "prior_confidence_threshold": 0.4, "proto_temp": 0.1,
+        "lambda_pi": 1.0, "lambda_residual_l2": 0.000001,
+        "group_pseudocount": 1.0, "prior_pseudocount": 10.0,
+        "prior_discount": 0.9,
+    },
+}
+
+# The first local trials change one high-impact factor at a time around the
+# anchor.  This is more informative than spending all 31 non-anchor trials on
+# independent random combinations in a 20-dimensional space.
+LOCAL_SEARCH_KEYS: Dict[str, Tuple[str, ...]] = {
+    "bailA": (
+        "hidden_dim", "tau_c", "prior_confidence_threshold", "adapt_epochs",
+        "adapt_lr", "proto_temp", "lambda_fair", "meta_lr", "dropout",
+        "lambda_residual_l2", "prior_discount", "source_mmd_bandwidth",
+    ),
+    "germanA": (
+        "hidden_dim", "dropout", "tau_c", "prior_confidence_threshold",
+        "proto_temp", "lambda_pi", "lambda_residual_l2", "adapt_epochs",
+        "residual_inner_steps", "lambda_fair", "group_pseudocount",
+        "source_mmd_bandwidth",
+    ),
+    "pokec": (
+        "tau_c", "prior_confidence_threshold", "adapt_epochs", "adapt_lr",
+        "proto_temp", "lambda_pi", "dropout", "hidden_dim",
+        "n_layers", "lambda_residual_l2",
+    ),
+    "syn": (
+        "hidden_dim", "tau_c", "prior_confidence_threshold", "prior_discount",
+        "lambda_pi", "lambda_residual_l2", "source_mmd_bandwidth", "adapt_epochs",
+        "dropout", "proto_temp",
+    ),
+}
+LOCAL_TRIALS_PER_DATASET = 12
 
 
 PRINT_LOCK = threading.Lock()
@@ -223,16 +302,44 @@ def _balanced_parameter_columns(
     return columns
 
 
+def _local_anchor_candidates(
+    dataset: str,
+    space: Mapping[str, Sequence[Any]],
+    anchor: Mapping[str, Any],
+) -> Iterable[Dict[str, Any]]:
+    """Yield one-factor perturbations in nearest-to-anchor order."""
+    alternatives: Dict[str, List[Any]] = {}
+    for key in LOCAL_SEARCH_KEYS[dataset]:
+        anchor_value = anchor[key]
+        values = [value for value in space[key] if value != anchor_value]
+        try:
+            values.sort(key=lambda value: abs(float(value) - float(anchor_value)))
+        except (TypeError, ValueError):
+            values.sort(key=repr)
+        alternatives[key] = values
+
+    max_depth = max((len(values) for values in alternatives.values()), default=0)
+    for depth in range(max_depth):
+        for key in LOCAL_SEARCH_KEYS[dataset]:
+            values = alternatives[key]
+            if depth >= len(values):
+                continue
+            candidate = dict(anchor)
+            candidate[key] = values[depth]
+            yield candidate
+
+
 def make_trials(
     dataset: str,
     count: int,
     sampler_seed: int,
     base_config: Mapping[str, Mapping[str, Any]],
 ) -> List[Trial]:
-    """Include the current baseline, then draw unique balanced combinations."""
+    """Include the best first-round anchor, then draw balanced combinations."""
     space = SEARCH_SPACES[dataset]
     effective_base = dict(SHARED_DEFAULTS)
     effective_base.update(base_config[dataset])
+    effective_base.update(SEARCH_ANCHORS[dataset])
     missing = [key for key in space if key not in effective_base]
     if missing:
         raise KeyError(
@@ -244,14 +351,29 @@ def make_trials(
     if count == 1:
         return trials
 
-    rng = random.Random(_stable_dataset_seed(sampler_seed, dataset))
-    sample_count = count - 1
-    columns = _balanced_parameter_columns(space, sample_count, rng)
     seen = {_signature(baseline)}
+    local_limit = min(count, 1 + LOCAL_TRIALS_PER_DATASET)
+    for candidate in _local_anchor_candidates(dataset, space, baseline):
+        if len(trials) >= local_limit:
+            break
+        signature = _signature(candidate)
+        if signature in seen:
+            continue
+        seen.add(signature)
+        trials.append(
+            Trial(dataset=dataset, trial_id=len(trials), parameters=candidate)
+        )
+
+    remaining = count - len(trials)
+    if remaining == 0:
+        return trials
+
+    rng = random.Random(_stable_dataset_seed(sampler_seed, dataset))
+    columns = _balanced_parameter_columns(space, remaining, rng)
     attempts = 0
     index = 0
     while len(trials) < count:
-        if index < sample_count:
+        if index < remaining:
             parameters = {key: columns[key][index] for key in space}
             index += 1
         else:
@@ -281,15 +403,30 @@ def stderr_path(results_dir: Path, trial: Trial) -> Path:
     return results_dir / "logs" / trial.dataset / f"{trial.name}.stderr.log"
 
 
-def is_complete_result(path: Path) -> bool:
+def is_complete_result(
+    path: Path,
+    expected_parameters: Mapping[str, Any] | None = None,
+) -> bool:
     if not path.exists():
         return False
     try:
         with path.open("r", encoding="utf-8") as result_file:
             payload = json.load(result_file)
         target = payload["metrics"]["target_after"]
-        return all(target[key] for key in ("acc", "auc", "dp", "eo"))
-    except (OSError, ValueError, KeyError, TypeError):
+        for key in ("acc", "auc", "dp", "eo"):
+            values = target.get(key)
+            if not isinstance(values, list) or not values:
+                return False
+            if not math.isfinite(float(values[0])):
+                return False
+        if expected_parameters is not None:
+            actual_parameters = payload.get("tuning", {}).get("parameters")
+            if not isinstance(actual_parameters, dict):
+                return False
+            if _signature(actual_parameters) != _signature(expected_parameters):
+                return False
+        return True
+    except (OSError, OverflowError, ValueError, KeyError, TypeError):
         return False
 
 
@@ -299,6 +436,111 @@ def _override_text(key: str, value: Any) -> str:
     else:
         rendered = str(value)
     return f"{key}={rendered}"
+
+
+def query_gpu_status() -> Dict[int, Dict[str, int]]:
+    """Return current free/total memory and utilization for every GPU.
+
+    The check intentionally uses ``nvidia-smi`` rather than importing torch:
+    it runs before the child process initializes CUDA and therefore observes
+    memory held by other users or stale jobs.
+    """
+    command = [
+        "nvidia-smi",
+        "--query-gpu=index,memory.free,memory.total,utilization.gpu",
+        "--format=csv,noheader,nounits",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError as error:
+        raise RuntimeError(
+            "nvidia-smi is required for Pokec GPU admission checks; "
+            "use --gpus -1 for CPU or load the NVIDIA driver environment"
+        ) from error
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or error.stdout or "").strip()
+        raise RuntimeError(f"nvidia-smi failed while checking GPU memory: {detail}") from error
+
+    statuses: Dict[int, Dict[str, int]] = {}
+    for line in completed.stdout.splitlines():
+        fields = [field.strip() for field in line.split(",")]
+        if len(fields) != 4:
+            continue
+        try:
+            index, free_mb, total_mb, utilization = (int(field) for field in fields)
+        except ValueError as error:
+            raise RuntimeError(f"Unexpected nvidia-smi output: {line!r}") from error
+        statuses[index] = {
+            "free_mb": free_mb,
+            "total_mb": total_mb,
+            "utilization": utilization,
+        }
+    if not statuses:
+        raise RuntimeError("nvidia-smi returned no GPU status rows")
+    return statuses
+
+
+def wait_for_pokec_gpu(
+    args: argparse.Namespace,
+    device_id: int,
+) -> Dict[str, int] | None:
+    """Wait until a Pokec worker has a safely idle GPU before launching.
+
+    A 44-GB card with only a few hundred MB free can pass a superficial
+    device-id check but still fail during the first backward pass.  Requiring
+    a configurable free-memory reserve and low utilization prevents that
+    situation and also avoids competing with another active process.
+    """
+    if device_id < 0:
+        return None
+
+    deadline = (
+        time.monotonic() + args.gpu_wait_timeout
+        if args.gpu_wait_timeout > 0
+        else None
+    )
+    last_report = 0.0
+    while True:
+        status = query_gpu_status().get(device_id)
+        if status is None:
+            raise RuntimeError(f"GPU {device_id} was not reported by nvidia-smi")
+        if status["total_mb"] < args.pokec_min_free_memory_mb:
+            raise RuntimeError(
+                f"GPU {device_id} has only {status['total_mb']} MiB total VRAM, "
+                f"below the Pokec minimum-free threshold "
+                f"{args.pokec_min_free_memory_mb} MiB"
+            )
+        if (
+            status["free_mb"] >= args.pokec_min_free_memory_mb
+            and status["utilization"] <= args.pokec_max_gpu_utilization
+        ):
+            print_status(
+                f"[GPU {device_id}] Pokec admission granted: "
+                f"free={status['free_mb']} MiB, util={status['utilization']}%"
+            )
+            return status
+
+        now = time.monotonic()
+        if now - last_report >= max(args.gpu_poll_seconds, 1):
+            print_status(
+                f"[GPU {device_id}] waiting for Pokec: "
+                f"free={status['free_mb']} MiB (need >= "
+                f"{args.pokec_min_free_memory_mb}), "
+                f"util={status['utilization']}% (need <= "
+                f"{args.pokec_max_gpu_utilization}%)"
+            )
+            last_report = now
+        if deadline is not None and now >= deadline:
+            raise TimeoutError(
+                f"GPU {device_id} did not reach the Pokec memory threshold "
+                f"within {args.gpu_wait_timeout:.0f}s"
+            )
+        time.sleep(args.gpu_poll_seconds)
 
 
 def build_command(
@@ -335,6 +577,7 @@ def _enrich_result(
     trial: Trial,
     duration_seconds: float,
     device_id: int,
+    gpu_status: Mapping[str, int] | None = None,
 ) -> None:
     with path.open("r", encoding="utf-8") as result_file:
         payload = json.load(result_file)
@@ -345,6 +588,8 @@ def _enrich_result(
         "device_id": device_id,
         "runs_per_combination": 1,
     }
+    if gpu_status is not None:
+        payload["tuning"]["gpu_admission"] = dict(gpu_status)
     temporary = path.with_suffix(".tmp")
     with temporary.open("w", encoding="utf-8") as output:
         json.dump(payload, output, ensure_ascii=False, indent=2)
@@ -362,10 +607,13 @@ def run_trial(
     result.parent.mkdir(parents=True, exist_ok=True)
     trial_log.parent.mkdir(parents=True, exist_ok=True)
 
-    if not args.rerun and is_complete_result(result):
+    if not args.rerun and is_complete_result(result, trial.parameters):
         print_status(f"[resume] {trial.dataset} {trial.name} already complete")
         return
+    if args.rerun and result.exists():
+        result.unlink()
 
+    gpu_status = wait_for_pokec_gpu(args, device_id) if trial.dataset == "pokec" else None
     command = build_command(args, device_id, trial, result, trial_log)
     print_status(f"[device {device_id}] start {trial.dataset} {trial.name}")
     started = time.monotonic()
@@ -389,7 +637,9 @@ def run_trial(
         )
     if not is_complete_result(result):
         raise RuntimeError(f"{trial.dataset} {trial.name} did not produce {result}")
-    _enrich_result(result, trial, duration, device_id)
+    _enrich_result(result, trial, duration, device_id, gpu_status)
+    if not is_complete_result(result, trial.parameters):
+        raise RuntimeError(f"{trial.dataset} {trial.name} result metadata mismatch")
     print_status(
         f"[device {device_id}] done  {trial.dataset} {trial.name} "
         f"({duration / 60.0:.1f} min)"
@@ -463,6 +713,42 @@ def resolve_devices(tokens: Sequence[str]) -> List[int]:
     return devices
 
 
+def filter_devices_for_pokec(
+    args: argparse.Namespace,
+    devices: Sequence[int],
+) -> List[int]:
+    """Exclude GPUs whose total VRAM cannot satisfy the Pokec reserve.
+
+    A mixed cluster may contain a small GPU and a 44-GB GPU.  Keeping the
+    small device in the worker pool would let it repeatedly pick Pokec jobs
+    and fail before the larger device can consume them.  We therefore remove
+    such devices for a run that includes Pokec; other datasets can still be
+    tuned separately on the small device.
+    """
+    if "pokec" not in args.datasets or all(device_id < 0 for device_id in devices):
+        return list(devices)
+
+    statuses = query_gpu_status()
+    eligible = [
+        device_id
+        for device_id in devices
+        if device_id in statuses
+        and statuses[device_id]["total_mb"] >= args.pokec_min_free_memory_mb
+    ]
+    excluded = [device_id for device_id in devices if device_id not in eligible]
+    if excluded:
+        print_status(
+            "Excluding GPUs from this Pokec run because total VRAM is below "
+            f"{args.pokec_min_free_memory_mb} MiB: {excluded}"
+        )
+    if not eligible:
+        raise RuntimeError(
+            "No selected GPU has enough total VRAM for Pokec; "
+            f"need at least {args.pokec_min_free_memory_mb} MiB"
+        )
+    return eligible
+
+
 def write_manifest(
     args: argparse.Namespace,
     trials: Sequence[Trial],
@@ -471,9 +757,11 @@ def write_manifest(
     path = args.results_dir / "manifest.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "search": "balanced_random_categorical",
+        "search_round": SEARCH_ROUND,
+        "search": "anchor_local_plus_balanced_random_categorical",
         "datasets": args.datasets,
         "trials_per_dataset": args.trials,
+        "local_trials_per_dataset": min(args.trials, 1 + LOCAL_TRIALS_PER_DATASET),
         "runs_per_combination": 1,
         "training_seed": args.seed,
         "sampler_seed": args.sampler_seed,
@@ -481,6 +769,12 @@ def write_manifest(
         "objective": {
             "formula": "ACC + AUC - DP - EO",
             "direction": "maximize",
+        },
+        "pokec_gpu_guard": {
+            "min_free_memory_mb": args.pokec_min_free_memory_mb,
+            "max_utilization_percent": args.pokec_max_gpu_utilization,
+            "poll_seconds": args.gpu_poll_seconds,
+            "wait_timeout_seconds": args.gpu_wait_timeout,
         },
         "search_spaces": {dataset: SEARCH_SPACES[dataset] for dataset in args.datasets},
         "trials": [
@@ -539,7 +833,7 @@ def aggregate(
     rows: List[Dict[str, Any]] = []
     for trial in trials:
         path = raw_result_path(args.results_dir, trial)
-        if not is_complete_result(path):
+        if not is_complete_result(path, trial.parameters):
             continue
         with path.open("r", encoding="utf-8") as result_file:
             payload = json.load(result_file)
@@ -640,6 +934,14 @@ def print_dry_run(
 def validate_args(args: argparse.Namespace) -> None:
     if args.trials < 1:
         raise ValueError("--trials must be at least 1")
+    if args.pokec_min_free_memory_mb < 1:
+        raise ValueError("--pokec-min-free-memory-mb must be positive")
+    if not 0 <= args.pokec_max_gpu_utilization <= 100:
+        raise ValueError("--pokec-max-gpu-utilization must lie in [0, 100]")
+    if args.gpu_poll_seconds < 1:
+        raise ValueError("--gpu-poll-seconds must be at least 1")
+    if args.gpu_wait_timeout < 0:
+        raise ValueError("--gpu-wait-timeout must be non-negative")
     if len(set(args.datasets)) != len(args.datasets):
         raise ValueError("--datasets must not contain duplicates")
     unknown = set(args.datasets) - set(DATASET_DOMAINS)
@@ -677,9 +979,33 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="ID",
         help="GPU ids (for example 0 1 2 3), auto, or -1 for CPU",
     )
+    parser.add_argument(
+        "--pokec-min-free-memory-mb",
+        type=int,
+        default=20000,
+        help="minimum free VRAM required before starting a Pokec trial",
+    )
+    parser.add_argument(
+        "--pokec-max-gpu-utilization",
+        type=int,
+        default=20,
+        help="maximum GPU utilization allowed before starting Pokec",
+    )
+    parser.add_argument(
+        "--gpu-poll-seconds",
+        type=int,
+        default=30,
+        help="seconds between Pokec GPU admission checks",
+    )
+    parser.add_argument(
+        "--gpu-wait-timeout",
+        type=float,
+        default=0.0,
+        help="maximum wait in seconds; 0 waits indefinitely",
+    )
     parser.add_argument("--seed", type=int, default=1111)
     parser.add_argument("--target-seed-offset", type=int, default=100000)
-    parser.add_argument("--sampler-seed", type=int, default=2027)
+    parser.add_argument("--sampler-seed", type=int, default=2028)
     parser.add_argument(
         "--results-dir",
         type=Path,
@@ -701,6 +1027,8 @@ def main() -> None:
     args.results_dir = args.results_dir.resolve()
     validate_args(args)
     devices = resolve_devices(args.gpus)
+    if not args.dry_run and not args.aggregate_only:
+        devices = filter_devices_for_pokec(args, devices)
     base_config = load_base_config()
     trials = [
         trial
@@ -724,7 +1052,9 @@ def main() -> None:
         tasks: queue.Queue = queue.Queue()
         stop_event = threading.Event()
         for trial in trials:
-            if args.rerun or not is_complete_result(raw_result_path(args.results_dir, trial)):
+            if args.rerun or not is_complete_result(
+                raw_result_path(args.results_dir, trial), trial.parameters
+            ):
                 tasks.put(trial)
         for _ in devices:
             tasks.put(None)
