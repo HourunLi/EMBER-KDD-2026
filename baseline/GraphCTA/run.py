@@ -11,6 +11,7 @@ import random
 import subprocess
 import sys
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from queue import Queue
@@ -40,6 +41,8 @@ PAIRS = {
 SEEDS = [1111, 2222, 3333, 4444, 5555]
 SOURCE_EPOCHS = TARGET_EPOCHS = 1000
 PATIENCE = 100
+POKEC_MIN_FREE_GIB = 43.5
+POKEC_GPU_POLL_SECONDS = 60
 
 LOG_DIR = HERE / "logs"
 RUN_DIR = HERE / "results" / "runs"
@@ -55,6 +58,38 @@ def seed_all(seed):
     if torch.cuda.is_available():
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+
+
+def wait_for_pokec_gpu(gpu, min_free_gib, poll_seconds, stage):
+    """Wait until a Pokec run has almost exclusive access to a large GPU."""
+    if gpu < 0 or min_free_gib <= 0:
+        return
+    torch.cuda.set_device(gpu)
+    while True:
+        gc.collect()
+        torch.cuda.empty_cache()
+        free_bytes, total_bytes = torch.cuda.mem_get_info(gpu)
+        free_gib = free_bytes / 1024**3
+        total_gib = total_bytes / 1024**3
+        if total_gib + 1e-6 < min_free_gib:
+            raise RuntimeError(
+                f"Pokec requires at least {min_free_gib:.1f} GiB free, but GPU {gpu} "
+                f"has only {total_gib:.1f} GiB total memory."
+            )
+        print(
+            f"[Pokec GPU guard] stage={stage} gpu={gpu} "
+            f"free={free_gib:.2f}/{total_gib:.2f} GiB "
+            f"required={min_free_gib:.2f} GiB",
+            flush=True,
+        )
+        if free_gib >= min_free_gib:
+            return
+        print(
+            f"[Pokec GPU guard] insufficient free memory; retrying in "
+            f"{poll_seconds}s",
+            flush=True,
+        )
+        time.sleep(poll_seconds)
 
 
 def valid_mask(data):
@@ -184,7 +219,17 @@ def evaluate(captured, target):
     return metrics, captured["embedding"], y, sens
 
 
-def run_one(dataset, run_idx, seed, gpu, source_epochs, target_epochs, patience):
+def run_one(
+    dataset,
+    run_idx,
+    seed,
+    gpu,
+    source_epochs,
+    target_epochs,
+    patience,
+    pokec_min_free_gib,
+    gpu_poll_seconds,
+):
     seed_all(seed)
     device = torch.device(f"cuda:{gpu}" if gpu >= 0 else "cpu")
     if gpu >= 0:
@@ -202,12 +247,26 @@ def run_one(dataset, run_idx, seed, gpu, source_epochs, target_epochs, patience)
         raise ValueError(f"{dataset}: source/target feature dimensions differ")
     install_pair_dataset(graphcta_view(source), graphcta_view(target, is_target=True))
 
+    if dataset == "pokec":
+        print(
+            f"PYTORCH_CUDA_ALLOC_CONF="
+            f"{os.environ.get('PYTORCH_CUDA_ALLOC_CONF', '<unset>')}",
+            flush=True,
+        )
+        wait_for_pokec_gpu(
+            gpu, pokec_min_free_gib, gpu_poll_seconds, stage="source"
+        )
+
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     previous_cwd = Path.cwd()
     with tempfile.TemporaryDirectory(prefix=f"{dataset}_run{run_idx + 1}_", dir=WORK_DIR) as work:
         os.chdir(work)
         try:
             best_epoch = train_source(device, seed, source_epochs, patience)
+            if dataset == "pokec":
+                wait_for_pokec_gpu(
+                    gpu, pokec_min_free_gib, gpu_poll_seconds, stage="target"
+                )
             captured = train_target(device, seed, target_epochs, target)
         finally:
             os.chdir(previous_cwd)
@@ -295,6 +354,9 @@ def launch(task, resources, args):
     dataset, run_idx, seed = task
     log_path = LOG_DIR / f"{dataset}_run{run_idx + 1}.log"
     try:
+        env = os.environ.copy()
+        if dataset == "pokec" and not env.get("PYTORCH_CUDA_ALLOC_CONF"):
+            env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
         with log_path.open("w", encoding="utf-8") as stream:
             subprocess.run(
                 [
@@ -309,8 +371,11 @@ def launch(task, resources, args):
                     "--source-epochs", str(args.source_epochs),
                     "--target-epochs", str(args.target_epochs),
                     "--patience", str(args.patience),
+                    "--pokec-min-free-gib", str(args.pokec_min_free_gib),
+                    "--gpu-poll-seconds", str(args.gpu_poll_seconds),
                 ],
                 cwd=HERE,
+                env=env,
                 stdout=stream,
                 stderr=subprocess.STDOUT,
                 check=True,
@@ -327,6 +392,18 @@ def main():
     parser.add_argument("--source-epochs", type=int, default=SOURCE_EPOCHS)
     parser.add_argument("--target-epochs", type=int, default=TARGET_EPOCHS)
     parser.add_argument("--patience", type=int, default=PATIENCE)
+    parser.add_argument(
+        "--pokec-min-free-gib",
+        type=float,
+        default=POKEC_MIN_FREE_GIB,
+        help="Pokec waits until its GPU has at least this much free memory",
+    )
+    parser.add_argument(
+        "--gpu-poll-seconds",
+        type=int,
+        default=POKEC_GPU_POLL_SECONDS,
+        help="seconds between Pokec GPU-memory checks",
+    )
     parser.add_argument("--workers", type=int, default=0,
                         help="0 uses one worker per GPU, or four CPU workers")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
@@ -336,8 +413,17 @@ def main():
     parser.add_argument("--gpu", type=int, default=-1, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    if args.source_epochs < 1 or args.target_epochs < 3 or args.patience < 1:
-        parser.error("source_epochs >= 1, target_epochs >= 3, and patience >= 1 are required")
+    if (
+        args.source_epochs < 1
+        or args.target_epochs < 3
+        or args.patience < 1
+        or args.pokec_min_free_gib < 0
+        or args.gpu_poll_seconds < 1
+    ):
+        parser.error(
+            "source_epochs >= 1, target_epochs >= 3, patience >= 1, "
+            "pokec_min_free_gib >= 0, and gpu_poll_seconds >= 1 are required"
+        )
     if args.worker:
         run_one(
             args.dataset,
@@ -347,6 +433,8 @@ def main():
             args.source_epochs,
             args.target_epochs,
             args.patience,
+            args.pokec_min_free_gib,
+            args.gpu_poll_seconds,
         )
         return
 
@@ -362,6 +450,13 @@ def main():
     worker_count = args.workers or default_workers
     if worker_count < 1:
         parser.error("workers must be non-negative")
+    if gpu_count and worker_count > gpu_count:
+        print(
+            f"capping workers from {worker_count} to {gpu_count} so each GPU "
+            "runs at most one GraphCTA process",
+            flush=True,
+        )
+        worker_count = gpu_count
     devices = (
         [index % gpu_count for index in range(worker_count)]
         if gpu_count
