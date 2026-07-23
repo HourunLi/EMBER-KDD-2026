@@ -38,15 +38,17 @@ PAIRS = {
     "pokec": ("_z", "_n"),
     "syn": ("-2", "-1"),
 }
+# Edit this list to choose the GPUs used for parallel runs. One run per GPU.
+AVAILABLE_GPUS = [0, 1, 2, 3]
 SEEDS = [1111, 2222, 3333, 4444, 5555]
 SOURCE_EPOCHS = TARGET_EPOCHS = 1000
 PATIENCE = 100
 # Edit these values directly. 0 disables the GPU-memory wait for that dataset.
 DATASET_MIN_FREE_MIB = {
-    "bailA": 500,
-    "germanA": 10,
-    "pokec": 1000,
-    "syn": 100,
+    "bailA": 0,
+    "germanA": 0,
+    "pokec": 0,
+    "syn": 0,
 }
 GPU_POLL_SECONDS = 60
 
@@ -402,8 +404,6 @@ def main():
         default=GPU_POLL_SECONDS,
         help="seconds between dataset GPU-memory checks",
     )
-    parser.add_argument("--workers", type=int, default=0,
-                        help="0 uses one worker per GPU, or four CPU workers")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--dataset", choices=PAIRS, default="bailA", help=argparse.SUPPRESS)
     parser.add_argument("--run-idx", type=int, default=0, help=argparse.SUPPRESS)
@@ -442,29 +442,20 @@ def main():
         for run_idx, seed in enumerate(SEEDS)
         for dataset in PAIRS
     ]
-    gpu_count = torch.cuda.device_count()
-    default_workers = gpu_count if gpu_count else min(4, os.cpu_count() or 1)
-    worker_count = args.workers or default_workers
-    if worker_count < 1:
-        parser.error("workers must be non-negative")
-    if gpu_count and worker_count > gpu_count:
-        print(
-            f"capping workers from {worker_count} to {gpu_count} so each GPU "
-            "runs at most one GraphCTA process",
-            flush=True,
-        )
-        worker_count = gpu_count
-    devices = (
-        [index % gpu_count for index in range(worker_count)]
-        if gpu_count
-        else [-1] * worker_count
-    )
+    devices = list(AVAILABLE_GPUS)
+    if not torch.cuda.is_available():
+        parser.error("CUDA is unavailable")
+    if not devices or len(devices) != len(set(devices)):
+        parser.error("AVAILABLE_GPUS must contain unique GPU ids")
+    invalid = [gpu for gpu in devices if gpu < 0 or gpu >= torch.cuda.device_count()]
+    if invalid:
+        parser.error(f"invalid GPU ids in AVAILABLE_GPUS: {invalid}")
     resources = Queue()
     for device in devices:
         resources.put(device)
 
-    print(f"launching {len(tasks)} runs with {worker_count} worker(s)", flush=True)
-    with ThreadPoolExecutor(max_workers=worker_count) as pool:
+    print(f"launching {len(tasks)} runs on devices={devices}", flush=True)
+    with ThreadPoolExecutor(max_workers=len(devices)) as pool:
         futures = [pool.submit(launch, task, resources, args) for task in tasks]
         for future in as_completed(futures):
             dataset, run_idx = future.result()
