@@ -70,7 +70,7 @@ DEFAULT_DELTA_VALUES = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
 DEFAULT_TAU_VALUES = (0.1, 0.25, 0.5, 0.75, 1.0)
 DEFAULT_ETA_VALUES = (0.0, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0)
 DEFAULT_BETA_VALUES = (0.0, 1.0, 2.0, 4.0, 8.0)
-DEFAULT_GAMMA_VALUES = (0.0, 0.5, 1.0, 2.0, 3.0)
+DEFAULT_GAMMA_VALUES = (0.0, 0.5, 1.0)
 DEFAULT_RESIDUAL_L2_VALUES = (0.0, 1e-5, 1e-4, 1e-3, 1e-2)
 DEFAULT_ADAPT_EPOCH_VALUES = (1, 10, 25, 50, 100, 150)
 
@@ -531,6 +531,18 @@ def scan_raw_records(results_dir: Path) -> List[MutableMapping[str, object]]:
         if not isinstance(metadata, dict) or not valid_metric_payload(record):
             print_status(f"Ignoring incomplete parameter result: {path}")
             continue
+        # Paper Section 3.3 restricts gamma to [0, 1], with gamma=1 denoting
+        # the full virtual fairness update. Incompatible records are excluded
+        # from paper-aligned summaries.
+        if metadata.get("group") == "beta_gamma":
+            parameters = metadata.get("parameters", {})
+            try:
+                gamma = float(parameters.get("lambda_coord"))
+            except (TypeError, ValueError):
+                print_status(f"Ignoring beta-gamma result without gamma: {path}")
+                continue
+            if not 0.0 <= gamma <= 1.0:
+                continue
         record["_path"] = str(path)
         records.append(record)
     return records
@@ -775,6 +787,11 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("Prior strengths must be non-negative")
     if any(value < 0 or value > 1 for value in args.delta_values):
         raise ValueError("Confidence thresholds must lie in [0, 1]")
+    if any(value < 0 or value > 1 for value in args.gamma_values):
+        raise ValueError(
+            "Coordination strengths gamma must lie in [0, 1]; "
+            "gamma=1 is the full fairness update"
+        )
     if any(value < 1 for value in args.adapt_epoch_values):
         raise ValueError(
             "adapt_epochs must be at least 1; use target_before metrics as the T=0 reference"

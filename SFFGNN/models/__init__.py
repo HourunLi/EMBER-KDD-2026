@@ -1,2 +1,3 @@
-from .classifier import *
-from .encoder import *
+from .encoder import FairGNN
+
+__all__ = ["FairGNN"]

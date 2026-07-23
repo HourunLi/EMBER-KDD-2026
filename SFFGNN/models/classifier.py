@@ -1,11 +1,10 @@
-import torch
-import torch.nn as nn
-import torch.nn.init as init
+from torch import nn
 
-class Classifier(torch.nn.Module):
-    def __init__(self, args, input_dim, num_cls):
-        super(Classifier, self).__init__()
+
+class Classifier(nn.Module):
+    def __init__(self, input_dim, num_cls):
+        super().__init__()
         self.body = nn.Linear(input_dim, num_cls)
-        
-    def forward(self, feat, edge_index = None):
+
+    def forward(self, feat):
         return self.body(feat)

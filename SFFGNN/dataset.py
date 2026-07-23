@@ -4,19 +4,12 @@ import numpy as np
 import pandas as pd
 import random
 import scipy.sparse as sp
-from utils import sens_correlation
 from torch_geometric.utils import from_scipy_sparse_matrix
 from torch_geometric.data import Data
 from torch_scatter import scatter_add
 from scipy.spatial import distance_matrix
 from scipy.sparse import load_npz
 
-# def feature_norm(x):
-#     # print("Z-Score Standardized Data:")
-#     mean = x.mean(dim=0, keepdim=True)
-#     std = x.std(dim=0, keepdim=True) + 1e-6
-#     return (x - mean) / std
-    
 def feature_norm(features):
     min_values = features.min(axis=0)[0]
     max_values = features.max(axis=0)[0]
@@ -28,30 +21,6 @@ def index_to_mask(node_num, index):
     mask[index] = 1
     return mask
 
-def sys_normalized_adjacency(adj):
-    adj = sp.coo_matrix(adj)
-    adj = adj + sp.eye(adj.shape[0])
-    row_sum = np.array(adj.sum(1))
-    row_sum = (row_sum == 0) * 1 + row_sum
-    d_inv_sqrt = np.power(row_sum, -0.5).flatten()
-    d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
-    d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
-
-    return d_mat_inv_sqrt.dot(adj).dot(d_mat_inv_sqrt).tocoo()
-
-def sparse_mx_to_torch_sparse_tensor(sparse_mx):
-    """Convert a scipy sparse matrix to a torch sparse tensor."""
-    sparse_mx = sparse_mx.tocoo().astype(np.float32)
-    indices = torch.from_numpy(np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
-    values = torch.from_numpy(sparse_mx.data)
-    shape = torch.Size(sparse_mx.shape)
-
-    return torch.sparse.FloatTensor(indices, values, shape)
-
-
-# x: A data matrix where each column represents a feature or point.
-# thresh: A threshold (default is 0.25) used to determine which pairs of points should be connected based on their similarity.
-# 按照和第二相似度的25%作为threshold，大于这个值的就连边
 def build_relationship(x, thresh=0.25):
     df_euclid = pd.DataFrame(
         1 / (1 + distance_matrix(x.T.T, x.T.T)), columns=x.T.columns, index=x.T.columns)
@@ -64,18 +33,14 @@ def build_relationship(x, thresh=0.25):
         for neig in neig_id:
             if neig != ind:
                 idx_map.append([ind, neig])
-    # print('building edge relationship complete')
     idx_map = np.array(idx_map)
     return idx_map
 
 
 def load_credit(dataset, id, sens_attr="Age", predict_attr="NoDefaultNextMonth", path="../dataset_bak/credit/"):
     path = f"/home/disk2/lhr/fairDomainAdaption/mine/dataset/{dataset}"
-    # path = f"/home/disk2/lhr/fairDomainAdaption/nifty/dataset/credit"
     idx_features_labels = pd.read_csv(os.path.join(path, f"{dataset}{id}.csv"))
-    # print(idx_features_labels)
     header = list(idx_features_labels.columns)
-    # header.remove("new_id")
     header.remove("user_id")
     header.remove('Single')
     header.remove(sens_attr) # sensitive feature removal
@@ -97,18 +62,14 @@ def load_credit(dataset, id, sens_attr="Age", predict_attr="NoDefaultNextMonth",
             edges_unordered = build_relationship(idx_features_labels[header], thresh=0.7)
             np.savetxt(f'{path}/{dataset}{id}_edges.txt', edges_unordered)
 
-        # print(edges_unordered.shape)
         idx = np.arange(features.shape[0])
         idx_map = {j: i for i, j in enumerate(idx)}
-        # print(len(list(map(idx_map.get, edges_unordered.flatten()))))
         edges = np.array(list(map(idx_map.get, edges_unordered.flatten())), dtype=int).reshape(edges_unordered.shape)
         adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])), shape=(labels.shape[0], labels.shape[0]), dtype=np.float32)
         # build symmetric adjacency matrix
         adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
         adj = adj + sp.eye(adj.shape[0])
 
-    adj_norm = sys_normalized_adjacency(adj)
-    adj_norm_sp = sparse_mx_to_torch_sparse_tensor(adj_norm)
     edge_index, _ = from_scipy_sparse_matrix(adj)
 
     label_idx_0 = np.where(labels == 0)[0]
@@ -129,7 +90,6 @@ def load_credit(dataset, id, sens_attr="Age", predict_attr="NoDefaultNextMonth",
 
 def load_bail(dataset, id, sens_attr="WHITE", predict_attr="RECID", path="../dataset/bail/"):
     path = f"/home1/zhangyutong/dataset/{dataset}"
-    # path = f"/home/disk2/lhr/fairDomainAdaption/nifty/dataset/bail"
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(idx_features_labels.columns)
     header.remove(predict_attr)
@@ -160,8 +120,6 @@ def load_bail(dataset, id, sens_attr="WHITE", predict_attr="RECID", path="../dat
         adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
         adj = adj + sp.eye(adj.shape[0])
 
-    adj_norm = sys_normalized_adjacency(adj)
-    adj_norm_sp = sparse_mx_to_torch_sparse_tensor(adj_norm)
     edge_index, _ = from_scipy_sparse_matrix(adj)
 
     label_idx_0 = np.where(labels == 0)[0]
@@ -224,30 +182,16 @@ def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_fi
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
 def load_german(dataset, id, sens_attr="Gender", predict_attr="GoodCustomer", path="../dataset/german/"):
-    # print('Loading {} dataset from {}'.format(dataset, path))
     path = f"/home1/zhangyutong/dataset/{dataset}"
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(idx_features_labels.columns)
-    # header.remove('user_id')
     header.remove(predict_attr)
     header.remove('OtherLoansAtStore')
     header.remove('PurposeOfLoan')
     header.remove(sens_attr)
 
-    # Sensitive Attribute
     idx_features_labels['Gender'][idx_features_labels['Gender'] == 'Female'] = 1
     idx_features_labels['Gender'][idx_features_labels['Gender'] == 'Male'] = 0
-
-#    for i in range(idx_features_labels['PurposeOfLoan'].unique().shape[0]):
-#        val = idx_features_labels['PurposeOfLoan'].unique()[i]
-#        idx_features_labels['PurposeOfLoan'][idx_features_labels['PurposeOfLoan'] == val] = i
-
-#    # Normalize LoanAmount
-#    idx_features_labels['LoanAmount'] = 2*(idx_features_labels['LoanAmount']-idx_features_labels['LoanAmount'].min()).div(idx_features_labels['LoanAmount'].max() - idx_features_labels['LoanAmount'].min()) - 1
-#
-#    # Normalize Age
-#    idx_features_labels['Age'] = 2*(idx_features_labels['Age']-idx_features_labels['Age'].min()).div(idx_features_labels['Age'].max() - idx_features_labels['Age'].min()) - 1
-#
 #    # Normalize LoanDuration
 #    idx_features_labels['LoanDuration'] = 2*(idx_features_labels['LoanDuration']-idx_features_labels['LoanDuration'].min()).div(idx_features_labels['LoanDuration'].max() - idx_features_labels['LoanDuration'].min()) - 1
 #
@@ -275,14 +219,12 @@ def load_german(dataset, id, sens_attr="Gender", predict_attr="GoodCustomer", pa
     # build symmetric adjacency matrix
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
 
-    # features = normalize(features)
     adj = adj + sp.eye(adj.shape[0])
     edge_index, _ = from_scipy_sparse_matrix(adj)
 
     features = torch.FloatTensor(np.array(features.todense()))
     labels = torch.LongTensor(labels)
 
-    import random
     random.seed(20)
     label_idx_0 = np.where(labels==0)[0]
     label_idx_1 = np.where(labels==1)[0]
@@ -324,8 +266,6 @@ def load_syn(dataset, id, path="/home1/zhangyutong/dataset/syn"):
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
     adj = adj + sp.eye(adj.shape[0])
 
-    adj_norm = sys_normalized_adjacency(adj)
-    adj_norm_sp = sparse_mx_to_torch_sparse_tensor(adj_norm)
     edge_index, _ = from_scipy_sparse_matrix(adj)
 
     label_idx_0 = np.where(labels == 0)[0]
@@ -369,19 +309,14 @@ def load_nba(dataset, id, sens_attr="country", predict_attr="SALARY", path="../d
             edges_unordered = build_relationship(idx_features_labels[header], thresh=0.6)
             np.savetxt(f'{path}/{dataset}{id}_edges.txt', edges_unordered)
 
-        # idx = np.array(idx_features_labels["user_id"], dtype=int)
         idx = np.arange(features.shape[0])
         idx_map = {j: i for i, j in enumerate(idx)}
         edges = np.array(list(map(idx_map.get, edges_unordered.flatten())), dtype=int).reshape(edges_unordered.shape)
-        # print(edges)
-        # print(edges_unordered)
         adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])), shape=(labels.shape[0], labels.shape[0]), dtype=np.float32)
         # build symmetric adjacency matrix
         adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
         adj = adj + sp.eye(adj.shape[0])
 
-    adj_norm = sys_normalized_adjacency(adj)
-    adj_norm_sp = sparse_mx_to_torch_sparse_tensor(adj_norm)
     edge_index, _ = from_scipy_sparse_matrix(adj)
 
     label_idx_0 = np.where(labels == 0)[0]
@@ -416,13 +351,6 @@ def get_dataset(args, inid):
     else:
         raise NotImplementedError
     features = feature_norm(features)
-    # print(features)
-    # top_k = 0
-    # corr_matrix = sens_correlation(features, sens_idx)
-    # corr_idx = np.argsort(-np.abs(corr_matrix))
-    # #  If top_k is specified (greater than 0), the corr_idx array is truncated to keep only the indices of the top k most correlated features.
-    # if(top_k > 0):
-    #     corr_idx = corr_idx[:top_k]
 
     data = Data(x = features, edge_index = edge_index, y = labels, sens_labels=sens_labels, 
             train_mask=train_mask, val_mask=val_mask, test_mask=test_mask)
@@ -438,7 +366,6 @@ def process_dataset(args, data, is_target=False):
     args.num_classes = len(data.y.unique()) - 1
     if args.dataset == "pokec":
         args.num_classes = 1
-    # print(f"args.num_classes: {args.num_classes}")
     label_idx_0 = np.where(data.y == 0)[0]
     label_idx_1 = np.where(data.y == 1)[0]
     print("==============the source label distribution==============")

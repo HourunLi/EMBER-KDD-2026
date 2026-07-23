@@ -1,10 +1,12 @@
 import argparse
 import math
-import torch
 import os
-import yaml
-from utils import *
 import sys
+
+import torch
+import yaml
+
+from utils import Logger
 
 
 def read_config(args):
@@ -103,21 +105,11 @@ def mprint(*arg, **kwargs):
         print(*arg, **kwargs)
 
 
-parser = argparse.ArgumentParser(description='mine Arguments.')
+parser = argparse.ArgumentParser(description='Train and evaluate EMBER.')
 
-# # dataset
 parser.add_argument('--dataset', type=str, default='syn')
 parser.add_argument('--inid',    type=str, default='-2')
 parser.add_argument('--outid',   type=str, default='-1')
-# parser.add_argument('--dataset', type=str, default='pokec')
-# parser.add_argument('--inid',    type=str, default='_z')
-# parser.add_argument('--outid',   type=str, default='_n')
-# parser.add_argument('--dataset', type=str, default='bailA')
-# parser.add_argument('--inid',    type=str, default='_2')
-# parser.add_argument('--outid',   type=str, default='_1')
-# parser.add_argument('--dataset', type=str, default='germanA')
-# parser.add_argument('--inid',    type=str, default='_2')
-# parser.add_argument('--outid',   type=str, default='_1')
 # optimisation
 parser.add_argument('--lr',           type=float, default=0.004)
 parser.add_argument('--lr2_reg',      type=float, default=0.001)
@@ -133,10 +125,19 @@ parser.add_argument('--inter_encoder', type=str,
 parser.add_argument('--hidden_dim',    type=int, default=32)
 parser.add_argument('--device_id',     type=str, default='0')
 
-# fairness loss weights
+# source pretraining (paper notation: beta, alpha, gamma)
 parser.add_argument('--lambda_fair',  type=float, default=1)
 parser.add_argument('--meta_lr', type=float, default=0.01)
-parser.add_argument('--lambda_coord', type=float, default=1.0)
+parser.add_argument(
+    '--lambda_coord',
+    type=float,
+    default=1.0,
+    help='coordination strength gamma in [0, 1]; gamma=1 is the full fairness update',
+)
+parser.add_argument('--lambda_sen', type=float, default=1.0)
+parser.add_argument('--lambda_dec', type=float, default=1.0)
+parser.add_argument('--disentangle_temp', type=float, default=0.1)
+parser.add_argument('--disentangle_batch_size', type=int, default=512)
 parser.add_argument('--source_mmd_bandwidth', type=float, default=1.0)
 parser.add_argument('--source_mmd_min_samples', type=int, default=2)
 parser.add_argument('--source_mmd_max_samples', type=int, default=0)
@@ -149,8 +150,10 @@ parser.add_argument('--lambda_pi',    type=float, default=1.0)   # Bayesian prio
 parser.add_argument('--adapt_lr',     type=float, default=1e-3)
 parser.add_argument('--residual_inner_steps', type=int, default=5)
 parser.add_argument('--lambda_residual_l2', type=float, default=1e-3)
-parser.add_argument('--prior_pseudocount', type=float, default=1.0)
-parser.add_argument('--minority_epsilon', type=float, default=1e-6)
+parser.add_argument('--group_pseudocount', type=float, default=1.0)  # nu_0 in Eq. (14)
+parser.add_argument('--prior_confidence_threshold', type=float, default=0.7)  # delta_p
+parser.add_argument('--prior_pseudocount', type=float, default=1.0)  # n_0 in Eq. (17)
+parser.add_argument('--prior_discount', type=float, default=0.9)  # omega in Eq. (17)
 parser.add_argument('--proto_temp',   type=float, default=0.1)   # softmax temperature for posterior sharpening
 parser.add_argument('--ablation', type=str,
                     choices=['full', 'metaalign', 'bca', 'ema', 'residual'],
@@ -195,6 +198,45 @@ if args.tune:
 for key, value in cli_values.items():
     setattr(args, key, value)
 args = apply_overrides(args, args.override)
+
+
+def require(condition, message):
+    if not condition:
+        parser.error(message)
+
+
+require(args.train_epochs >= 2, "train_epochs must be at least 2")
+require(args.n_layers >= 1, "n_layers must be at least 1")
+require(args.lr > 0.0, "lr must be positive")
+require(args.lr2_reg >= 0.0, "lr2_reg must be non-negative")
+require(args.lambda_fair >= 0.0, "lambda_fair (beta) must be non-negative")
+require(args.meta_lr > 0.0, "meta_lr (alpha) must be positive")
+require(
+    0.0 <= args.lambda_coord <= 1.0,
+    "lambda_coord (gamma) must lie in [0, 1]",
+)
+require(args.lambda_sen >= 0.0, "lambda_sen must be non-negative")
+require(args.lambda_dec >= 0.0, "lambda_dec must be non-negative")
+require(args.disentangle_temp > 0.0, "disentangle_temp must be positive")
+require(args.disentangle_batch_size >= 1, "disentangle_batch_size must be positive")
+require(args.source_mmd_bandwidth > 0.0, "source_mmd_bandwidth must be positive")
+require(args.source_mmd_min_samples >= 1, "source_mmd_min_samples must be positive")
+require(args.source_mmd_max_samples >= 0, "source_mmd_max_samples must be non-negative")
+require(args.mmd_chunk_size >= 1, "mmd_chunk_size must be positive")
+require(args.adapt_epochs >= 1, "adapt_epochs must be at least 1")
+require(args.adapt_lr > 0.0, "adapt_lr must be positive")
+require(args.residual_inner_steps >= 1, "residual_inner_steps must be at least 1")
+require(args.lambda_residual_l2 >= 0.0, "lambda_residual_l2 must be non-negative")
+require(0.0 <= args.tau_c <= 1.0, "tau_c (delta) must lie in [0, 1]")
+require(
+    0.0 <= args.prior_confidence_threshold <= 1.0,
+    "prior_confidence_threshold (delta_p) must lie in [0, 1]",
+)
+require(args.proto_temp > 0.0, "proto_temp (tau) must be positive")
+require(0.0 <= args.lambda_pi <= 1.0, "lambda_pi (eta) must lie in [0, 1]")
+require(args.group_pseudocount > 0.0, "group_pseudocount (nu_0) must be positive")
+require(args.prior_pseudocount > 0.0, "prior_pseudocount (n_0) must be positive")
+require(0.0 <= args.prior_discount < 1.0, "prior_discount (omega) must lie in [0, 1)")
 if args.runs_override is not None:
     args.runs = args.runs_override
 print(args)

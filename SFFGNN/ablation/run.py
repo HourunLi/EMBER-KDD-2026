@@ -1,7 +1,8 @@
-"""Run four FairMAC module ablations and aggregate five repeated runs.
+"""Run four EMBER module ablations and aggregate five repeated runs.
 
-Each experiment name means "FairMAC without this module".  In particular,
-``residual`` removes the complete minority-aware sensitive residual learner.
+The variants follow the paper exactly: remove meta-coordination, Bayesian
+correction, cumulative prototype averaging, or minority-aware residual
+evolution, respectively.
 """
 
 import csv
@@ -34,6 +35,29 @@ DATASET_DOMAINS = {
     "syn": ("-2", "-1"),
 }
 
+ABLATION_SPECS = {
+    "metaalign": {
+        "paper_variant": "var1",
+        "variant": "wo_metaalign",
+        "removed_module": "meta-coordinated fair alignment",
+    },
+    "bca": {
+        "paper_variant": "var2",
+        "variant": "wo_bca",
+        "removed_module": "Bayesian prior correction",
+    },
+    "ema": {
+        "paper_variant": "var3",
+        "variant": "wo_ema",
+        "removed_module": "cumulative prototype averaging",
+    },
+    "residual": {
+        "paper_variant": "var4",
+        "variant": "wo_residual",
+        "removed_module": "minority-aware residual evolution",
+    },
+}
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SFFGNN_DIR = SCRIPT_DIR.parent
@@ -49,18 +73,12 @@ def print_status(message):
 
 
 def variant_specs():
-    ablations = ("metaalign", "bca", "ema", "residual")
+    ablations = tuple(ABLATION_SPECS)
     if EXPERIMENT not in {*ablations, "all"}:
         raise ValueError(f"Unknown EXPERIMENT: {EXPERIMENT}")
 
     selected = ablations if EXPERIMENT == "all" else (EXPERIMENT,)
-    return [
-        {
-            "variant": "wo_" + name,
-            "ablation": name,
-        }
-        for name in selected
-    ]
+    return [dict(ABLATION_SPECS[name], ablation=name) for name in selected]
 
 
 def gpu_status(gpu_id):
@@ -178,6 +196,8 @@ def aggregate(specs):
                 "dataset": dataset,
                 "variant": spec["variant"],
                 "ablation": spec["ablation"],
+                "paper_variant": spec["paper_variant"],
+                "removed_module": spec["removed_module"],
                 "runs": len(records),
             }
             for stage in stages:

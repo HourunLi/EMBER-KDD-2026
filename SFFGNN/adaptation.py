@@ -1,12 +1,13 @@
-"""Paper-aligned source-free target adaptation for FairMAC.
+"""Paper-aligned source-free target adaptation for EMBER.
 
 The source model is frozen on the target graph.  Target adaptation updates
-only class prototype residuals and confidence-counted target class priors.
+only class prototype residuals and discounted soft-evidence class priors.
 Target labels and sensitive attributes are never consumed by this module.
 """
 
 from __future__ import annotations
 
+import math
 from typing import Dict, Mapping, Tuple
 
 import torch
@@ -14,7 +15,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-JOINT_KEYS = ((0, 0), (0, 1), (1, 0), (1, 1))
+CLASS_IDS = (0, 1)
+GROUP_IDS = (0, 1)
+JOINT_KEYS = tuple(
+    (class_id, group_id)
+    for class_id in CLASS_IDS
+    for group_id in GROUP_IDS
+)
 ABLATION_MODES = ("full", "metaalign", "bca", "ema", "residual")
 
 
@@ -25,6 +32,35 @@ def _safe_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
 def _graph_zero(x: torch.Tensor) -> torch.Tensor:
     """Return a zero connected to ``x`` when ``x`` requires gradients."""
     return x.sum() * 0.0
+
+
+def _require_finite(name: str, value: float) -> float:
+    value = float(value)
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be finite")
+    return value
+
+
+def _require_positive(name: str, value: float, allow_zero: bool = False) -> float:
+    value = _require_finite(name, value)
+    invalid = value < 0.0 if allow_zero else value <= 0.0
+    if invalid:
+        relation = "non-negative" if allow_zero else "positive"
+        raise ValueError(f"{name} must be {relation}")
+    return value
+
+
+def _require_unit_interval(
+    name: str,
+    value: float,
+    include_one: bool = True,
+) -> float:
+    value = _require_finite(name, value)
+    valid = 0.0 <= value <= 1.0 if include_one else 0.0 <= value < 1.0
+    if not valid:
+        interval = "[0, 1]" if include_one else "[0, 1)"
+        raise ValueError(f"{name} must lie in {interval}")
+    return value
 
 
 def safe_mmd_loss(
@@ -42,7 +78,14 @@ def safe_mmd_loss(
     if h0.shape[0] < min_samples or h1.shape[0] < min_samples:
         return _graph_zero(h)
 
-    cap = max(int(max_samples), 0)
+    if min_samples < 1:
+        raise ValueError("min_samples must be positive")
+    if max_samples < 0:
+        raise ValueError("max_samples must be non-negative")
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be positive")
+
+    cap = int(max_samples)
     if cap > 0:
         if h0.shape[0] > cap:
             indices = torch.randperm(h0.shape[0], device=h0.device)[:cap]
@@ -51,8 +94,8 @@ def safe_mmd_loss(
             indices = torch.randperm(h1.shape[0], device=h1.device)[:cap]
             h1 = h1[indices]
 
-    sigma = max(float(bandwidth), 1e-6)
-    block = max(int(chunk_size), 1)
+    sigma = _require_positive("MMD bandwidth", bandwidth)
+    block = int(chunk_size)
 
     def kernel_mean(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         total = _graph_zero(x)
@@ -124,8 +167,10 @@ def class_conditional_mmd_loss(
             max_samples=max_samples,
         )
         valid_classes += 1
-    if reduction == "mean" and selected_classes:
-        loss = loss / float(len(selected_classes))
+    if reduction == "mean":
+        # Eq. (6) divides by the task label-space size |Y|, not by the number
+        # of classes that happened to contain enough samples in this batch.
+        loss = loss / float(len(CLASS_IDS))
     return loss, valid_classes
 
 
@@ -143,58 +188,59 @@ def select_high_confidence(
     confidence: torch.Tensor,
     threshold: float,
 ) -> torch.Tensor:
-    """Eq. (8)/(14): select nodes whose confidence is above delta."""
-    delta = min(max(float(threshold), 0.0), 1.0)
+    """Eqs. (12), (17), and (20): threshold a confidence score."""
+    delta = _require_unit_interval("confidence threshold", threshold)
     return confidence > delta
+
+
+def _source_bank(
+    knowledge: Mapping,
+    bank_name: str,
+    indices: Tuple[int, ...],
+    device: torch.device,
+) -> torch.Tensor:
+    bank = knowledge.get(bank_name)
+    if not isinstance(bank, Mapping):
+        raise ValueError(f"Source knowledge does not contain '{bank_name}'")
+
+    values = []
+    feature_dim = None
+    for index in indices:
+        value = bank.get(index)
+        if not isinstance(value, torch.Tensor) or value.ndim != 1:
+            raise ValueError(f"{bank_name}[{index}] must be a one-dimensional tensor")
+        if not bool(torch.isfinite(value).all()) or value.norm().item() <= 1e-12:
+            raise ValueError(f"{bank_name}[{index}] must be finite and non-zero")
+        if feature_dim is None:
+            feature_dim = value.numel()
+        elif value.numel() != feature_dim:
+            raise ValueError(f"All vectors in '{bank_name}' must have equal size")
+        values.append(_safe_normalize(value.to(device).float(), dim=0))
+    return torch.stack(values, dim=0)
 
 
 def _source_class_prototypes(
     knowledge: Mapping,
     device: torch.device,
 ) -> torch.Tensor:
-    values = []
-    dim = int(knowledge["p_y"][0].numel())
-    for class_id in (0, 1):
-        value = knowledge["p_y"].get(class_id)
-        if value is None or not torch.isfinite(value).all() or value.norm() < 1e-12:
-            value = torch.zeros(dim)
-            value[class_id % dim] = 1.0
-        values.append(_safe_normalize(value.to(device).float(), dim=0))
-    return torch.stack(values, dim=0)
+    return _source_bank(knowledge, "p_y", CLASS_IDS, device)
 
 
-def _source_group_prototypes(
+def _source_sensitive_anchors(
     knowledge: Mapping,
     device: torch.device,
 ) -> torch.Tensor:
-    if "p_ys" not in knowledge:
-        raise ValueError(
-            "Source knowledge does not contain group prototypes 'p_ys'; "
-            "regenerate the Source checkpoint with the group-balanced exporter"
-        )
-    dim = int(knowledge["p_y"][0].numel())
-    prototypes = torch.zeros((2, 2, dim), device=device)
-    for class_id, group_id in JOINT_KEYS:
-        value = knowledge["p_ys"].get((class_id, group_id))
-        if value is None or not torch.isfinite(value).all() or value.norm() < 1e-12:
-            value = knowledge["p_y"][class_id]
-        prototypes[class_id, group_id] = _safe_normalize(
-            value.to(device).float(), dim=0
-        )
-    return prototypes
+    return _source_bank(knowledge, "a_g", GROUP_IDS, device)
 
 
 def infer_pseudo_sensitive(
-    features: torch.Tensor,
-    pseudo_labels: torch.Tensor,
-    source_group_prototypes: torch.Tensor,
+    sensitive_features: torch.Tensor,
+    source_sensitive_anchors: torch.Tensor,
 ) -> torch.Tensor:
-    """Eq. (8)/(15): nearest Source group prototype inside pseudo class."""
-    class_group_prototypes = source_group_prototypes[pseudo_labels.long()]
-    similarities = torch.einsum(
-        "nd,ngd->ng",
-        _safe_normalize(features, dim=1),
-        _safe_normalize(class_group_prototypes, dim=2),
+    """Eq. (12): match each sensitive view to its nearest source anchor."""
+    similarities = (
+        _safe_normalize(sensitive_features, dim=1)
+        @ _safe_normalize(source_sensitive_anchors, dim=1).t()
     )
     return similarities.argmax(dim=1)
 
@@ -204,10 +250,11 @@ def prototype_logits(
     class_prototypes: torch.Tensor,
     temperature: float,
 ) -> torch.Tensor:
+    temperature = _require_positive("prototype temperature", temperature)
     return (
         _safe_normalize(features, dim=1)
         @ _safe_normalize(class_prototypes, dim=1).t()
-    ) / max(float(temperature), 1e-6)
+    ) / temperature
 
 
 def prototype_probabilities(
@@ -227,9 +274,10 @@ def bayesian_class_posterior(
     temperature: float,
     prior_strength: float,
 ) -> torch.Tensor:
-    """Eq. (12)/(17): prototype likelihood plus count-aware class prior."""
+    """Eq. (18): prototype likelihood plus tempered target class prior."""
+    prior_strength = _require_unit_interval("Bayesian prior strength", prior_strength)
     corrected_logits = prototype_logits(features, class_prototypes, temperature)
-    corrected_logits = corrected_logits + float(prior_strength) * torch.log(
+    corrected_logits = corrected_logits + prior_strength * torch.log(
         class_prior.clamp_min(1e-8)
     ).unsqueeze(0)
     return torch.softmax(torch.nan_to_num(corrected_logits), dim=1)
@@ -239,10 +287,14 @@ def minority_aware_weights(
     pseudo_labels: torch.Tensor,
     pseudo_sensitive: torch.Tensor,
     selected: torch.Tensor,
-    epsilon: float,
+    pseudocount: float,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Eq. (9): inverse class-conditional pseudo-group frequency weights."""
-    counts = torch.zeros((2, 2), device=pseudo_labels.device)
+    """Eq. (14): inverse pseudo-group count with Dirichlet smoothing."""
+    pseudocount = _require_positive("group pseudocount", pseudocount)
+    counts = torch.zeros(
+        (len(CLASS_IDS), len(GROUP_IDS)),
+        device=pseudo_labels.device,
+    )
     for class_id, group_id in JOINT_KEYS:
         counts[class_id, group_id] = (
             selected
@@ -255,29 +307,29 @@ def minority_aware_weights(
         selected_classes = pseudo_labels[selected].long()
         selected_groups = pseudo_sensitive[selected].long()
         weights[selected] = 1.0 / (
-            counts[selected_classes, selected_groups]
-            + max(float(epsilon), 1e-12)
+            counts[selected_classes, selected_groups] + pseudocount
         )
     return weights, counts
 
 
-def _initial_count_prior(
+def _prior_from_evidence(
+    evidence: torch.Tensor,
     pseudocount: float,
-    device: torch.device,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    counts = torch.full(
-        (2,), max(float(pseudocount), 0.0), device=device, dtype=torch.float
-    )
-    if counts.sum().item() <= 1e-12:
-        counts.fill_(1.0)
-    prior = (counts + 1e-8) / (counts + 1e-8).sum().clamp_min(1e-8)
-    return counts, prior
+) -> torch.Tensor:
+    """Eq. (17): posterior mean of the symmetric Dirichlet prior."""
+    n0 = _require_positive("prior pseudocount", pseudocount)
+    if not bool(torch.isfinite(evidence).all()) or bool((evidence < 0).any()):
+        raise ValueError("Class-prior evidence must be finite and non-negative")
+    numerator = evidence + n0
+    denominator = len(CLASS_IDS) * n0 + evidence.sum()
+    return numerator / denominator
 
 
 def _base_state(
     args,
     class_prototypes: torch.Tensor,
     class_prior: torch.Tensor,
+    prediction_mode: str = "prototype_posterior",
 ) -> Dict:
     ablation = str(getattr(args, "ablation", "full"))
     use_bca = ablation != "bca"
@@ -288,17 +340,24 @@ def _base_state(
         "prior_strength": (
             float(getattr(args, "lambda_pi", 1.0)) if use_bca else 0.0
         ),
+        "prediction_mode": prediction_mode,
     }
 
 
 def build_initial_adaptation_state(args, knowledge: Mapping) -> Dict:
-    """Build the t=0 Source-prototype state without touching Target labels."""
+    """Build the frozen-source baseline state without Target annotations."""
     device = args.device
     class_prototypes = _source_class_prototypes(knowledge, device)
-    _, class_prior = _initial_count_prior(
-        getattr(args, "prior_pseudocount", 1.0), device
+    class_prior = _prior_from_evidence(
+        torch.zeros(len(CLASS_IDS), device=device),
+        getattr(args, "prior_pseudocount", 1.0),
     )
-    return _base_state(args, class_prototypes, class_prior)
+    return _base_state(
+        args,
+        class_prototypes,
+        class_prior,
+        prediction_mode="source_classifier",
+    )
 
 
 def run_target_adaptation(
@@ -307,7 +366,7 @@ def run_target_adaptation(
     target_data,
     knowledge: Mapping,
 ) -> Dict:
-    """Run Eqs. (8)-(17) while keeping the Source model completely frozen."""
+    """Run Eqs. (12)-(20) while keeping the source model frozen."""
     ablation = str(getattr(args, "ablation", "full"))
     if ablation not in ABLATION_MODES:
         raise ValueError(
@@ -325,41 +384,88 @@ def run_target_adaptation(
         parameter.grad = None
 
     with torch.no_grad():
-        base_embedding, source_logits = source_model(
-            target_data.x, target_data.edge_index
+        task_features, sensitive_features = source_model.encode_views(
+            target_data.x,
+            target_data.edge_index,
         )
-        features = _safe_normalize(base_embedding.detach(), dim=1)
+        source_logits = source_model.cls_head(task_features)
+        features = _safe_normalize(task_features.detach(), dim=1)
+        sensitive_features = _safe_normalize(
+            sensitive_features.detach(), dim=1
+        )
         source_probabilities = source_classifier_probabilities(source_logits.detach())
 
     source_class_prototypes = _source_class_prototypes(knowledge, device)
-    source_group_prototypes = _source_group_prototypes(knowledge, device)
+    source_sensitive_anchors = _source_sensitive_anchors(knowledge, device)
     class_prototypes = source_class_prototypes.detach().clone()
 
-    class_counts, class_prior = _initial_count_prior(
-        getattr(args, "prior_pseudocount", 1.0), device
+    discounted_evidence = torch.zeros(len(CLASS_IDS), device=device)
+    class_prior = _prior_from_evidence(
+        discounted_evidence,
+        getattr(args, "prior_pseudocount", 1.0),
     )
-    class_update_counts = torch.zeros(2, device=device, dtype=torch.long)
-
-    epochs = max(1, int(getattr(args, "adapt_epochs", 200)))
-    residual_inner_steps = max(
-        1, int(getattr(args, "residual_inner_steps", 5))
+    class_update_counts = torch.zeros(
+        len(CLASS_IDS),
+        device=device,
+        dtype=torch.long,
     )
-    adapt_lr = float(getattr(args, "adapt_lr", 1e-3))
-    threshold = float(getattr(args, "tau_c", 0.7))
-    temperature = float(getattr(args, "proto_temp", 1.0))
-    prior_strength = float(getattr(args, "lambda_pi", 1.0)) if use_bca else 0.0
-    residual_l2_weight = float(getattr(args, "lambda_residual_l2", 1e-3))
-    minority_epsilon = float(getattr(args, "minority_epsilon", 1e-6))
 
-    # Eq. (8): q_v^ta is produced once by the frozen Source classifier and
-    # remains fixed throughout adaptation.  Bayesian confidence is introduced
-    # separately by Eqs. (13)-(14) only to refresh subsequent confident sets.
+    epochs = int(getattr(args, "adapt_epochs", 200))
+    residual_inner_steps = int(getattr(args, "residual_inner_steps", 5))
+    if epochs < 1:
+        raise ValueError("adapt_epochs must be at least 1")
+    if residual_inner_steps < 1:
+        raise ValueError("residual_inner_steps must be at least 1")
+    adapt_lr = _require_positive(
+        "adaptation learning rate",
+        getattr(args, "adapt_lr", 1e-3),
+    )
+    threshold = _require_unit_interval("delta", getattr(args, "tau_c", 0.7))
+    prior_threshold = _require_unit_interval(
+        "delta_p",
+        getattr(args, "prior_confidence_threshold", threshold),
+    )
+    temperature = _require_positive(
+        "prototype temperature",
+        getattr(args, "proto_temp", 1.0),
+    )
+    configured_prior_strength = _require_unit_interval(
+        "eta",
+        getattr(args, "lambda_pi", 1.0),
+    )
+    prior_strength = configured_prior_strength if use_bca else 0.0
+    residual_l2_weight = _require_positive(
+        "residual L2 weight",
+        getattr(args, "lambda_residual_l2", 1e-3),
+        allow_zero=True,
+    )
+    group_pseudocount = _require_positive(
+        "group pseudocount",
+        getattr(args, "group_pseudocount", 1.0),
+    )
+    prior_pseudocount = _require_positive(
+        "prior pseudocount",
+        getattr(args, "prior_pseudocount", 1.0),
+    )
+    prior_discount = _require_unit_interval(
+        "omega",
+        getattr(args, "prior_discount", 0.9),
+        include_one=False,
+    )
+
+    # Eq. (12): task confidence is read from the frozen source classifier,
+    # while the pseudo-sensitive group is matched once in the decoupled
+    # sensitive space and then held fixed for all adaptation rounds.
     source_confidence, pseudo_labels = source_probabilities.max(dim=1)
     source_confidence = source_confidence.detach()
+    pseudo_sensitive = infer_pseudo_sensitive(
+        sensitive_features,
+        source_sensitive_anchors,
+    )
     selected = select_high_confidence(source_confidence, threshold)
 
     print(
-        "[FairMAC] ablation={} epochs={} residual_inner={} "
+        "[EMBER] ablation={} rounds={} residual_inner={} "
         "residual={} ema={} prior={}".format(
             ablation,
             epochs,
@@ -371,121 +477,111 @@ def run_target_adaptation(
     )
 
     for step in range(epochs):
-        with torch.no_grad():
-            pseudo_sensitive = infer_pseudo_sensitive(
-                features, pseudo_labels, source_group_prototypes
+        residual_nll = _graph_zero(class_prototypes)
+        residual_l2 = _graph_zero(class_prototypes)
+        if use_residual:
+            inverse_group_weights, _ = minority_aware_weights(
+                pseudo_labels,
+                pseudo_sensitive,
+                selected,
+                group_pseudocount,
             )
+            step_residuals = nn.Parameter(torch.zeros_like(class_prototypes))
+            step_optimizer = torch.optim.Adam([step_residuals], lr=adapt_lr)
+            node_weights = source_confidence * inverse_group_weights
+            normalizer = node_weights[selected].sum()
 
-        inverse_group_weights, _ = minority_aware_weights(
-            pseudo_labels,
-            pseudo_sensitive,
-            selected,
-            minority_epsilon,
-        )
+            for _ in range(residual_inner_steps):
+                candidate_prototypes = _safe_normalize(
+                    class_prototypes.detach() + step_residuals,
+                    dim=1,
+                )
+                log_prototype_probabilities = F.log_softmax(
+                    prototype_logits(features, candidate_prototypes, temperature),
+                    dim=1,
+                )
 
-        # Eq. (9)/(16): every adaptation step owns an independent R^(t),
-        # initialized at zero and discarded after updating the prototypes.
-        step_residuals = nn.Parameter(
-            torch.zeros_like(class_prototypes), requires_grad=use_residual
-        )
-        step_optimizer = (
-            torch.optim.Adam([step_residuals], lr=adapt_lr)
-            if use_residual
-            else None
-        )
-        optimization_steps = residual_inner_steps if use_residual else 1
-        # Eq. (9): q_v^ta is the fixed Source-classifier confidence, while
-        # only the inverse pseudo-group-frequency term changes with t.
-        node_weights = source_confidence * inverse_group_weights
-        normalizer = node_weights[selected].sum()
+                if selected.any() and normalizer.detach().item() > 1e-12:
+                    row_index = torch.arange(features.shape[0], device=device)
+                    point_losses = -log_prototype_probabilities[
+                        row_index,
+                        pseudo_labels.long(),
+                    ]
+                    residual_nll = (
+                        node_weights[selected] * point_losses[selected]
+                    ).sum() / normalizer.clamp_min(1e-8)
+                else:
+                    residual_nll = _graph_zero(candidate_prototypes)
 
-        for _ in range(optimization_steps):
-            candidate_prototypes = _safe_normalize(
-                class_prototypes.detach() + step_residuals, dim=1
-            )
-            log_prototype_probabilities = F.log_softmax(
-                prototype_logits(features, candidate_prototypes, temperature),
-                dim=1,
-            )
-
-            if selected.any() and normalizer.detach().item() > 1e-12:
-                row_index = torch.arange(features.shape[0], device=device)
-                point_losses = -log_prototype_probabilities[
-                    row_index, pseudo_labels.long()
-                ]
-                residual_nll = (
-                    node_weights[selected] * point_losses[selected]
-                ).sum() / normalizer.clamp_min(1e-8)
-            else:
-                residual_nll = _graph_zero(candidate_prototypes)
-
-            residual_l2 = step_residuals.square().sum()
-            total_loss = residual_nll + residual_l2_weight * residual_l2
-
-            if step_optimizer is not None:
+                residual_l2 = step_residuals.square().sum()
+                total_loss = residual_nll + residual_l2_weight * residual_l2
                 step_optimizer.zero_grad()
                 total_loss.backward()
                 step_optimizer.step()
 
+            with torch.no_grad():
+                optimized_candidates = _safe_normalize(
+                    class_prototypes + step_residuals,
+                    dim=1,
+                )
+                updated_prototypes = class_prototypes.clone()
+                for class_id in CLASS_IDS:
+                    class_selected = selected & (pseudo_labels == class_id)
+                    if not class_selected.any():
+                        continue
+                    if use_ema:
+                        class_update_counts[class_id] += 1
+                        mu = 1.0 / float(
+                            class_update_counts[class_id].item() + 1
+                        )
+                        updated_prototypes[class_id] = _safe_normalize(
+                            (1.0 - mu) * class_prototypes[class_id]
+                            + mu * optimized_candidates[class_id],
+                            dim=0,
+                        )
+                    else:
+                        updated_prototypes[class_id] = optimized_candidates[class_id]
+                class_prototypes = updated_prototypes
+
         with torch.no_grad():
-            optimized_candidates = _safe_normalize(
-                class_prototypes + step_residuals, dim=1
-            )
-            updated_prototypes = class_prototypes.clone()
-            for class_id in (0, 1):
-                class_selected = selected & (pseudo_labels == class_id)
-                if not class_selected.any() or not use_residual:
-                    continue
-                if use_ema:
-                    # Paper Eq. (9): adaptively smooth the newly optimized
-                    # residual prototype with its historical class prototype.
-                    class_update_counts[class_id] += 1
-                    mu = 1.0 / float(class_update_counts[class_id].item() + 1)
-                    updated_prototypes[class_id] = _safe_normalize(
-                        (1.0 - mu) * class_prototypes[class_id]
-                        + mu * optimized_candidates[class_id],
-                        dim=0,
-                    )
-                else:
-                    # EMA ablation: retain residual learning, but replace the
-                    # historical prototype directly with the new candidate.
-                    updated_prototypes[class_id] = optimized_candidates[class_id]
-            class_prototypes = updated_prototypes
-
-            # Eq. (11): cumulative counts always use the fixed q_v^ta from
-            # Eq. (8).  The prototype-induced label and confident set remain
-            # iteration-dependent.
             likelihood = prototype_probabilities(
-                features, class_prototypes, temperature
-            )
-            count_labels = likelihood.argmax(dim=1)
-            for class_id in (0, 1):
-                class_count_mask = selected & (count_labels == class_id)
-                class_counts[class_id] += source_confidence[
-                    class_count_mask
-                ].sum()
-            class_prior = (class_counts + 1e-8) / (
-                class_counts + 1e-8
-            ).sum().clamp_min(1e-8)
-
-            # Eqs. (12)-(14): Bayesian confidence refreshes only the next
-            # pseudo-labels and confident set; it never replaces q_v^ta in
-            # either the residual objective or cumulative counting.
-            corrected_probabilities = bayesian_class_posterior(
                 features,
                 class_prototypes,
-                class_prior,
                 temperature,
-                prior_strength,
             )
-            bayesian_confidence, pseudo_labels = corrected_probabilities.max(dim=1)
-            selected = select_high_confidence(bayesian_confidence, threshold)
+            if use_bca:
+                prior_selected = select_high_confidence(
+                    likelihood.max(dim=1).values,
+                    prior_threshold,
+                )
+                round_evidence = (
+                    source_confidence[prior_selected].unsqueeze(1)
+                    * likelihood[prior_selected]
+                ).sum(dim=0)
+                discounted_evidence = (
+                    prior_discount * discounted_evidence + round_evidence
+                )
+                class_prior = _prior_from_evidence(
+                    discounted_evidence,
+                    prior_pseudocount,
+                )
+                adapted_probabilities = bayesian_class_posterior(
+                    features,
+                    class_prototypes,
+                    class_prior,
+                    temperature,
+                    prior_strength,
+                )
+            else:
+                adapted_probabilities = likelihood
+            adapted_confidence, pseudo_labels = adapted_probabilities.max(dim=1)
+            selected = select_high_confidence(adapted_confidence, threshold)
 
         if step == 0 or (step + 1) % 50 == 0 or step + 1 == epochs:
             print(
                 "  [Adapt {:3d}] hc={}/{} res={:.4f} l2={:.4f} "
                 "prior=({:.3f},{:.3f})".format(
-                    step,
+                    step + 1,
                     int(selected.sum().item()),
                     features.shape[0],
                     float(residual_nll.detach().item()),
@@ -504,18 +600,21 @@ def predict_target_proba(
     encoder,
     state: Mapping,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Eq. (17) inference without accessing Target labels or attributes."""
+    """Return frozen-source or Eq. (18) probabilities without annotations."""
     del args
     encoder.eval()
     with torch.no_grad():
-        base_embedding, _ = encoder(data.x, data.edge_index)
-        device = base_embedding.device
-        features = _safe_normalize(base_embedding, dim=1)
-        probabilities = bayesian_class_posterior(
-            features,
-            state["class_prototypes"].to(device),
-            state["class_prior"].to(device),
-            float(state["proto_temp"]),
-            float(state["prior_strength"]),
-        )
+        task_features, source_logits = encoder(data.x, data.edge_index)
+        device = task_features.device
+        features = _safe_normalize(task_features, dim=1)
+        if state.get("prediction_mode") == "source_classifier":
+            probabilities = source_classifier_probabilities(source_logits)
+        else:
+            probabilities = bayesian_class_posterior(
+                features,
+                state["class_prototypes"].to(device),
+                state["class_prior"].to(device),
+                float(state["proto_temp"]),
+                float(state["prior_strength"]),
+            )
         return features, probabilities

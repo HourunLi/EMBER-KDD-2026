@@ -1,12 +1,12 @@
-from dataset import process_dataset, get_dataset
-from models import *
-from utils import *
-from runner import *
-from config import args
 import json
-import numpy as np
 import os
-import torch
+
+import numpy as np
+
+from config import args
+from dataset import get_dataset, process_dataset
+from runner import train_and_adapt
+from utils import seed_everything
 
 if __name__ == '__main__':
     seed_everything(args.seed)

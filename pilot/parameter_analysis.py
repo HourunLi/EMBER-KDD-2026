@@ -137,7 +137,7 @@ def _as_number(value: str):
 
 
 def load_summary(path: Path) -> List[Dict[str, object]]:
-    """Read an aggregate parameter-analysis CSV."""
+    """Read a paper-aligned aggregate parameter-analysis CSV."""
 
     with path.open("r", newline="", encoding="utf-8") as source:
         rows = list(csv.DictReader(source))
@@ -145,6 +145,19 @@ def load_summary(path: Path) -> List[Dict[str, object]]:
         for column in NUMERIC_COLUMNS:
             if column in row:
                 row[column] = _as_number(row[column])
+    invalid_gamma_rows = [
+        row
+        for row in rows
+        if row.get("group") == "beta_gamma"
+        and _finite(row.get("lambda_coord"))
+        and not 0.0 <= float(row["lambda_coord"]) <= 1.0
+    ]
+    if invalid_gamma_rows:
+        raise ValueError(
+            "Summary contains beta-gamma rows outside paper Section 3.3's "
+            "gamma range [0, 1]. Re-aggregate the raw results with "
+            "SFFGNN/parameter/run.py before plotting."
+        )
     return rows
 
 

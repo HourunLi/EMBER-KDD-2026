@@ -10,7 +10,11 @@ bailA:
   inter_encoder: GCN
   lambda_fair: 8.0
   meta_lr: 0.03
-  lambda_coord: 3.0
+  lambda_coord: 1.0
+  lambda_sen: 1.0
+  lambda_dec: 1.0
+  disentangle_temp: 0.1
+  disentangle_batch_size: 512
   source_mmd_bandwidth: 0.5
   source_mmd_min_samples: 8
   source_mmd_max_samples: 0
@@ -23,8 +27,10 @@ bailA:
   proto_temp: 0.75
   lambda_pi: 0.01
   lambda_residual_l2: 0.0001
+  group_pseudocount: 1.0
+  prior_confidence_threshold: 0.75
   prior_pseudocount: 1.0
-  minority_epsilon: 0.000001
+  prior_discount: 0.9
 germanA:
   train_epochs: 800
   lr: 0.005
@@ -37,7 +43,11 @@ germanA:
   inter_encoder: GCN
   lambda_fair: 4.0
   meta_lr: 0.02
-  lambda_coord: 3.0
+  lambda_coord: 1.0
+  lambda_sen: 1.0
+  lambda_dec: 1.0
+  disentangle_temp: 0.1
+  disentangle_batch_size: 512
   source_mmd_bandwidth: 0.75
   source_mmd_min_samples: 4
   source_mmd_max_samples: 0
@@ -50,8 +60,10 @@ germanA:
   proto_temp: 0.5
   lambda_pi: 0.2
   lambda_residual_l2: 0.001
+  group_pseudocount: 1.0
+  prior_confidence_threshold: 0.75
   prior_pseudocount: 1.0
-  minority_epsilon: 0.000001
+  prior_discount: 0.9
 pokec:
   train_epochs: 800
   lr: 0.002
@@ -64,7 +76,11 @@ pokec:
   inter_encoder: GCN
   lambda_fair: 2.0
   meta_lr: 0.01
-  lambda_coord: 2.0
+  lambda_coord: 1.0
+  lambda_sen: 1.0
+  lambda_dec: 1.0
+  disentangle_temp: 0.1
+  disentangle_batch_size: 512
   source_mmd_bandwidth: 2.0
   source_mmd_min_samples: 8
   source_mmd_max_samples: 0
@@ -77,8 +93,10 @@ pokec:
   proto_temp: 1.0
   lambda_pi: 0.1
   lambda_residual_l2: 0.001
+  group_pseudocount: 1.0
+  prior_confidence_threshold: 0.35
   prior_pseudocount: 10.0
-  minority_epsilon: 0.000001
+  prior_discount: 0.9
 syn:
   train_epochs: 800
   lr: 0.005
@@ -91,7 +109,11 @@ syn:
   inter_encoder: MLP
   lambda_fair: 8.0
   meta_lr: 0.003
-  lambda_coord: 3.0
+  lambda_coord: 1.0
+  lambda_sen: 1.0
+  lambda_dec: 1.0
+  disentangle_temp: 0.1
+  disentangle_batch_size: 512
   source_mmd_bandwidth: 0.25
   source_mmd_min_samples: 4
   source_mmd_max_samples: 0
@@ -104,5 +126,7 @@ syn:
   proto_temp: 0.1
   lambda_pi: 0.5
   lambda_residual_l2: 0.00001
+  group_pseudocount: 1.0
+  prior_confidence_threshold: 0.5
   prior_pseudocount: 25.0
-  minority_epsilon: 0.000001
+  prior_discount: 0.9
