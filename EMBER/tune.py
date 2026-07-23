@@ -7,12 +7,14 @@ The search space follows the method in Sections 1-3 of the EMBER paper:
 * confidence-filtered residual prototype evolution, and
 * smoothed, discounted Bayesian class-prior correction.
 
-This is a deterministic local-neighborhood plus balanced random search over
-dataset-specific discrete ranges.  It deliberately runs exactly one training
-run for every sampled combination (``--runs_override 1``).  Different trials are dispatched in
-parallel with one worker per GPU, so a GPU never hosts two EMBER trials from
-this script at the same time.  Before every Pokec launch, the worker also waits
-for a configurable amount of free VRAM and low GPU utilization.
+This deterministic search combines preserved elite anchors, primary-anchor
+local perturbations, and balanced random samples from dataset-specific ranges.
+It deliberately runs exactly one training run for every sampled combination
+(``--runs_override 1``).
+Different trials are dispatched in parallel with one worker per GPU, so a GPU
+never hosts two EMBER trials from this script at the same time.  Before every
+Pokec launch, the worker also waits for a configurable amount of free VRAM and
+low GPU utilization.
 
 Examples
 --------
@@ -52,8 +54,8 @@ import yaml
 SCRIPT_DIR = Path(__file__).resolve().parent
 MAIN_SCRIPT = SCRIPT_DIR / "main.py"
 CONFIG_PATH = SCRIPT_DIR / "config" / "config.yaml"
-SEARCH_ROUND = 2
-DEFAULT_RESULTS_DIR = SCRIPT_DIR / "tune_results_round2"
+SEARCH_ROUND = 3
+DEFAULT_RESULTS_DIR = SCRIPT_DIR / "tune_results_round3"
 
 DATASET_DOMAINS: Dict[str, Tuple[str, str]] = {
     "bailA": ("_2", "_1"),
@@ -63,9 +65,9 @@ DATASET_DOMAINS: Dict[str, Tuple[str, str]] = {
 }
 
 # These shared values intentionally live in config.py instead of being
-# repeated for every dataset in config/config.yaml.  They are listed here only
-# so trial 0 can reproduce the complete baseline and so selected shared method
-# parameters can still be searched explicitly.
+# repeated for every dataset in config/config.yaml.  They are listed here so
+# every anchor can be resolved to a complete search parameter dictionary and
+# so selected shared method parameters can still be searched explicitly.
 SHARED_DEFAULTS: Dict[str, Any] = {
     "lambda_coord": 1.0,
     "disentangle_temp": 0.1,
@@ -73,179 +75,249 @@ SHARED_DEFAULTS: Dict[str, Any] = {
     "prior_discount": 0.9,
 }
 
-# Second-round ranges are local neighborhoods around the best completed trial
-# in paper/tune/summary.csv.  They retain a few adjacent values on either side
-# of a boundary so the search can still discover a nearby improvement.  Bail
-# and German use stricter confidence filtering; Pokec uses lower thresholds;
-# the synthetic MLP setting permits a sharper prototype temperature.
+# Third-round ranges follow paper/tune/summary2.csv.  Because several datasets
+# have two nearly tied but structurally different modes, the search keeps a
+# primary best anchor plus selected secondary anchors before exploring local
+# one-factor perturbations and balanced random combinations.
 SEARCH_SPACES: Dict[str, Dict[str, Tuple[Any, ...]]] = {
     "bailA": {
-        "hidden_dim": (64, 128),
+        "hidden_dim": (64,),
         "n_layers": (1, 2),
-        "lr": (0.003, 0.0045, 0.006),
-        "dropout": (0.4, 0.5, 0.6),
-        "lambda_fair": (2.0, 4.0, 6.0, 8.0),
-        "meta_lr": (0.005, 0.01, 0.02, 0.03),
-        "lambda_coord": (0.75, 1.0),
-        "disentangle_temp": (0.03, 0.05, 0.1, 0.2),
+        "lr": (0.0035, 0.0045, 0.0055),
+        "dropout": (0.35, 0.4, 0.45, 0.5),
+        "lambda_fair": (3.0, 4.0, 5.0, 6.0),
+        "meta_lr": (0.02, 0.025, 0.03, 0.035),
+        "lambda_coord": (0.5, 0.75, 1.0),
+        "disentangle_temp": (0.05, 0.075, 0.1, 0.15),
         "source_mmd_bandwidth": (0.25, 0.5, 1.0, 1.5),
-        "adapt_epochs": (75, 100, 125, 150),
-        "adapt_lr": (0.0003, 0.0005, 0.0008),
+        "adapt_epochs": (50, 75, 100, 125, 150),
+        "adapt_lr": (0.0003, 0.0004, 0.0005, 0.0007),
         "residual_inner_steps": (20, 30, 40),
-        "tau_c": (0.7, 0.75, 0.8),
-        "prior_confidence_threshold": (0.6, 0.65, 0.7),
-        "proto_temp": (0.5, 0.75, 1.0, 1.25),
-        "lambda_pi": (0.0, 0.01, 0.05, 0.1, 0.25),
-        "lambda_residual_l2": (0.0001, 0.001, 0.003),
+        "tau_c": (0.65, 0.7, 0.75),
+        "prior_confidence_threshold": (0.55, 0.6, 0.65, 0.7, 0.75),
+        "proto_temp": (0.4, 0.5, 0.75, 1.0),
+        "lambda_pi": (0.0, 0.005, 0.01, 0.025),
+        "lambda_residual_l2": (0.0005, 0.001, 0.002, 0.003),
         "group_pseudocount": (0.25, 0.5, 0.75, 1.0),
-        "prior_pseudocount": (5.0, 10.0, 20.0),
-        "prior_discount": (0.5, 0.75, 0.9, 0.95),
+        "prior_pseudocount": (5.0, 7.5, 10.0, 15.0),
+        "prior_discount": (0.5, 0.625, 0.75, 0.9),
     },
     "germanA": {
-        "hidden_dim": (32, 64, 128),
+        "hidden_dim": (128,),
         "n_layers": (1, 2),
-        "lr": (0.005, 0.0075, 0.01),
-        "dropout": (0.2, 0.3, 0.4),
-        "lambda_fair": (1.0, 2.0, 4.0, 8.0),
-        "meta_lr": (0.01, 0.02, 0.03),
+        "lr": (0.0075, 0.009, 0.01, 0.012),
+        "dropout": (0.25, 0.3, 0.35, 0.4),
+        "lambda_fair": (3.0, 4.0, 6.0, 8.0),
+        "meta_lr": (0.015, 0.02, 0.025, 0.03),
         "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.05, 0.1, 0.2),
-        "source_mmd_bandwidth": (0.25, 0.5, 0.75, 1.5),
-        "adapt_epochs": (10, 15, 25, 50),
-        "adapt_lr": (0.0002, 0.0005, 0.001),
-        "residual_inner_steps": (20, 40, 60),
-        "tau_c": (0.6, 0.65, 0.7, 0.9),
-        "prior_confidence_threshold": (0.6, 0.65, 0.7, 0.75),
-        "proto_temp": (0.1, 0.15, 0.25, 0.5),
-        "lambda_pi": (0.1, 0.4, 0.6, 0.8),
-        "lambda_residual_l2": (0.001, 0.01, 0.03),
-        "group_pseudocount": (1.0, 2.0, 5.0),
-        "prior_pseudocount": (1.0, 5.0, 10.0),
-        "prior_discount": (0.5, 0.75, 0.9),
+        "disentangle_temp": (0.1, 0.15, 0.2, 0.25),
+        "source_mmd_bandwidth": (0.1, 0.25, 0.5, 0.75),
+        "adapt_epochs": (5, 10, 15, 25),
+        "adapt_lr": (0.0001, 0.0002, 0.00035, 0.0005),
+        "residual_inner_steps": (20, 30, 40, 60),
+        "tau_c": (0.6, 0.65, 0.7, 0.75),
+        "prior_confidence_threshold": (0.65, 0.7, 0.75),
+        "proto_temp": (0.1, 0.25, 0.4, 0.5, 0.6),
+        "lambda_pi": (0.5, 0.6, 0.7, 0.8),
+        "lambda_residual_l2": (0.003, 0.01, 0.02, 0.03),
+        "group_pseudocount": (1.0, 2.0, 3.0, 5.0),
+        "prior_pseudocount": (1.0, 2.0, 5.0),
+        "prior_discount": (0.75, 0.85, 0.9, 0.95),
     },
     "pokec": {
         "hidden_dim": (64, 128),
         "n_layers": (2, 3, 4),
-        "lr": (0.001, 0.003, 0.004),
-        "dropout": (0.1, 0.2, 0.3, 0.4),
-        "lambda_fair": (0.5, 1.0, 2.0, 4.0),
-        "meta_lr": (0.005, 0.01, 0.02),
+        "lr": (0.001, 0.0025, 0.004, 0.005),
+        "dropout": (0.1, 0.15, 0.2, 0.25, 0.3),
+        "lambda_fair": (0.5, 2.0, 4.0),
+        "meta_lr": (0.005, 0.01, 0.015, 0.02),
         "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.05, 0.1, 0.2),
-        "source_mmd_bandwidth": (0.5, 1.0, 2.0),
-        "adapt_epochs": (20, 25, 50, 75),
-        "adapt_lr": (0.0003, 0.0005, 0.001),
+        "disentangle_temp": (0.075, 0.1, 0.15, 0.2),
+        "source_mmd_bandwidth": (0.5, 1.0, 1.5, 2.0, 2.5),
+        "adapt_epochs": (15, 20, 25, 50, 75),
+        "adapt_lr": (0.0002, 0.0003, 0.0005, 0.00075, 0.001),
         "residual_inner_steps": (10, 20, 30),
-        "tau_c": (0.2, 0.25, 0.35, 0.45),
-        "prior_confidence_threshold": (0.2, 0.25, 0.35, 0.45),
-        "proto_temp": (0.35, 0.5, 0.75, 1.0),
+        "tau_c": (0.2, 0.25, 0.35, 0.45, 0.5),
+        "prior_confidence_threshold": (0.25, 0.35, 0.4, 0.45, 0.5),
+        "proto_temp": (0.5, 0.75, 1.0, 1.25),
         "lambda_pi": (0.1, 0.2, 0.3, 0.4),
-        "lambda_residual_l2": (0.0001, 0.001, 0.003),
-        "group_pseudocount": (0.5, 1.0, 2.0, 5.0),
-        "prior_pseudocount": (10.0, 50.0, 100.0),
-        "prior_discount": (0.0, 0.25, 0.5, 0.9),
+        "lambda_residual_l2": (0.0001, 0.0003, 0.001, 0.003),
+        "group_pseudocount": (0.5, 1.0, 2.0),
+        "prior_pseudocount": (50.0, 75.0, 100.0, 150.0),
+        "prior_discount": (0.0, 0.5, 0.75, 0.9),
     },
     "syn": {
         # n_layers is intentionally absent: the MLP backbone ignores it.
-        "hidden_dim": (128, 256),
-        "lr": (0.002, 0.0035, 0.005),
-        "dropout": (0.2, 0.3, 0.4),
-        "lambda_fair": (2.0, 4.0, 8.0, 12.0),
-        "meta_lr": (0.001, 0.003, 0.005, 0.01),
+        "hidden_dim": (256,),
+        "lr": (0.0015, 0.002, 0.003, 0.004, 0.005),
+        "dropout": (0.25, 0.3, 0.35, 0.4),
+        "lambda_fair": (1.0, 2.0, 4.0, 6.0, 8.0),
+        "meta_lr": (0.002, 0.003, 0.005, 0.0075, 0.01),
         "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.05, 0.1),
-        "source_mmd_bandwidth": (0.25, 0.5, 1.0, 1.5),
-        "adapt_epochs": (75, 100, 150),
-        "adapt_lr": (0.0002, 0.0005, 0.001),
-        "residual_inner_steps": (20, 40, 60),
-        "tau_c": (0.35, 0.4, 0.45, 0.5),
-        "prior_confidence_threshold": (0.35, 0.4, 0.45, 0.5),
-        "proto_temp": (0.05, 0.1, 0.2, 0.5),
-        "lambda_pi": (0.1, 0.5, 0.75, 1.0),
-        "lambda_residual_l2": (0.0000003, 0.000001, 0.000003, 0.00001),
-        "group_pseudocount": (0.5, 1.0, 2.0),
-        "prior_pseudocount": (5.0, 10.0, 25.0, 50.0),
-        "prior_discount": (0.75, 0.9, 0.95),
+        "disentangle_temp": (0.075, 0.1, 0.15),
+        "source_mmd_bandwidth": (0.75, 1.0, 1.25),
+        "adapt_epochs": (50, 75, 100, 125, 150),
+        "adapt_lr": (0.0001, 0.0002, 0.00035, 0.0005),
+        "residual_inner_steps": (30, 40, 50),
+        "tau_c": (0.4, 0.45, 0.5, 0.55),
+        "prior_confidence_threshold": (0.4, 0.45, 0.5, 0.55),
+        "proto_temp": (0.05, 0.075, 0.1, 0.15, 0.2),
+        "lambda_pi": (0.1, 0.25, 0.5, 0.75, 1.0),
+        "lambda_residual_l2": (0.000001, 0.000003, 0.00001, 0.00003),
+        "group_pseudocount": (1.0, 1.5, 2.0, 3.0),
+        "prior_pseudocount": (10.0, 25.0, 50.0, 75.0),
+        "prior_discount": (0.85, 0.9, 0.95),
     },
 }
 
-# Keep the best completed first-round configuration as trial 0000.  This
-# makes the second round monotone with respect to the observed baseline even
-# if the new random samples all land below it.
+# Keep the best completed second-round configuration as trial 0000.  These
+# primary anchors maximize ACC + AUC - DP - EO in paper/tune/summary2.csv.
 SEARCH_ANCHORS: Dict[str, Dict[str, Any]] = {
     "bailA": {
-        "hidden_dim": 64, "n_layers": 2, "lr": 0.003, "dropout": 0.6,
-        "lambda_fair": 2.0, "meta_lr": 0.02, "lambda_coord": 1.0,
-        "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.25,
-        "adapt_epochs": 150, "adapt_lr": 0.0003,
-        "residual_inner_steps": 40, "tau_c": 0.75,
-        "prior_confidence_threshold": 0.65, "proto_temp": 1.0,
-        "lambda_pi": 0.01, "lambda_residual_l2": 0.001,
-        "group_pseudocount": 1.0, "prior_pseudocount": 10.0,
-        "prior_discount": 0.75,
+        "hidden_dim": 64, "n_layers": 1, "lr": 0.0045, "dropout": 0.4,
+        "lambda_fair": 6.0, "meta_lr": 0.03, "lambda_coord": 0.75,
+        "disentangle_temp": 0.1, "source_mmd_bandwidth": 1.0,
+        "adapt_epochs": 75, "adapt_lr": 0.0005,
+        "residual_inner_steps": 20, "tau_c": 0.7,
+        "prior_confidence_threshold": 0.7, "proto_temp": 0.75,
+        "lambda_pi": 0.0, "lambda_residual_l2": 0.003,
+        "group_pseudocount": 0.5, "prior_pseudocount": 5.0,
+        "prior_discount": 0.5,
     },
     "germanA": {
         "hidden_dim": 128, "n_layers": 2, "lr": 0.01, "dropout": 0.4,
-        "lambda_fair": 8.0, "meta_lr": 0.02, "lambda_coord": 1.0,
-        "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.5,
-        "adapt_epochs": 15, "adapt_lr": 0.0002,
+        "lambda_fair": 4.0, "meta_lr": 0.02, "lambda_coord": 0.5,
+        "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.25,
+        "adapt_epochs": 25, "adapt_lr": 0.0002,
         "residual_inner_steps": 40, "tau_c": 0.65,
-        "prior_confidence_threshold": 0.75, "proto_temp": 0.25,
+        "prior_confidence_threshold": 0.7, "proto_temp": 0.5,
         "lambda_pi": 0.6, "lambda_residual_l2": 0.01,
-        "group_pseudocount": 2.0, "prior_pseudocount": 1.0,
-        "prior_discount": 0.75,
+        "group_pseudocount": 1.0, "prior_pseudocount": 1.0,
+        "prior_discount": 0.9,
     },
     "pokec": {
-        "hidden_dim": 128, "n_layers": 4, "lr": 0.004, "dropout": 0.2,
-        "lambda_fair": 4.0, "meta_lr": 0.01, "lambda_coord": 0.5,
-        "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.5,
-        "adapt_epochs": 25, "adapt_lr": 0.0005,
-        "residual_inner_steps": 20, "tau_c": 0.25,
-        "prior_confidence_threshold": 0.35, "proto_temp": 0.5,
-        "lambda_pi": 0.2, "lambda_residual_l2": 0.001,
-        "group_pseudocount": 0.5, "prior_pseudocount": 50.0,
+        "hidden_dim": 64, "n_layers": 3, "lr": 0.004, "dropout": 0.2,
+        "lambda_fair": 0.5, "meta_lr": 0.01, "lambda_coord": 0.75,
+        "disentangle_temp": 0.1, "source_mmd_bandwidth": 2.0,
+        "adapt_epochs": 20, "adapt_lr": 0.0005,
+        "residual_inner_steps": 20, "tau_c": 0.45,
+        "prior_confidence_threshold": 0.45, "proto_temp": 1.0,
+        "lambda_pi": 0.3, "lambda_residual_l2": 0.0001,
+        "group_pseudocount": 0.5, "prior_pseudocount": 100.0,
         "prior_discount": 0.0,
     },
     "syn": {
-        "hidden_dim": 256, "lr": 0.005, "dropout": 0.4,
-        "lambda_fair": 8.0, "meta_lr": 0.01, "lambda_coord": 1.0,
+        "hidden_dim": 256, "lr": 0.002, "dropout": 0.3,
+        "lambda_fair": 2.0, "meta_lr": 0.005, "lambda_coord": 0.75,
         "disentangle_temp": 0.1, "source_mmd_bandwidth": 1.0,
-        "adapt_epochs": 150, "adapt_lr": 0.0005,
-        "residual_inner_steps": 40, "tau_c": 0.4,
-        "prior_confidence_threshold": 0.4, "proto_temp": 0.1,
-        "lambda_pi": 1.0, "lambda_residual_l2": 0.000001,
-        "group_pseudocount": 1.0, "prior_pseudocount": 10.0,
+        "adapt_epochs": 75, "adapt_lr": 0.0002,
+        "residual_inner_steps": 40, "tau_c": 0.5,
+        "prior_confidence_threshold": 0.5, "proto_temp": 0.1,
+        "lambda_pi": 0.75, "lambda_residual_l2": 0.00001,
+        "group_pseudocount": 2.0, "prior_pseudocount": 50.0,
         "prior_discount": 0.9,
     },
 }
 
-# The first local trials change one high-impact factor at a time around the
-# anchor.  This is more informative than spending all 31 non-anchor trials on
-# independent random combinations in a 20-dimensional space.
-LOCAL_SEARCH_KEYS: Dict[str, Tuple[str, ...]] = {
+# Preserve secondary high-scoring modes before drawing any new configurations.
+# Pokec keeps both the lower-capacity trial-30 mode and the older 128x4 mode,
+# whose second-round scores were close to the primary 64x3 mode.
+SEARCH_EXTRA_ANCHORS: Dict[str, Tuple[Dict[str, Any], ...]] = {
     "bailA": (
-        "hidden_dim", "tau_c", "prior_confidence_threshold", "adapt_epochs",
-        "adapt_lr", "proto_temp", "lambda_fair", "meta_lr", "dropout",
-        "lambda_residual_l2", "prior_discount", "source_mmd_bandwidth",
+        {
+            "hidden_dim": 64, "n_layers": 2, "lr": 0.0045, "dropout": 0.4,
+            "lambda_fair": 4.0, "meta_lr": 0.03, "lambda_coord": 0.75,
+            "disentangle_temp": 0.05, "source_mmd_bandwidth": 1.5,
+            "adapt_epochs": 150, "adapt_lr": 0.0005,
+            "residual_inner_steps": 40, "tau_c": 0.75,
+            "prior_confidence_threshold": 0.6, "proto_temp": 0.5,
+            "lambda_pi": 0.01, "lambda_residual_l2": 0.001,
+            "group_pseudocount": 0.5, "prior_pseudocount": 10.0,
+            "prior_discount": 0.75,
+        },
     ),
     "germanA": (
-        "hidden_dim", "dropout", "tau_c", "prior_confidence_threshold",
-        "proto_temp", "lambda_pi", "lambda_residual_l2", "adapt_epochs",
-        "residual_inner_steps", "lambda_fair", "group_pseudocount",
-        "source_mmd_bandwidth",
+        {
+            "hidden_dim": 128, "n_layers": 2, "lr": 0.01, "dropout": 0.4,
+            "lambda_fair": 4.0, "meta_lr": 0.02, "lambda_coord": 1.0,
+            "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.5,
+            "adapt_epochs": 15, "adapt_lr": 0.0002,
+            "residual_inner_steps": 40, "tau_c": 0.65,
+            "prior_confidence_threshold": 0.75, "proto_temp": 0.25,
+            "lambda_pi": 0.6, "lambda_residual_l2": 0.01,
+            "group_pseudocount": 2.0, "prior_pseudocount": 1.0,
+            "prior_discount": 0.75,
+        },
     ),
     "pokec": (
-        "tau_c", "prior_confidence_threshold", "adapt_epochs", "adapt_lr",
-        "proto_temp", "lambda_pi", "dropout", "hidden_dim",
-        "n_layers", "lambda_residual_l2",
+        {
+            "hidden_dim": 64, "n_layers": 2, "lr": 0.001, "dropout": 0.2,
+            "lambda_fair": 4.0, "meta_lr": 0.005, "lambda_coord": 1.0,
+            "disentangle_temp": 0.2, "source_mmd_bandwidth": 2.0,
+            "adapt_epochs": 75, "adapt_lr": 0.001,
+            "residual_inner_steps": 10, "tau_c": 0.25,
+            "prior_confidence_threshold": 0.45, "proto_temp": 0.75,
+            "lambda_pi": 0.1, "lambda_residual_l2": 0.003,
+            "group_pseudocount": 0.5, "prior_pseudocount": 100.0,
+            "prior_discount": 0.5,
+        },
+        {
+            "hidden_dim": 128, "n_layers": 4, "lr": 0.004, "dropout": 0.2,
+            "lambda_fair": 4.0, "meta_lr": 0.01, "lambda_coord": 0.5,
+            "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.5,
+            "adapt_epochs": 25, "adapt_lr": 0.0003,
+            "residual_inner_steps": 20, "tau_c": 0.25,
+            "prior_confidence_threshold": 0.35, "proto_temp": 0.5,
+            "lambda_pi": 0.2, "lambda_residual_l2": 0.001,
+            "group_pseudocount": 0.5, "prior_pseudocount": 50.0,
+            "prior_discount": 0.0,
+        },
     ),
     "syn": (
-        "hidden_dim", "tau_c", "prior_confidence_threshold", "prior_discount",
-        "lambda_pi", "lambda_residual_l2", "source_mmd_bandwidth", "adapt_epochs",
-        "dropout", "proto_temp",
+        {
+            "hidden_dim": 256, "lr": 0.005, "dropout": 0.4,
+            "lambda_fair": 8.0, "meta_lr": 0.01, "lambda_coord": 1.0,
+            "disentangle_temp": 0.1, "source_mmd_bandwidth": 1.0,
+            "adapt_epochs": 150, "adapt_lr": 0.0005,
+            "residual_inner_steps": 40, "tau_c": 0.4,
+            "prior_confidence_threshold": 0.4, "proto_temp": 0.05,
+            "lambda_pi": 1.0, "lambda_residual_l2": 0.000001,
+            "group_pseudocount": 1.0, "prior_pseudocount": 10.0,
+            "prior_discount": 0.9,
+        },
     ),
 }
-LOCAL_TRIALS_PER_DATASET = 12
+
+# Local trials change one high-impact factor at a time around the primary
+# anchor.  The remaining budget samples joint interactions across the narrowed
+# third-round ranges.
+LOCAL_SEARCH_KEYS: Dict[str, Tuple[str, ...]] = {
+    "bailA": (
+        "n_layers", "dropout", "lambda_fair", "lambda_coord",
+        "disentangle_temp", "source_mmd_bandwidth", "adapt_epochs", "tau_c",
+        "prior_confidence_threshold", "proto_temp", "lambda_pi",
+        "lambda_residual_l2", "lr", "prior_discount",
+    ),
+    "germanA": (
+        "dropout", "lambda_fair", "lambda_coord", "source_mmd_bandwidth",
+        "adapt_epochs", "adapt_lr", "residual_inner_steps", "tau_c",
+        "prior_confidence_threshold", "proto_temp", "group_pseudocount",
+        "prior_discount", "n_layers", "lambda_pi",
+    ),
+    "pokec": (
+        "hidden_dim", "n_layers", "adapt_lr", "dropout", "lambda_fair",
+        "lambda_coord", "disentangle_temp", "source_mmd_bandwidth",
+        "prior_confidence_threshold", "lambda_pi", "prior_pseudocount",
+        "prior_discount", "tau_c", "lambda_residual_l2",
+    ),
+    "syn": (
+        "lr", "dropout", "lambda_fair", "meta_lr", "lambda_coord",
+        "adapt_epochs", "adapt_lr", "tau_c", "prior_confidence_threshold",
+        "lambda_pi", "lambda_residual_l2", "prior_pseudocount",
+        "group_pseudocount", "proto_temp",
+    ),
+}
+LOCAL_TRIALS_PER_DATASET = 14
 
 
 PRINT_LOCK = threading.Lock()
@@ -283,6 +355,60 @@ def _stable_dataset_seed(seed: int, dataset: str) -> int:
 
 def _signature(parameters: Mapping[str, Any]) -> str:
     return json.dumps(parameters, sort_keys=True, separators=(",", ":"))
+
+
+def _resolved_search_anchors(
+    dataset: str,
+    space: Mapping[str, Sequence[Any]],
+    base_config: Mapping[str, Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Resolve and validate the primary and secondary anchors for a dataset."""
+    effective_base = dict(SHARED_DEFAULTS)
+    effective_base.update(base_config[dataset])
+    anchor_overrides = (
+        SEARCH_ANCHORS[dataset],
+        *SEARCH_EXTRA_ANCHORS.get(dataset, ()),
+    )
+
+    anchors: List[Dict[str, Any]] = []
+    seen = set()
+    for anchor_index, overrides in enumerate(anchor_overrides):
+        unknown = sorted(set(overrides) - set(space))
+        if unknown:
+            raise KeyError(
+                f"Anchor {anchor_index} for {dataset} contains parameters outside "
+                f"its search space: {', '.join(unknown)}"
+            )
+
+        resolved = dict(effective_base)
+        resolved.update(overrides)
+        missing = [key for key in space if key not in resolved]
+        if missing:
+            raise KeyError(
+                f"No anchor/default value for {dataset}: "
+                f"{', '.join(sorted(missing))}"
+            )
+        parameters = {key: resolved[key] for key in space}
+        outside = {
+            key: value
+            for key, value in parameters.items()
+            if value not in space[key]
+        }
+        if outside:
+            rendered = ", ".join(
+                f"{key}={value!r}" for key, value in sorted(outside.items())
+            )
+            raise ValueError(
+                f"Anchor {anchor_index} for {dataset} lies outside the "
+                f"third-round ranges: {rendered}"
+            )
+
+        signature = _signature(parameters)
+        if signature in seen:
+            raise ValueError(f"Duplicate search anchor for {dataset}: {anchor_index}")
+        seen.add(signature)
+        anchors.append(parameters)
+    return anchors
 
 
 def _balanced_parameter_columns(
@@ -335,26 +461,23 @@ def make_trials(
     sampler_seed: int,
     base_config: Mapping[str, Mapping[str, Any]],
 ) -> List[Trial]:
-    """Include the best first-round anchor, then draw balanced combinations."""
+    """Preserve elite anchors, add primary-local trials, then sample jointly."""
     space = SEARCH_SPACES[dataset]
-    effective_base = dict(SHARED_DEFAULTS)
-    effective_base.update(base_config[dataset])
-    effective_base.update(SEARCH_ANCHORS[dataset])
-    missing = [key for key in space if key not in effective_base]
-    if missing:
-        raise KeyError(
-            f"No baseline/default value for {dataset}: {', '.join(sorted(missing))}"
+    anchors = _resolved_search_anchors(dataset, space, base_config)
+    primary_anchor = anchors[0]
+    trials: List[Trial] = []
+    seen = set()
+    for anchor in anchors:
+        if len(trials) >= count:
+            return trials
+        seen.add(_signature(anchor))
+        trials.append(
+            Trial(dataset=dataset, trial_id=len(trials), parameters=anchor)
         )
 
-    baseline = {key: effective_base[key] for key in space}
-    trials = [Trial(dataset=dataset, trial_id=0, parameters=baseline)]
-    if count == 1:
-        return trials
-
-    seen = {_signature(baseline)}
-    local_limit = min(count, 1 + LOCAL_TRIALS_PER_DATASET)
-    for candidate in _local_anchor_candidates(dataset, space, baseline):
-        if len(trials) >= local_limit:
+    local_added = 0
+    for candidate in _local_anchor_candidates(dataset, space, primary_anchor):
+        if len(trials) >= count or local_added >= LOCAL_TRIALS_PER_DATASET:
             break
         signature = _signature(candidate)
         if signature in seen:
@@ -363,6 +486,7 @@ def make_trials(
         trials.append(
             Trial(dataset=dataset, trial_id=len(trials), parameters=candidate)
         )
+        local_added += 1
 
     remaining = count - len(trials)
     if remaining == 0:
@@ -756,12 +880,29 @@ def write_manifest(
 ) -> Path:
     path = args.results_dir / "manifest.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    anchor_counts = {
+        dataset: min(args.trials, 1 + len(SEARCH_EXTRA_ANCHORS.get(dataset, ())))
+        for dataset in args.datasets
+    }
+    local_counts = {
+        dataset: min(
+            LOCAL_TRIALS_PER_DATASET,
+            max(0, args.trials - anchor_counts[dataset]),
+        )
+        for dataset in args.datasets
+    }
+    random_counts = {
+        dataset: args.trials - anchor_counts[dataset] - local_counts[dataset]
+        for dataset in args.datasets
+    }
     payload = {
         "search_round": SEARCH_ROUND,
-        "search": "anchor_local_plus_balanced_random_categorical",
+        "search": "multi_anchor_local_plus_balanced_random_categorical",
         "datasets": args.datasets,
         "trials_per_dataset": args.trials,
-        "local_trials_per_dataset": min(args.trials, 1 + LOCAL_TRIALS_PER_DATASET),
+        "anchor_trials_per_dataset": anchor_counts,
+        "local_trials_per_dataset": local_counts,
+        "balanced_random_trials_per_dataset": random_counts,
         "runs_per_combination": 1,
         "training_seed": args.seed,
         "sampler_seed": args.sampler_seed,
@@ -970,7 +1111,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--trials",
         type=int,
         default=32,
-        help="total unique combinations per dataset, including the baseline",
+        help="total unique combinations per dataset, including preserved anchors",
     )
     parser.add_argument(
         "--gpus",
@@ -1005,7 +1146,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--seed", type=int, default=1111)
     parser.add_argument("--target-seed-offset", type=int, default=100000)
-    parser.add_argument("--sampler-seed", type=int, default=2028)
+    parser.add_argument("--sampler-seed", type=int, default=2029)
     parser.add_argument(
         "--results-dir",
         type=Path,
