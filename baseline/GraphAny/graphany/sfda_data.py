@@ -40,7 +40,7 @@ def load_sffgnn_get_dataset():
     for path in (str(REPO_ROOT), str(SFFGNN_DIR)):
         if path not in sys.path:
             sys.path.insert(0, path)
-    from SFFGNN.dataset import get_dataset
+    from EMBER.dataset import get_dataset
 
     return get_dataset
 

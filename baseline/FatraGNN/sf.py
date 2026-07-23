@@ -40,7 +40,7 @@ REPO_ROOT = SCRIPT_DIR.parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
-from SFFGNN.dataset import get_dataset
+from EMBER.dataset import get_dataset
 from visualization.export_utils import save_visualization_embeddings
 
 try:

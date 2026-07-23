@@ -40,7 +40,7 @@ if str(REPO_ROOT) not in sys.path:
 if str(SFFGNN_DIR) not in sys.path:
     sys.path.insert(0, str(SFFGNN_DIR))
 
-from SFFGNN.dataset import get_dataset
+from EMBER.dataset import get_dataset
 from visualization.export_utils import save_visualization_embeddings
 
 

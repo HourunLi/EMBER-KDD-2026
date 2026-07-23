@@ -46,8 +46,8 @@ if str(REPO_ROOT) not in sys.path:
 if str(SFFGNN_DIR) not in sys.path:
     sys.path.append(str(SFFGNN_DIR))
 
-from SFFGNN.dataset import get_dataset  # noqa: E402
-from SFFGNN.utils import fair_metric  # noqa: E402
+from EMBER.dataset import get_dataset  # noqa: E402
+from EMBER.utils import fair_metric  # noqa: E402
 from visualization.export_utils import save_visualization_embeddings  # noqa: E402
 
 

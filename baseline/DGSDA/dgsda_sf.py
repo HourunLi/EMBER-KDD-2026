@@ -54,7 +54,7 @@ def load_sffgnn_dataset_api():
     """按 SFFGNN/dataset.py 的原始路径与逻辑加载数据接口。"""
     if str(SFFGNN_DIR) not in sys.path:
         sys.path.insert(0, str(SFFGNN_DIR))
-    from SFFGNN.dataset import get_dataset
+    from EMBER.dataset import get_dataset
     return get_dataset
 
 
