@@ -41,8 +41,14 @@ PAIRS = {
 SEEDS = [1111, 2222, 3333, 4444, 5555]
 SOURCE_EPOCHS = TARGET_EPOCHS = 1000
 PATIENCE = 100
-POKEC_MIN_FREE_GIB = 43.5
-POKEC_GPU_POLL_SECONDS = 60
+# Edit these values directly. 0 disables the GPU-memory wait for that dataset.
+DATASET_MIN_FREE_MIB = {
+    "bailA": 0,
+    "germanA": 0,
+    "pokec": 44544,  # 43.5 GiB; replace with your preferred MiB threshold.
+    "syn": 0,
+}
+GPU_POLL_SECONDS = 60
 
 LOG_DIR = HERE / "logs"
 RUN_DIR = HERE / "results" / "runs"
@@ -60,32 +66,32 @@ def seed_all(seed):
         torch.backends.cudnn.benchmark = False
 
 
-def wait_for_pokec_gpu(gpu, min_free_gib, poll_seconds, stage):
-    """Wait until a Pokec run has almost exclusive access to a large GPU."""
-    if gpu < 0 or min_free_gib <= 0:
+def wait_for_dataset_gpu(dataset, gpu, min_free_mib, poll_seconds, stage):
+    """Wait until the assigned GPU satisfies this dataset's free-memory floor."""
+    if gpu < 0 or min_free_mib <= 0:
         return
     torch.cuda.set_device(gpu)
     while True:
         gc.collect()
         torch.cuda.empty_cache()
         free_bytes, total_bytes = torch.cuda.mem_get_info(gpu)
-        free_gib = free_bytes / 1024**3
-        total_gib = total_bytes / 1024**3
-        if total_gib + 1e-6 < min_free_gib:
+        free_mib = free_bytes / 1024**2
+        total_mib = total_bytes / 1024**2
+        if total_mib + 1e-6 < min_free_mib:
             raise RuntimeError(
-                f"Pokec requires at least {min_free_gib:.1f} GiB free, but GPU {gpu} "
-                f"has only {total_gib:.1f} GiB total memory."
+                f"{dataset} requires at least {min_free_mib:.0f} MiB free, but "
+                f"GPU {gpu} has only {total_mib:.0f} MiB total memory."
             )
         print(
-            f"[Pokec GPU guard] stage={stage} gpu={gpu} "
-            f"free={free_gib:.2f}/{total_gib:.2f} GiB "
-            f"required={min_free_gib:.2f} GiB",
+            f"[GPU guard] dataset={dataset} stage={stage} gpu={gpu} "
+            f"free={free_mib:.0f}/{total_mib:.0f} MiB "
+            f"required={min_free_mib:.0f} MiB",
             flush=True,
         )
-        if free_gib >= min_free_gib:
+        if free_mib >= min_free_mib:
             return
         print(
-            f"[Pokec GPU guard] insufficient free memory; retrying in "
+            f"[GPU guard] insufficient free memory; retrying in "
             f"{poll_seconds}s",
             flush=True,
         )
@@ -227,7 +233,6 @@ def run_one(
     source_epochs,
     target_epochs,
     patience,
-    pokec_min_free_gib,
     gpu_poll_seconds,
 ):
     seed_all(seed)
@@ -247,15 +252,16 @@ def run_one(
         raise ValueError(f"{dataset}: source/target feature dimensions differ")
     install_pair_dataset(graphcta_view(source), graphcta_view(target, is_target=True))
 
+    min_free_mib = DATASET_MIN_FREE_MIB[dataset]
     if dataset == "pokec":
         print(
             f"PYTORCH_CUDA_ALLOC_CONF="
             f"{os.environ.get('PYTORCH_CUDA_ALLOC_CONF', '<unset>')}",
             flush=True,
         )
-        wait_for_pokec_gpu(
-            gpu, pokec_min_free_gib, gpu_poll_seconds, stage="source"
-        )
+    wait_for_dataset_gpu(
+        dataset, gpu, min_free_mib, gpu_poll_seconds, stage="source"
+    )
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     previous_cwd = Path.cwd()
@@ -263,10 +269,9 @@ def run_one(
         os.chdir(work)
         try:
             best_epoch = train_source(device, seed, source_epochs, patience)
-            if dataset == "pokec":
-                wait_for_pokec_gpu(
-                    gpu, pokec_min_free_gib, gpu_poll_seconds, stage="target"
-                )
+            wait_for_dataset_gpu(
+                dataset, gpu, min_free_mib, gpu_poll_seconds, stage="target"
+            )
             captured = train_target(device, seed, target_epochs, target)
         finally:
             os.chdir(previous_cwd)
@@ -371,7 +376,6 @@ def launch(task, resources, args):
                     "--source-epochs", str(args.source_epochs),
                     "--target-epochs", str(args.target_epochs),
                     "--patience", str(args.patience),
-                    "--pokec-min-free-gib", str(args.pokec_min_free_gib),
                     "--gpu-poll-seconds", str(args.gpu_poll_seconds),
                 ],
                 cwd=HERE,
@@ -393,16 +397,10 @@ def main():
     parser.add_argument("--target-epochs", type=int, default=TARGET_EPOCHS)
     parser.add_argument("--patience", type=int, default=PATIENCE)
     parser.add_argument(
-        "--pokec-min-free-gib",
-        type=float,
-        default=POKEC_MIN_FREE_GIB,
-        help="Pokec waits until its GPU has at least this much free memory",
-    )
-    parser.add_argument(
         "--gpu-poll-seconds",
         type=int,
-        default=POKEC_GPU_POLL_SECONDS,
-        help="seconds between Pokec GPU-memory checks",
+        default=GPU_POLL_SECONDS,
+        help="seconds between dataset GPU-memory checks",
     )
     parser.add_argument("--workers", type=int, default=0,
                         help="0 uses one worker per GPU, or four CPU workers")
@@ -417,12 +415,12 @@ def main():
         args.source_epochs < 1
         or args.target_epochs < 3
         or args.patience < 1
-        or args.pokec_min_free_gib < 0
+        or any(value < 0 for value in DATASET_MIN_FREE_MIB.values())
         or args.gpu_poll_seconds < 1
     ):
         parser.error(
             "source_epochs >= 1, target_epochs >= 3, patience >= 1, "
-            "pokec_min_free_gib >= 0, and gpu_poll_seconds >= 1 are required"
+            "all dataset GPU floors >= 0, and gpu_poll_seconds >= 1 are required"
         )
     if args.worker:
         run_one(
@@ -433,7 +431,6 @@ def main():
             args.source_epochs,
             args.target_epochs,
             args.patience,
-            args.pokec_min_free_gib,
             args.gpu_poll_seconds,
         )
         return
