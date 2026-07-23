@@ -50,7 +50,7 @@ class Model(nn.Module):
             if len(self.positive_samples[i]) != 2:
                 self.positive_samples[i].append(self.positive_samples[i][0])
 
-        samples = torch.tensor(self.positive_samples).cuda()
+        samples = torch.tensor(self.positive_samples, device=self.args.device)
 
         center_nodes = torch.unsqueeze(samples[:, 0], dim = -1)
         positive_samples = torch.unsqueeze(samples[:, 1], dim = -1)
@@ -58,7 +58,13 @@ class Model(nn.Module):
         return center_nodes, positive_samples
 
     def generate_negative_samples(self):
-        negative_samples = torch.tensor([self.Negative_Sampler.sample() for _ in range(self.num_negative_samples * self.args.num_target_nodes)]).view([self.args.num_target_nodes, self.num_negative_samples]).cuda()
+        negative_samples = torch.tensor(
+            [
+                self.Negative_Sampler.sample()
+                for _ in range(self.num_negative_samples * self.args.num_target_nodes)
+            ],
+            device=self.args.device,
+        ).view([self.args.num_target_nodes, self.num_negative_samples])
 
         return negative_samples
 
