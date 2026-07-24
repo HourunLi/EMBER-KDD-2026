@@ -135,7 +135,7 @@ parser.add_argument('--inter_encoder', type=str,
 parser.add_argument('--hidden_dim',    type=int, default=32)
 parser.add_argument('--device_id',     type=str, default='0')
 
-# source pretraining (paper notation: beta, alpha, gamma)
+# Source pretraining (paper notation: beta, alpha, gamma)
 parser.add_argument('--lambda_fair',  type=float, default=1)
 parser.add_argument('--meta_lr', type=float, default=0.01)
 parser.add_argument(
@@ -146,10 +146,14 @@ parser.add_argument(
 )
 parser.add_argument('--lambda_sen', type=float, default=1.0)
 parser.add_argument('--lambda_dec', type=float, default=1.0)
-parser.add_argument('--disentangle_batch_size', type=int, default=512)
 parser.add_argument('--source_mmd_bandwidth', type=float, default=1.0)
+
+# Fixed implementation controls.  These affect memory use / stochastic
+# approximation, but are not method hyperparameters to tune per dataset, so
+# they intentionally stay out of config/config.yaml.
+parser.add_argument('--disentangle_batch_size', type=int, default=512)
 parser.add_argument('--source_mmd_min_samples', type=int, default=1)
-parser.add_argument('--source_mmd_max_samples', type=int, default=0)
+parser.add_argument('--source_mmd_max_samples', type=int, default=1024)
 parser.add_argument('--mmd_chunk_size', type=int, default=256)
 
 # SFDA target adaptation

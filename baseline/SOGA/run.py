@@ -37,7 +37,7 @@ PAIRS = {
     "pokec": ("_z", "_n"),
     "syn": ("-2", "-1"),
 }
-SEEDS = [1, 3, 5, 7, 9]
+SEEDS = [1111, 2222, 3333, 4444, 5555]
 SOURCE_EPOCHS = TARGET_EPOCHS = 101
 SOURCE_LR = TARGET_LR = 0.01
 WEIGHT_DECAY = 5e-4
