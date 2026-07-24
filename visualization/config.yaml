@@ -41,21 +41,19 @@ methods:
     enabled: true
   - name: NIFTY
     enabled: true
+  - name: FairVGNN
+    enabled: true
   - name: FairSIN
     enabled: true
   - name: SFG
     enabled: true
-  - name: GraphAny
-    enabled: true
-  - name: DGSDA
-    enabled: true
-  - name: UDAGCN
-    enabled: true
-  - name: GRADE
-    enabled: true
   - name: FatraGNN
     enabled: true
   - name: DANCE
+    enabled: true
+  - name: SOGA
+    enabled: true
+  - name: GraphCTA
     enabled: true
 
 labels:

@@ -70,23 +70,13 @@ def _init_fair_gnn(args):
 def _disentanglement_loss(
     task_view,
     sensitive_view,
-    temperature,
     batch_size,
 ):
-    """Paper Eq. (5), evaluated on one uniformly sampled source mini-batch.
-
-    The paper minimizes the mean log-probability of each task view matching
-    its paired sensitive view.  This is the negative of ordinary cross-entropy:
-    minimizing it suppresses paired-view identifiability instead of promoting
-    it.
-    """
+    """Paper Eq. (5): mean squared cosine of matched source-node views."""
     node_count = task_view.shape[0]
     if node_count == 0:
         return task_view.sum() * 0.0
-    temperature = float(temperature)
     batch_size = int(batch_size)
-    if temperature <= 0.0:
-        raise ValueError("disentanglement temperature must be positive")
     if batch_size < 1:
         raise ValueError("disentanglement batch size must be positive")
     size = min(batch_size, node_count)
@@ -101,10 +91,8 @@ def _disentanglement_loss(
         dim=1,
         eps=1e-12,
     )
-    pairwise_logits = normalized_task @ normalized_sensitive.t()
-    pairwise_logits = pairwise_logits / temperature
-    paired_log_probabilities = F.log_softmax(pairwise_logits, dim=1).diagonal()
-    return paired_log_probabilities.mean()
+    paired_cosine = (normalized_task * normalized_sensitive).sum(dim=1)
+    return paired_cosine.square().mean()
 
 
 def _normalized_masked_mean(features, mask, name):
@@ -180,7 +168,7 @@ def extract_source_knowledge(data, model):
         if not key.startswith("sens_head.")
     }
     return {
-        "knowledge_version": 3,
+        "knowledge_version": 4,
         "p_y": {key: value.cpu() for key, value in p_y.items()},
         "a_g": {key: value.cpu() for key, value in a_g.items()},
         "model_state": exported_state,
@@ -205,15 +193,15 @@ def _get_checkpoint_name(args, run_idx):
         f"lcoord={getattr(args, 'lambda_coord', 1.0)}",
         f"lsen={getattr(args, 'lambda_sen', 1.0)}",
         f"ldec={getattr(args, 'lambda_dec', 1.0)}",
-        f"taud={getattr(args, 'disentangle_temp', 0.1)}",
         f"decbatch={getattr(args, 'disentangle_batch_size', 512)}",
+        "dec=matched-squared-cosine-v1",
         f"srcmmd={getattr(args, 'source_mmd_bandwidth', getattr(args, 'mmd_bandwidth', 1.0))}",
         f"srcmmdmin={getattr(args, 'source_mmd_min_samples', 2)}",
         f"srcmmdmax={getattr(args, 'source_mmd_max_samples', 0)}",
         f"srcmmdchunk={getattr(args, 'mmd_chunk_size', 1024)}",
         "srcscope=all-labeled-vso",
         "architecture=dual-head-v1",
-        "knowledge=ember-bank-v3",
+        "knowledge=ember-bank-v4",
         f"run={run_idx}",
         f"seed={args.seed}",
     ]
@@ -259,7 +247,7 @@ def _load_checkpoint(args, run_idx):
     print(f'[Checkpoint] loading ← {path}')
     ckpt = torch.load(path, map_location=args.device)
     knowledge = ckpt.get('knowledge', {})
-    if int(knowledge.get('knowledge_version', 0)) < 3 or 'a_g' not in knowledge:
+    if int(knowledge.get('knowledge_version', 0)) < 4 or 'a_g' not in knowledge:
         print('[Checkpoint] obsolete Source knowledge format; retraining required.')
         return None, None
     model = FairGNN(args, encoder_type=args.inter_encoder).to(args.device)
@@ -375,7 +363,6 @@ def train_and_adapt(args, source_data, target_data):
             lambda_dec = float(getattr(args, 'lambda_dec', 1.0))
             if lambda_sen < 0.0 or lambda_dec < 0.0:
                 raise ValueError("lambda_sen and lambda_dec must be non-negative")
-            disentangle_temp = float(getattr(args, 'disentangle_temp', 0.1))
             disentangle_batch_size = int(
                 getattr(args, 'disentangle_batch_size', 512)
             )
@@ -424,7 +411,6 @@ def train_and_adapt(args, source_data, target_data):
                 L_dec = _disentanglement_loss(
                     source_task_view,
                     source_sensitive_view,
-                    disentangle_temp,
                     disentangle_batch_size,
                 )
 
@@ -640,8 +626,8 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
             if y_true.size == 0:
                 accs[split_name] = 0.0
                 auc_rocs[split_name] = 50.0
-                paritys[split_name] = 0.0
-                equalitys[split_name] = 0.0
+                paritys[split_name] = float("nan")
+                equalitys[split_name] = float("nan")
                 continue
 
             sens = sens_all[mask]

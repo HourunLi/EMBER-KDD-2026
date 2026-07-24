@@ -79,7 +79,9 @@ def train_source():
         correct = pred.eq(data.y[data.train_mask]).sum().item()
         train_acc = correct * 1.0 / (data.train_mask).sum().item()
 
-        val_acc, val_loss = compute_test(data.val_mask, model, data)
+        with torch.no_grad():
+            val_acc, val_loss = compute_test(data.val_mask, model, data)
+        val_loss = float(val_loss.item())
 
         print('Epoch: {:04d}'.format(epoch + 1), 'train_loss: {:.6f}'.format(train_loss),
               'train_acc: {:.6f}'.format(train_acc), 'loss_val: {:.6f}'.format(val_loss),

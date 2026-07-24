@@ -45,8 +45,8 @@ def evaluate_per_class(args, data, encoder):
             if y_true.size == 0:
                 accs[split_name] = 0.0
                 auc_rocs[split_name] = 50.0
-                paritys[split_name] = 0.0
-                equalitys[split_name] = 0.0
+                paritys[split_name] = float("nan")
+                equalitys[split_name] = float("nan")
                 continue
 
             sens = sens_all[mask]

@@ -1,16 +1,18 @@
-"""Tune EMBER once per hyperparameter combination, in parallel across GPUs.
+"""Tune EMBER twice per hyperparameter combination, in parallel across GPUs.
 
 The search space follows the method in Sections 1-3 of the EMBER paper:
 
 * source utility/fairness coordination (beta, alpha, gamma and MMD scale),
-* dual-head disentanglement temperature,
+* matched-pair squared-cosine dual-head disentanglement,
 * confidence-filtered residual prototype evolution, and
 * smoothed, discounted Bayesian class-prior correction.
 
-This deterministic search combines preserved elite anchors, primary-anchor
-local perturbations, and balanced random samples from dataset-specific ranges.
-It deliberately runs exactly one training run for every sampled combination
-(``--runs_override 1``).
+This deterministic search combines preserved elite anchors, local searches
+around every elite, focused multi-parameter mutations, and a smaller globally
+balanced sample from dataset-specific ranges.
+It deliberately runs exactly two training runs for every sampled combination
+(``--runs_override 2``), then ranks combinations by the mean
+ACC + AUC - DP - EO score.
 Different trials are dispatched in parallel with one worker per GPU, so a GPU
 never hosts two EMBER trials from this script at the same time.  Before every
 Pokec launch, the worker also waits for a configurable amount of free VRAM and
@@ -22,18 +24,19 @@ Inspect the sampled trials without launching training::
 
     python tune.py --dry-run --trials 8
 
-Use four GPUs for all four datasets::
+Use six GPUs with the round-4 dataset-specific default budgets::
 
-    python tune.py --gpus 0 1 2 3 --trials 32
+    python tune.py --gpus 0 1 2 3 4 5
 
 Tune only Pokec and resume already completed trials automatically::
 
-    python tune.py --datasets pokec --gpus 0 1 --trials 48
+    python tune.py --datasets pokec --gpus 0 1 2 3 4 5 --trials 320
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import hashlib
 import json
@@ -45,6 +48,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
@@ -53,9 +57,28 @@ import yaml
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 MAIN_SCRIPT = SCRIPT_DIR / "main.py"
+CONFIG_SCRIPT = SCRIPT_DIR / "config.py"
 CONFIG_PATH = SCRIPT_DIR / "config" / "config.yaml"
-SEARCH_ROUND = 3
-DEFAULT_RESULTS_DIR = SCRIPT_DIR / "tune_results_round3"
+SEARCH_ROUND = 4
+DEFAULT_RESULTS_DIR = SCRIPT_DIR / "tune_results_round4"
+RUNS_PER_COMBINATION = 2
+
+# summary3.csv durations already include both runs.  These defaults consume
+# about 37.3 GPU-hours in total: roughly 6.2 ideal wall-clock hours on six
+# GPUs, or about 7.8 hours after reserving 25% for Pokec admission waits,
+# heterogeneous trial lengths, and the final scheduling tail.
+DEFAULT_TRIALS_PER_DATASET: Dict[str, int] = {
+    "bailA": 192,
+    "germanA": 192,
+    "pokec": 320,
+    "syn": 192,
+}
+REFERENCE_DURATION_SECONDS: Dict[str, float] = {
+    "bailA": 142.5,
+    "germanA": 47.9,
+    "pokec": 247.6,
+    "syn": 95.6,
+}
 
 DATASET_DOMAINS: Dict[str, Tuple[str, str]] = {
     "bailA": ("_2", "_1"),
@@ -70,168 +93,189 @@ DATASET_DOMAINS: Dict[str, Tuple[str, str]] = {
 # so selected shared method parameters can still be searched explicitly.
 SHARED_DEFAULTS: Dict[str, Any] = {
     "lambda_coord": 1.0,
-    "disentangle_temp": 0.1,
     "group_pseudocount": 1.0,
     "prior_discount": 0.9,
 }
 
-# Third-round ranges follow paper/tune/summary2.csv.  Because several datasets
-# have two nearly tied but structurally different modes, the search keeps a
-# primary best anchor plus selected secondary anchors before exploring local
-# one-factor perturbations and balanced random combinations.
+# Fourth-round ranges follow paper/tune/summary3.csv and retain only values or
+# boundary extensions supported by the two-run averages.  Every elite mode is
+# explored locally; the remaining budget mixes elite-neighborhood mutations
+# with a smaller globally balanced sample.
 SEARCH_SPACES: Dict[str, Dict[str, Tuple[Any, ...]]] = {
     "bailA": {
         "hidden_dim": (64,),
-        "n_layers": (1, 2),
-        "lr": (0.0035, 0.0045, 0.0055),
-        "dropout": (0.35, 0.4, 0.45, 0.5),
-        "lambda_fair": (3.0, 4.0, 5.0, 6.0),
-        "meta_lr": (0.02, 0.025, 0.03, 0.035),
-        "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.05, 0.075, 0.1, 0.15),
-        "source_mmd_bandwidth": (0.25, 0.5, 1.0, 1.5),
-        "adapt_epochs": (50, 75, 100, 125, 150),
-        "adapt_lr": (0.0003, 0.0004, 0.0005, 0.0007),
+        "n_layers": (1,),
+        "lr": (0.004, 0.0045, 0.005, 0.0055),
+        "dropout": (0.3, 0.35, 0.375, 0.4, 0.425, 0.45),
+        "lambda_fair": (3.0, 4.0, 5.0, 6.0, 7.0, 8.0),
+        "meta_lr": (0.025, 0.03, 0.035),
+        "lambda_coord": (0.5, 0.625, 0.75, 0.875, 1.0),
+        "source_mmd_bandwidth": (0.25, 0.5, 0.75, 1.0, 1.25),
+        "adapt_epochs": (50, 75, 100, 125),
+        "adapt_lr": (0.00035, 0.0004, 0.0005, 0.0006),
         "residual_inner_steps": (20, 30, 40),
-        "tau_c": (0.65, 0.7, 0.75),
+        "tau_c": (0.7, 0.725, 0.75),
         "prior_confidence_threshold": (0.55, 0.6, 0.65, 0.7, 0.75),
-        "proto_temp": (0.4, 0.5, 0.75, 1.0),
-        "lambda_pi": (0.0, 0.005, 0.01, 0.025),
-        "lambda_residual_l2": (0.0005, 0.001, 0.002, 0.003),
-        "group_pseudocount": (0.25, 0.5, 0.75, 1.0),
-        "prior_pseudocount": (5.0, 7.5, 10.0, 15.0),
-        "prior_discount": (0.5, 0.625, 0.75, 0.9),
+        "proto_temp": (0.4, 0.5, 0.625, 0.75, 1.0),
+        "lambda_pi": (0.0, 0.0025, 0.005, 0.01),
+        "lambda_residual_l2": (0.001, 0.0015, 0.002, 0.0025, 0.003),
+        "group_pseudocount": (0.25, 0.5, 0.75),
+        "prior_pseudocount": (2.5, 5.0, 7.5, 10.0, 15.0),
+        "prior_discount": (0.25, 0.375, 0.5, 0.625, 0.75),
     },
     "germanA": {
         "hidden_dim": (128,),
         "n_layers": (1, 2),
-        "lr": (0.0075, 0.009, 0.01, 0.012),
-        "dropout": (0.25, 0.3, 0.35, 0.4),
-        "lambda_fair": (3.0, 4.0, 6.0, 8.0),
-        "meta_lr": (0.015, 0.02, 0.025, 0.03),
-        "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.1, 0.15, 0.2, 0.25),
-        "source_mmd_bandwidth": (0.1, 0.25, 0.5, 0.75),
-        "adapt_epochs": (5, 10, 15, 25),
-        "adapt_lr": (0.0001, 0.0002, 0.00035, 0.0005),
-        "residual_inner_steps": (20, 30, 40, 60),
-        "tau_c": (0.6, 0.65, 0.7, 0.75),
-        "prior_confidence_threshold": (0.65, 0.7, 0.75),
-        "proto_temp": (0.1, 0.25, 0.4, 0.5, 0.6),
-        "lambda_pi": (0.5, 0.6, 0.7, 0.8),
-        "lambda_residual_l2": (0.003, 0.01, 0.02, 0.03),
-        "group_pseudocount": (1.0, 2.0, 3.0, 5.0),
-        "prior_pseudocount": (1.0, 2.0, 5.0),
-        "prior_discount": (0.75, 0.85, 0.9, 0.95),
+        "lr": (0.0075, 0.009, 0.01, 0.011, 0.012, 0.015),
+        "dropout": (0.28, 0.3, 0.35, 0.4),
+        "lambda_fair": (3.0, 4.0, 5.0, 6.0, 8.0),
+        "meta_lr": (0.01, 0.015, 0.02, 0.025),
+        "lambda_coord": (0.5, 0.625, 0.75, 1.0),
+        "source_mmd_bandwidth": (0.05, 0.1, 0.15, 0.25, 0.5, 0.75),
+        "adapt_epochs": (5, 10, 15, 20, 25, 30),
+        "adapt_lr": (0.0001, 0.00015, 0.0002, 0.000275, 0.00035, 0.0005),
+        "residual_inner_steps": (10, 20, 30, 40),
+        "tau_c": (0.55, 0.6, 0.65, 0.7, 0.75),
+        "prior_confidence_threshold": (0.6, 0.65, 0.7, 0.75),
+        "proto_temp": (0.2, 0.25, 0.4, 0.5, 0.6, 0.75),
+        "lambda_pi": (0.4, 0.5, 0.6, 0.7, 0.8, 0.9),
+        "lambda_residual_l2": (0.003, 0.006, 0.01, 0.02, 0.03, 0.05),
+        "group_pseudocount": (0.5, 1.0, 2.0, 3.0),
+        "prior_pseudocount": (0.5, 1.0, 2.0, 5.0),
+        "prior_discount": (0.5, 0.625, 0.75, 0.85, 0.9, 0.95),
     },
     "pokec": {
         "hidden_dim": (64, 128),
         "n_layers": (2, 3, 4),
-        "lr": (0.001, 0.0025, 0.004, 0.005),
-        "dropout": (0.1, 0.15, 0.2, 0.25, 0.3),
-        "lambda_fair": (0.5, 2.0, 4.0),
-        "meta_lr": (0.005, 0.01, 0.015, 0.02),
+        "lr": (0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.0025, 0.003,
+               0.0035, 0.004, 0.0045, 0.005),
+        "dropout": (0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+        "lambda_fair": (0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+        "meta_lr": (0.0025, 0.005, 0.0075, 0.01, 0.0125, 0.015, 0.02),
         "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.075, 0.1, 0.15, 0.2),
-        "source_mmd_bandwidth": (0.5, 1.0, 1.5, 2.0, 2.5),
-        "adapt_epochs": (15, 20, 25, 50, 75),
-        "adapt_lr": (0.0002, 0.0003, 0.0005, 0.00075, 0.001),
-        "residual_inner_steps": (10, 20, 30),
-        "tau_c": (0.2, 0.25, 0.35, 0.45, 0.5),
-        "prior_confidence_threshold": (0.25, 0.35, 0.4, 0.45, 0.5),
-        "proto_temp": (0.5, 0.75, 1.0, 1.25),
-        "lambda_pi": (0.1, 0.2, 0.3, 0.4),
-        "lambda_residual_l2": (0.0001, 0.0003, 0.001, 0.003),
-        "group_pseudocount": (0.5, 1.0, 2.0),
-        "prior_pseudocount": (50.0, 75.0, 100.0, 150.0),
-        "prior_discount": (0.0, 0.5, 0.75, 0.9),
+        "source_mmd_bandwidth": (0.25, 0.5, 0.75, 1.0, 1.5, 1.75, 2.0,
+                                 2.25, 2.5, 3.0),
+        "adapt_epochs": (10, 15, 20, 25, 35, 50, 75, 100, 125),
+        "adapt_lr": (0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.00075,
+                     0.001, 0.00125, 0.0015),
+        "residual_inner_steps": (5, 10, 15, 20),
+        "tau_c": (0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5),
+        "prior_confidence_threshold": (0.2, 0.25, 0.35, 0.4, 0.45, 0.5,
+                                       0.55, 0.6),
+        "proto_temp": (0.5, 0.625, 0.75, 0.875, 1.0, 1.25, 1.5),
+        "lambda_pi": (0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
+        "lambda_residual_l2": (0.00003, 0.00005, 0.0001, 0.0002, 0.0003,
+                               0.001, 0.002, 0.003, 0.005, 0.01),
+        "group_pseudocount": (0.25, 0.5, 0.75, 1.0, 1.5, 2.0),
+        "prior_pseudocount": (50.0, 75.0, 100.0, 125.0, 150.0, 200.0),
+        "prior_discount": (0.0, 0.25, 0.5, 0.625, 0.75),
     },
     "syn": {
         # n_layers is intentionally absent: the MLP backbone ignores it.
         "hidden_dim": (256,),
-        "lr": (0.0015, 0.002, 0.003, 0.004, 0.005),
-        "dropout": (0.25, 0.3, 0.35, 0.4),
-        "lambda_fair": (1.0, 2.0, 4.0, 6.0, 8.0),
-        "meta_lr": (0.002, 0.003, 0.005, 0.0075, 0.01),
-        "lambda_coord": (0.5, 0.75, 1.0),
-        "disentangle_temp": (0.075, 0.1, 0.15),
-        "source_mmd_bandwidth": (0.75, 1.0, 1.25),
-        "adapt_epochs": (50, 75, 100, 125, 150),
-        "adapt_lr": (0.0001, 0.0002, 0.00035, 0.0005),
-        "residual_inner_steps": (30, 40, 50),
+        "lr": (0.002, 0.0025, 0.003, 0.0035, 0.004),
+        "dropout": (0.25, 0.3, 0.35, 0.4, 0.45),
+        "lambda_fair": (2.0, 4.0, 6.0, 8.0),
+        "meta_lr": (0.004, 0.005, 0.006, 0.0075, 0.009),
+        "lambda_coord": (0.4, 0.5, 0.6, 0.75),
+        "source_mmd_bandwidth": (0.5, 0.625, 0.75, 0.875, 1.0),
+        "adapt_epochs": (75, 100, 125, 150),
+        "adapt_lr": (0.0001, 0.0002, 0.00035, 0.0005, 0.00075),
+        "residual_inner_steps": (20, 30, 40),
         "tau_c": (0.4, 0.45, 0.5, 0.55),
-        "prior_confidence_threshold": (0.4, 0.45, 0.5, 0.55),
-        "proto_temp": (0.05, 0.075, 0.1, 0.15, 0.2),
-        "lambda_pi": (0.1, 0.25, 0.5, 0.75, 1.0),
-        "lambda_residual_l2": (0.000001, 0.000003, 0.00001, 0.00003),
-        "group_pseudocount": (1.0, 1.5, 2.0, 3.0),
-        "prior_pseudocount": (10.0, 25.0, 50.0, 75.0),
+        "prior_confidence_threshold": (0.4, 0.45, 0.5, 0.55, 0.6),
+        "proto_temp": (0.05, 0.075, 0.1, 0.125, 0.15, 0.2),
+        "lambda_pi": (0.05, 0.1, 0.25, 0.5, 0.75, 1.0),
+        "lambda_residual_l2": (0.0000003, 0.000001, 0.000003, 0.00001,
+                               0.00003),
+        "group_pseudocount": (0.5, 1.0, 1.5, 2.0, 3.0),
+        "prior_pseudocount": (25.0, 50.0, 75.0, 100.0),
         "prior_discount": (0.85, 0.9, 0.95),
     },
 }
 
-# Keep the best completed second-round configuration as trial 0000.  These
-# primary anchors maximize ACC + AUC - DP - EO in paper/tune/summary2.csv.
+# Primary anchors are the best two-run configurations in summary3.csv.
 SEARCH_ANCHORS: Dict[str, Dict[str, Any]] = {
     "bailA": {
         "hidden_dim": 64, "n_layers": 1, "lr": 0.0045, "dropout": 0.4,
         "lambda_fair": 6.0, "meta_lr": 0.03, "lambda_coord": 0.75,
-        "disentangle_temp": 0.1, "source_mmd_bandwidth": 1.0,
+        "source_mmd_bandwidth": 1.0,
         "adapt_epochs": 75, "adapt_lr": 0.0005,
         "residual_inner_steps": 20, "tau_c": 0.7,
         "prior_confidence_threshold": 0.7, "proto_temp": 0.75,
-        "lambda_pi": 0.0, "lambda_residual_l2": 0.003,
+        "lambda_pi": 0.0, "lambda_residual_l2": 0.002,
         "group_pseudocount": 0.5, "prior_pseudocount": 5.0,
         "prior_discount": 0.5,
     },
     "germanA": {
-        "hidden_dim": 128, "n_layers": 2, "lr": 0.01, "dropout": 0.4,
-        "lambda_fair": 4.0, "meta_lr": 0.02, "lambda_coord": 0.5,
-        "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.25,
-        "adapt_epochs": 25, "adapt_lr": 0.0002,
-        "residual_inner_steps": 40, "tau_c": 0.65,
-        "prior_confidence_threshold": 0.7, "proto_temp": 0.5,
-        "lambda_pi": 0.6, "lambda_residual_l2": 0.01,
-        "group_pseudocount": 1.0, "prior_pseudocount": 1.0,
-        "prior_discount": 0.9,
+        "hidden_dim": 128, "n_layers": 1, "lr": 0.01, "dropout": 0.3,
+        "lambda_fair": 4.0, "meta_lr": 0.015, "lambda_coord": 0.75,
+        "source_mmd_bandwidth": 0.1,
+        "adapt_epochs": 25, "adapt_lr": 0.00035,
+        "residual_inner_steps": 30, "tau_c": 0.6,
+        "prior_confidence_threshold": 0.7, "proto_temp": 0.6,
+        "lambda_pi": 0.8, "lambda_residual_l2": 0.03,
+        "group_pseudocount": 1.0, "prior_pseudocount": 2.0,
+        "prior_discount": 0.75,
     },
     "pokec": {
-        "hidden_dim": 64, "n_layers": 3, "lr": 0.004, "dropout": 0.2,
-        "lambda_fair": 0.5, "meta_lr": 0.01, "lambda_coord": 0.75,
-        "disentangle_temp": 0.1, "source_mmd_bandwidth": 2.0,
-        "adapt_epochs": 20, "adapt_lr": 0.0005,
-        "residual_inner_steps": 20, "tau_c": 0.45,
-        "prior_confidence_threshold": 0.45, "proto_temp": 1.0,
-        "lambda_pi": 0.3, "lambda_residual_l2": 0.0001,
+        "hidden_dim": 64, "n_layers": 2, "lr": 0.001, "dropout": 0.2,
+        "lambda_fair": 4.0, "meta_lr": 0.005, "lambda_coord": 1.0,
+        "source_mmd_bandwidth": 2.0,
+        "adapt_epochs": 75, "adapt_lr": 0.001,
+        "residual_inner_steps": 10, "tau_c": 0.25,
+        "prior_confidence_threshold": 0.45, "proto_temp": 0.75,
+        "lambda_pi": 0.1, "lambda_residual_l2": 0.003,
         "group_pseudocount": 0.5, "prior_pseudocount": 100.0,
-        "prior_discount": 0.0,
+        "prior_discount": 0.5,
     },
     "syn": {
-        "hidden_dim": 256, "lr": 0.002, "dropout": 0.3,
-        "lambda_fair": 2.0, "meta_lr": 0.005, "lambda_coord": 0.75,
-        "disentangle_temp": 0.1, "source_mmd_bandwidth": 1.0,
-        "adapt_epochs": 75, "adapt_lr": 0.0002,
-        "residual_inner_steps": 40, "tau_c": 0.5,
-        "prior_confidence_threshold": 0.5, "proto_temp": 0.1,
-        "lambda_pi": 0.75, "lambda_residual_l2": 0.00001,
-        "group_pseudocount": 2.0, "prior_pseudocount": 50.0,
+        "hidden_dim": 256, "lr": 0.003, "dropout": 0.3,
+        "lambda_fair": 6.0, "meta_lr": 0.005, "lambda_coord": 0.5,
+        "source_mmd_bandwidth": 0.75,
+        "adapt_epochs": 100, "adapt_lr": 0.0001,
+        "residual_inner_steps": 30, "tau_c": 0.45,
+        "prior_confidence_threshold": 0.55, "proto_temp": 0.15,
+        "lambda_pi": 1.0, "lambda_residual_l2": 0.000001,
+        "group_pseudocount": 1.0, "prior_pseudocount": 50.0,
         "prior_discount": 0.9,
     },
 }
 
-# Preserve secondary high-scoring modes before drawing any new configurations.
-# Pokec keeps both the lower-capacity trial-30 mode and the older 128x4 mode,
-# whose second-round scores were close to the primary 64x3 mode.
+# Preserve structurally distinct two-run modes.  The final Pokec entry is a
+# targeted hybrid of the positive t5/t12/t13/t14 local directions.
 SEARCH_EXTRA_ANCHORS: Dict[str, Tuple[Dict[str, Any], ...]] = {
     "bailA": (
         {
-            "hidden_dim": 64, "n_layers": 2, "lr": 0.0045, "dropout": 0.4,
-            "lambda_fair": 4.0, "meta_lr": 0.03, "lambda_coord": 0.75,
-            "disentangle_temp": 0.05, "source_mmd_bandwidth": 1.5,
-            "adapt_epochs": 150, "adapt_lr": 0.0005,
-            "residual_inner_steps": 40, "tau_c": 0.75,
-            "prior_confidence_threshold": 0.6, "proto_temp": 0.5,
-            "lambda_pi": 0.01, "lambda_residual_l2": 0.001,
+            "hidden_dim": 64, "n_layers": 1, "lr": 0.0045, "dropout": 0.4,
+            "lambda_fair": 6.0, "meta_lr": 0.03, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 0.5,
+            "adapt_epochs": 75, "adapt_lr": 0.0005,
+            "residual_inner_steps": 20, "tau_c": 0.7,
+            "prior_confidence_threshold": 0.7, "proto_temp": 0.75,
+            "lambda_pi": 0.0, "lambda_residual_l2": 0.003,
+            "group_pseudocount": 0.5, "prior_pseudocount": 5.0,
+            "prior_discount": 0.5,
+        },
+        {
+            "hidden_dim": 64, "n_layers": 1, "lr": 0.0045, "dropout": 0.4,
+            "lambda_fair": 6.0, "meta_lr": 0.03, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 1.0,
+            "adapt_epochs": 75, "adapt_lr": 0.0005,
+            "residual_inner_steps": 20, "tau_c": 0.7,
+            "prior_confidence_threshold": 0.7, "proto_temp": 0.75,
+            "lambda_pi": 0.005, "lambda_residual_l2": 0.003,
+            "group_pseudocount": 0.5, "prior_pseudocount": 5.0,
+            "prior_discount": 0.5,
+        },
+        {
+            "hidden_dim": 64, "n_layers": 1, "lr": 0.0055, "dropout": 0.35,
+            "lambda_fair": 3.0, "meta_lr": 0.03, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 1.0,
+            "adapt_epochs": 75, "adapt_lr": 0.0004,
+            "residual_inner_steps": 30, "tau_c": 0.75,
+            "prior_confidence_threshold": 0.55, "proto_temp": 1.0,
+            "lambda_pi": 0.005, "lambda_residual_l2": 0.001,
             "group_pseudocount": 0.5, "prior_pseudocount": 10.0,
             "prior_discount": 0.75,
         },
@@ -239,85 +283,183 @@ SEARCH_EXTRA_ANCHORS: Dict[str, Tuple[Dict[str, Any], ...]] = {
     "germanA": (
         {
             "hidden_dim": 128, "n_layers": 2, "lr": 0.01, "dropout": 0.4,
-            "lambda_fair": 4.0, "meta_lr": 0.02, "lambda_coord": 1.0,
-            "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.5,
-            "adapt_epochs": 15, "adapt_lr": 0.0002,
+            "lambda_fair": 4.0, "meta_lr": 0.02, "lambda_coord": 0.5,
+            "source_mmd_bandwidth": 0.25,
+            "adapt_epochs": 25, "adapt_lr": 0.0002,
             "residual_inner_steps": 40, "tau_c": 0.65,
-            "prior_confidence_threshold": 0.75, "proto_temp": 0.25,
+            "prior_confidence_threshold": 0.7, "proto_temp": 0.5,
+            "lambda_pi": 0.5, "lambda_residual_l2": 0.01,
+            "group_pseudocount": 1.0, "prior_pseudocount": 1.0,
+            "prior_discount": 0.9,
+        },
+        {
+            "hidden_dim": 128, "n_layers": 2, "lr": 0.0075, "dropout": 0.3,
+            "lambda_fair": 8.0, "meta_lr": 0.02, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 0.1,
+            "adapt_epochs": 25, "adapt_lr": 0.0002,
+            "residual_inner_steps": 20, "tau_c": 0.75,
+            "prior_confidence_threshold": 0.75, "proto_temp": 0.5,
+            "lambda_pi": 0.7, "lambda_residual_l2": 0.01,
+            "group_pseudocount": 3.0, "prior_pseudocount": 5.0,
+            "prior_discount": 0.85,
+        },
+        {
+            "hidden_dim": 128, "n_layers": 1, "lr": 0.012, "dropout": 0.4,
+            "lambda_fair": 4.0, "meta_lr": 0.025, "lambda_coord": 0.5,
+            "source_mmd_bandwidth": 0.75,
+            "adapt_epochs": 5, "adapt_lr": 0.0001,
+            "residual_inner_steps": 20, "tau_c": 0.75,
+            "prior_confidence_threshold": 0.65, "proto_temp": 0.25,
             "lambda_pi": 0.6, "lambda_residual_l2": 0.01,
-            "group_pseudocount": 2.0, "prior_pseudocount": 1.0,
+            "group_pseudocount": 1.0, "prior_pseudocount": 1.0,
             "prior_discount": 0.75,
         },
     ),
     "pokec": (
         {
-            "hidden_dim": 64, "n_layers": 2, "lr": 0.001, "dropout": 0.2,
-            "lambda_fair": 4.0, "meta_lr": 0.005, "lambda_coord": 1.0,
-            "disentangle_temp": 0.2, "source_mmd_bandwidth": 2.0,
-            "adapt_epochs": 75, "adapt_lr": 0.001,
-            "residual_inner_steps": 10, "tau_c": 0.25,
-            "prior_confidence_threshold": 0.45, "proto_temp": 0.75,
-            "lambda_pi": 0.1, "lambda_residual_l2": 0.003,
-            "group_pseudocount": 0.5, "prior_pseudocount": 100.0,
+            "hidden_dim": 128, "n_layers": 4, "lr": 0.004, "dropout": 0.1,
+            "lambda_fair": 4.0, "meta_lr": 0.015, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 0.5,
+            "adapt_epochs": 25, "adapt_lr": 0.0002,
+            "residual_inner_steps": 10, "tau_c": 0.45,
+            "prior_confidence_threshold": 0.5, "proto_temp": 1.25,
+            "lambda_pi": 0.3, "lambda_residual_l2": 0.0001,
+            "group_pseudocount": 1.0, "prior_pseudocount": 75.0,
             "prior_discount": 0.5,
         },
         {
-            "hidden_dim": 128, "n_layers": 4, "lr": 0.004, "dropout": 0.2,
-            "lambda_fair": 4.0, "meta_lr": 0.01, "lambda_coord": 0.5,
-            "disentangle_temp": 0.2, "source_mmd_bandwidth": 0.5,
-            "adapt_epochs": 25, "adapt_lr": 0.0003,
-            "residual_inner_steps": 20, "tau_c": 0.25,
-            "prior_confidence_threshold": 0.35, "proto_temp": 0.5,
-            "lambda_pi": 0.2, "lambda_residual_l2": 0.001,
-            "group_pseudocount": 0.5, "prior_pseudocount": 50.0,
+            "hidden_dim": 128, "n_layers": 4, "lr": 0.0025, "dropout": 0.1,
+            "lambda_fair": 2.0, "meta_lr": 0.01, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 2.5,
+            "adapt_epochs": 15, "adapt_lr": 0.0002,
+            "residual_inner_steps": 10, "tau_c": 0.35,
+            "prior_confidence_threshold": 0.25, "proto_temp": 0.75,
+            "lambda_pi": 0.4, "lambda_residual_l2": 0.0001,
+            "group_pseudocount": 0.5, "prior_pseudocount": 150.0,
             "prior_discount": 0.0,
+        },
+        {
+            "hidden_dim": 64, "n_layers": 3, "lr": 0.004, "dropout": 0.2,
+            "lambda_fair": 0.5, "meta_lr": 0.01, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 2.0,
+            "adapt_epochs": 20, "adapt_lr": 0.0003,
+            "residual_inner_steps": 20, "tau_c": 0.45,
+            "prior_confidence_threshold": 0.45, "proto_temp": 1.0,
+            "lambda_pi": 0.3, "lambda_residual_l2": 0.0001,
+            "group_pseudocount": 0.5, "prior_pseudocount": 100.0,
+            "prior_discount": 0.0,
+        },
+        {
+            "hidden_dim": 64, "n_layers": 3, "lr": 0.004, "dropout": 0.2,
+            "lambda_fair": 0.5, "meta_lr": 0.01, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 2.0,
+            "adapt_epochs": 20, "adapt_lr": 0.0003,
+            "residual_inner_steps": 20, "tau_c": 0.45,
+            "prior_confidence_threshold": 0.45, "proto_temp": 1.0,
+            "lambda_pi": 0.2, "lambda_residual_l2": 0.0001,
+            "group_pseudocount": 0.5, "prior_pseudocount": 75.0,
+            "prior_discount": 0.5,
         },
     ),
     "syn": (
         {
-            "hidden_dim": 256, "lr": 0.005, "dropout": 0.4,
-            "lambda_fair": 8.0, "meta_lr": 0.01, "lambda_coord": 1.0,
-            "disentangle_temp": 0.1, "source_mmd_bandwidth": 1.0,
-            "adapt_epochs": 150, "adapt_lr": 0.0005,
-            "residual_inner_steps": 40, "tau_c": 0.4,
+            "hidden_dim": 256, "lr": 0.003, "dropout": 0.4,
+            "lambda_fair": 2.0, "meta_lr": 0.0075, "lambda_coord": 0.5,
+            "source_mmd_bandwidth": 0.75,
+            "adapt_epochs": 125, "adapt_lr": 0.0005,
+            "residual_inner_steps": 30, "tau_c": 0.5,
             "prior_confidence_threshold": 0.4, "proto_temp": 0.05,
-            "lambda_pi": 1.0, "lambda_residual_l2": 0.000001,
-            "group_pseudocount": 1.0, "prior_pseudocount": 10.0,
+            "lambda_pi": 0.1, "lambda_residual_l2": 0.00001,
+            "group_pseudocount": 3.0, "prior_pseudocount": 75.0,
+            "prior_discount": 0.95,
+        },
+        {
+            "hidden_dim": 256, "lr": 0.002, "dropout": 0.3,
+            "lambda_fair": 2.0, "meta_lr": 0.005, "lambda_coord": 0.5,
+            "source_mmd_bandwidth": 1.0,
+            "adapt_epochs": 75, "adapt_lr": 0.0002,
+            "residual_inner_steps": 40, "tau_c": 0.5,
+            "prior_confidence_threshold": 0.5, "proto_temp": 0.1,
+            "lambda_pi": 0.75, "lambda_residual_l2": 0.00001,
+            "group_pseudocount": 2.0, "prior_pseudocount": 50.0,
+            "prior_discount": 0.9,
+        },
+        {
+            "hidden_dim": 256, "lr": 0.002, "dropout": 0.4,
+            "lambda_fair": 2.0, "meta_lr": 0.005, "lambda_coord": 0.75,
+            "source_mmd_bandwidth": 0.75,
+            "adapt_epochs": 75, "adapt_lr": 0.0005,
+            "residual_inner_steps": 40, "tau_c": 0.4,
+            "prior_confidence_threshold": 0.45, "proto_temp": 0.15,
+            "lambda_pi": 0.1, "lambda_residual_l2": 0.000003,
+            "group_pseudocount": 2.0, "prior_pseudocount": 75.0,
             "prior_discount": 0.9,
         },
     ),
 }
 
-# Local trials change one high-impact factor at a time around the primary
-# anchor.  The remaining budget samples joint interactions across the narrowed
-# third-round ranges.
+# Local candidates are generated around every elite anchor.  The order matters
+# when a per-anchor quota is smaller than the number of searchable factors.
 LOCAL_SEARCH_KEYS: Dict[str, Tuple[str, ...]] = {
     "bailA": (
-        "n_layers", "dropout", "lambda_fair", "lambda_coord",
-        "disentangle_temp", "source_mmd_bandwidth", "adapt_epochs", "tau_c",
-        "prior_confidence_threshold", "proto_temp", "lambda_pi",
-        "lambda_residual_l2", "lr", "prior_discount",
+        "lambda_residual_l2", "source_mmd_bandwidth", "lambda_pi",
+        "proto_temp", "prior_confidence_threshold", "lr", "dropout",
+        "lambda_fair", "meta_lr", "lambda_coord",
+        "adapt_epochs", "adapt_lr", "residual_inner_steps", "tau_c",
+        "prior_discount",
     ),
     "germanA": (
-        "dropout", "lambda_fair", "lambda_coord", "source_mmd_bandwidth",
-        "adapt_epochs", "adapt_lr", "residual_inner_steps", "tau_c",
-        "prior_confidence_threshold", "proto_temp", "group_pseudocount",
-        "prior_discount", "n_layers", "lambda_pi",
+        "lambda_pi", "lambda_fair", "adapt_lr", "proto_temp",
+        "prior_discount", "lambda_coord", "source_mmd_bandwidth",
+        "residual_inner_steps", "adapt_epochs", "dropout", "n_layers", "lr",
+        "meta_lr", "tau_c",
+        "prior_confidence_threshold", "lambda_residual_l2",
+        "group_pseudocount",
     ),
     "pokec": (
-        "hidden_dim", "n_layers", "adapt_lr", "dropout", "lambda_fair",
-        "lambda_coord", "disentangle_temp", "source_mmd_bandwidth",
-        "prior_confidence_threshold", "lambda_pi", "prior_pseudocount",
-        "prior_discount", "tau_c", "lambda_residual_l2",
+        "adapt_lr", "lambda_pi", "prior_pseudocount", "prior_discount",
+        "dropout", "lambda_fair", "source_mmd_bandwidth", "adapt_epochs",
+        "lr", "meta_lr", "lambda_coord",
+        "residual_inner_steps", "tau_c", "prior_confidence_threshold",
+        "lambda_residual_l2", "proto_temp", "group_pseudocount",
     ),
     "syn": (
-        "lr", "dropout", "lambda_fair", "meta_lr", "lambda_coord",
-        "adapt_epochs", "adapt_lr", "tau_c", "prior_confidence_threshold",
-        "lambda_pi", "lambda_residual_l2", "prior_pseudocount",
-        "group_pseudocount", "proto_temp",
+        "lambda_coord", "lr", "meta_lr", "dropout", "proto_temp",
+        "lambda_fair", "source_mmd_bandwidth",
+        "residual_inner_steps", "adapt_epochs", "adapt_lr", "tau_c",
+        "prior_confidence_threshold", "lambda_pi", "lambda_residual_l2",
+        "group_pseudocount", "prior_pseudocount", "prior_discount",
     ),
 }
-LOCAL_TRIALS_PER_DATASET = 14
+LOCAL_TRIALS_PER_ANCHOR: Dict[str, int] = {
+    "bailA": 16,
+    "germanA": 18,
+    "pokec": 16,
+    "syn": 18,
+}
+ELITE_RANDOM_FRACTION: Dict[str, float] = {
+    "bailA": 0.75,
+    "germanA": 0.75,
+    "pokec": 0.85,
+    "syn": 0.75,
+}
+ELITE_MUTATION_BOUNDS: Dict[str, Tuple[int, int]] = {
+    "bailA": (2, 5),
+    "germanA": (2, 6),
+    "pokec": (2, 7),
+    "syn": (2, 6),
+}
+ELITE_NEIGHBOR_DEPTH: Dict[str, int] = {
+    "bailA": 3,
+    "germanA": 3,
+    "pokec": 3,
+    "syn": 3,
+}
+ELITE_FIXED_KEYS: Dict[str, Tuple[str, ...]] = {
+    # Keep the discovered Pokec architecture modes intact during focused
+    # mutations; the global segment still explores all architecture pairs.
+    "pokec": ("hidden_dim", "n_layers"),
+}
 
 
 PRINT_LOCK = threading.Lock()
@@ -329,6 +471,8 @@ class Trial:
     dataset: str
     trial_id: int
     parameters: Dict[str, Any]
+    strategy: str
+    anchor_index: int | None = None
 
     @property
     def name(self) -> str:
@@ -388,19 +532,24 @@ def _resolved_search_anchors(
                 f"No anchor/default value for {dataset}: "
                 f"{', '.join(sorted(missing))}"
             )
-        parameters = {key: resolved[key] for key in space}
-        outside = {
-            key: value
-            for key, value in parameters.items()
-            if value not in space[key]
-        }
+        parameters: Dict[str, Any] = {}
+        outside: Dict[str, Any] = {}
+        for key, choices in space.items():
+            value = resolved[key]
+            matching_choices = [choice for choice in choices if choice == value]
+            if not matching_choices:
+                outside[key] = value
+                continue
+            # Normalize 1 versus 1.0 and similar numeric aliases to the exact
+            # object stored in the search space before computing signatures.
+            parameters[key] = matching_choices[0]
         if outside:
             rendered = ", ".join(
                 f"{key}={value!r}" for key, value in sorted(outside.items())
             )
             raise ValueError(
                 f"Anchor {anchor_index} for {dataset} lies outside the "
-                f"third-round ranges: {rendered}"
+                f"fourth-round ranges: {rendered}"
             )
 
         signature = _signature(parameters)
@@ -436,13 +585,7 @@ def _local_anchor_candidates(
     """Yield one-factor perturbations in nearest-to-anchor order."""
     alternatives: Dict[str, List[Any]] = {}
     for key in LOCAL_SEARCH_KEYS[dataset]:
-        anchor_value = anchor[key]
-        values = [value for value in space[key] if value != anchor_value]
-        try:
-            values.sort(key=lambda value: abs(float(value) - float(anchor_value)))
-        except (TypeError, ValueError):
-            values.sort(key=repr)
-        alternatives[key] = values
+        alternatives[key] = _ordered_alternatives(space[key], anchor[key])
 
     max_depth = max((len(values) for values in alternatives.values()), default=0)
     for depth in range(max_depth):
@@ -455,49 +598,152 @@ def _local_anchor_candidates(
             yield candidate
 
 
+def _ordered_alternatives(
+    choices: Sequence[Any],
+    anchor_value: Any,
+) -> List[Any]:
+    """Return non-anchor choices from nearest to farthest."""
+    values = [value for value in choices if value != anchor_value]
+    try:
+        values.sort(key=lambda value: abs(float(value) - float(anchor_value)))
+    except (TypeError, ValueError):
+        values.sort(key=repr)
+    return values
+
+
+def _elite_mutation_candidate(
+    dataset: str,
+    space: Mapping[str, Sequence[Any]],
+    anchors: Sequence[Mapping[str, Any]],
+    rng: random.Random,
+) -> Tuple[Dict[str, Any], int]:
+    """Jointly mutate a few nearby values while preserving an elite mode."""
+    weights = [2.0] + [1.0] * (len(anchors) - 1)
+    anchor_index = rng.choices(range(len(anchors)), weights=weights, k=1)[0]
+    anchor = anchors[anchor_index]
+    fixed_keys = set(ELITE_FIXED_KEYS.get(dataset, ()))
+    mutable_keys = [
+        key
+        for key, choices in space.items()
+        if len(choices) > 1 and key not in fixed_keys
+    ]
+    lower, upper = ELITE_MUTATION_BOUNDS[dataset]
+    lower = min(lower, len(mutable_keys))
+    upper = min(upper, len(mutable_keys))
+    mutation_count = rng.randint(lower, upper)
+    selected_keys = rng.sample(mutable_keys, mutation_count)
+
+    parameters = dict(anchor)
+    neighbor_depth = ELITE_NEIGHBOR_DEPTH[dataset]
+    for key in selected_keys:
+        alternatives = _ordered_alternatives(space[key], anchor[key])
+        parameters[key] = rng.choice(alternatives[:neighbor_depth])
+    return parameters, anchor_index
+
+
 def make_trials(
     dataset: str,
     count: int,
     sampler_seed: int,
     base_config: Mapping[str, Mapping[str, Any]],
 ) -> List[Trial]:
-    """Preserve elite anchors, add primary-local trials, then sample jointly."""
+    """Preserve elites, search every elite locally, then sample interactions."""
     space = SEARCH_SPACES[dataset]
     anchors = _resolved_search_anchors(dataset, space, base_config)
-    primary_anchor = anchors[0]
     trials: List[Trial] = []
     seen = set()
-    for anchor in anchors:
+    for anchor_index, anchor in enumerate(anchors):
         if len(trials) >= count:
             return trials
         seen.add(_signature(anchor))
         trials.append(
-            Trial(dataset=dataset, trial_id=len(trials), parameters=anchor)
+            Trial(
+                dataset=dataset,
+                trial_id=len(trials),
+                parameters=anchor,
+                strategy=("primary_anchor" if anchor_index == 0 else "secondary_anchor"),
+                anchor_index=anchor_index,
+            )
         )
 
-    local_added = 0
-    for candidate in _local_anchor_candidates(dataset, space, primary_anchor):
-        if len(trials) >= count or local_added >= LOCAL_TRIALS_PER_DATASET:
+    local_quota = LOCAL_TRIALS_PER_ANCHOR[dataset]
+    local_generators = [
+        iter(_local_anchor_candidates(dataset, space, anchor))
+        for anchor in anchors
+    ]
+    local_counts = [0] * len(anchors)
+    active = [True] * len(anchors)
+    while len(trials) < count and any(active):
+        progressed = False
+        for anchor_index, generator in enumerate(local_generators):
+            if len(trials) >= count:
+                break
+            if not active[anchor_index] or local_counts[anchor_index] >= local_quota:
+                active[anchor_index] = False
+                continue
+            while True:
+                try:
+                    candidate = next(generator)
+                except StopIteration:
+                    active[anchor_index] = False
+                    break
+                signature = _signature(candidate)
+                if signature in seen:
+                    continue
+                seen.add(signature)
+                trials.append(
+                    Trial(
+                        dataset=dataset,
+                        trial_id=len(trials),
+                        parameters=candidate,
+                        strategy="local",
+                        anchor_index=anchor_index,
+                    )
+                )
+                local_counts[anchor_index] += 1
+                progressed = True
+                break
+        if not progressed:
             break
-        signature = _signature(candidate)
-        if signature in seen:
-            continue
-        seen.add(signature)
-        trials.append(
-            Trial(dataset=dataset, trial_id=len(trials), parameters=candidate)
-        )
-        local_added += 1
 
     remaining = count - len(trials)
     if remaining == 0:
         return trials
 
     rng = random.Random(_stable_dataset_seed(sampler_seed, dataset))
-    columns = _balanced_parameter_columns(space, remaining, rng)
+    elite_target = round(remaining * ELITE_RANDOM_FRACTION[dataset])
+    attempts = 0
+    elite_added = 0
+    while elite_added < elite_target and len(trials) < count:
+        parameters, anchor_index = _elite_mutation_candidate(
+            dataset, space, anchors, rng
+        )
+        signature = _signature(parameters)
+        attempts += 1
+        if signature in seen:
+            if attempts > max(count * 1000, 10000):
+                raise RuntimeError(
+                    f"Could not sample {elite_target} elite mutations for {dataset}"
+                )
+            continue
+        seen.add(signature)
+        trials.append(
+            Trial(
+                dataset=dataset,
+                trial_id=len(trials),
+                parameters=parameters,
+                strategy="elite_random",
+                anchor_index=anchor_index,
+            )
+        )
+        elite_added += 1
+
+    global_target = count - len(trials)
+    columns = _balanced_parameter_columns(space, global_target, rng)
     attempts = 0
     index = 0
     while len(trials) < count:
-        if index < remaining:
+        if index < global_target:
             parameters = {key: columns[key][index] for key in space}
             index += 1
         else:
@@ -505,12 +751,19 @@ def make_trials(
         signature = _signature(parameters)
         attempts += 1
         if signature in seen:
-            if attempts > count * 100:
-                raise RuntimeError(f"Could not sample {count} unique trials for {dataset}")
+            if attempts > max(count * 1000, 10000):
+                raise RuntimeError(
+                    f"Could not sample {count} unique trials for {dataset}"
+                )
             continue
         seen.add(signature)
         trials.append(
-            Trial(dataset=dataset, trial_id=len(trials), parameters=parameters)
+            Trial(
+                dataset=dataset,
+                trial_id=len(trials),
+                parameters=parameters,
+                strategy="global_random",
+            )
         )
     return trials
 
@@ -539,15 +792,21 @@ def is_complete_result(
         target = payload["metrics"]["target_after"]
         for key in ("acc", "auc", "dp", "eo"):
             values = target.get(key)
-            if not isinstance(values, list) or not values:
+            if (
+                not isinstance(values, list)
+                or len(values) != RUNS_PER_COMBINATION
+            ):
                 return False
-            if not math.isfinite(float(values[0])):
+            if not all(math.isfinite(float(value)) for value in values):
                 return False
         if expected_parameters is not None:
             actual_parameters = payload.get("tuning", {}).get("parameters")
             if not isinstance(actual_parameters, dict):
                 return False
             if _signature(actual_parameters) != _signature(expected_parameters):
+                return False
+            actual_runs = payload.get("tuning", {}).get("runs_per_combination")
+            if actual_runs != RUNS_PER_COMBINATION:
                 return False
         return True
     except (OSError, OverflowError, ValueError, KeyError, TypeError):
@@ -560,6 +819,45 @@ def _override_text(key: str, value: Any) -> str:
     else:
         rendered = str(value)
     return f"{key}={rendered}"
+
+
+@lru_cache(maxsize=1)
+def _main_cli_options() -> frozenset[str]:
+    """Read the options actually registered by the colocated config.py.
+
+    Some deployed EMBER copies predate the checkpoint-disable arguments.  A
+    static AST inspection keeps tune.py compatible with both parser versions
+    without importing config.py, which would immediately parse tune.py's own
+    command line and initialize the training runtime.
+    """
+    source = CONFIG_SCRIPT.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(CONFIG_SCRIPT))
+    options = {
+        argument.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_argument"
+        for argument in node.args
+        if isinstance(argument, ast.Constant)
+        and isinstance(argument.value, str)
+        and argument.value.startswith("--")
+    }
+    return frozenset(options)
+
+
+def _checkpoint_cli_arguments(options: Iterable[str]) -> List[str]:
+    """Return only checkpoint-safety switches supported by main.py's parser."""
+    supported = set(options)
+    arguments: List[str] = []
+    for aliases in (
+        ("--no-checkpoint", "--no_checkpoint"),
+        ("--disable-checkpoint-save", "--disable_checkpoint_save"),
+    ):
+        selected = next((option for option in aliases if option in supported), None)
+        if selected is not None:
+            arguments.append(selected)
+    return arguments
 
 
 def query_gpu_status() -> Dict[int, Dict[str, int]]:
@@ -683,14 +981,18 @@ def build_command(
         "--outid", outid,
         "--device_id", str(device_id),
         "--seed", str(args.seed),
-        "--target_seed", str(args.seed + args.target_seed_offset),
-        "--runs_override", "1",
-        "--no-checkpoint",
-        "--disable-checkpoint-save",
+        "--runs_override", str(RUNS_PER_COMBINATION),
         "--disable_embedding_export",
         "--log_path", str(trial_log_path),
         "--result_path", str(result_path),
     ]
+    # With no explicit target seed, runner.py uses seed + run_idx * 1111, so
+    # the two target-adaptation runs no longer reset to the same random seed.
+    if args.target_seed_offset is not None:
+        command.extend(
+            ("--target_seed", str(args.seed + args.target_seed_offset))
+        )
+    command.extend(_checkpoint_cli_arguments(_main_cli_options()))
     for key, value in trial.parameters.items():
         command.extend(("--override", _override_text(key, value)))
     return command
@@ -708,9 +1010,11 @@ def _enrich_result(
     payload["tuning"] = {
         "trial_id": trial.trial_id,
         "parameters": trial.parameters,
+        "search_strategy": trial.strategy,
+        "anchor_index": trial.anchor_index,
         "duration_seconds": duration_seconds,
         "device_id": device_id,
-        "runs_per_combination": 1,
+        "runs_per_combination": RUNS_PER_COMBINATION,
     }
     if gpu_status is not None:
         payload["tuning"]["gpu_admission"] = dict(gpu_status)
@@ -739,7 +1043,10 @@ def run_trial(
 
     gpu_status = wait_for_pokec_gpu(args, device_id) if trial.dataset == "pokec" else None
     command = build_command(args, device_id, trial, result, trial_log)
-    print_status(f"[device {device_id}] start {trial.dataset} {trial.name}")
+    print_status(
+        f"[device {device_id}] start {trial.dataset} {trial.name} "
+        f"[{trial.strategy}]"
+    )
     started = time.monotonic()
     completed = subprocess.run(
         command,
@@ -873,6 +1180,54 @@ def filter_devices_for_pokec(
     return eligible
 
 
+def resolve_trial_counts(args: argparse.Namespace) -> Dict[str, int]:
+    """Resolve global or dataset-specific CLI budgets against round-4 defaults."""
+    counts = {
+        dataset: DEFAULT_TRIALS_PER_DATASET[dataset]
+        for dataset in args.datasets
+    }
+    if args.trials is not None:
+        if args.trials < 1:
+            raise ValueError("--trials must be at least 1")
+        return {dataset: args.trials for dataset in args.datasets}
+
+    seen = set()
+    for item in args.trials_per_dataset or ():
+        dataset, separator, raw_count = item.partition("=")
+        dataset = dataset.strip()
+        if not separator or not dataset or not raw_count.strip():
+            raise ValueError(
+                f"Invalid --trials-per-dataset value {item!r}; "
+                "expected DATASET=COUNT"
+            )
+        if dataset not in DATASET_DOMAINS:
+            raise ValueError(f"Unknown dataset in trial budget: {dataset}")
+        if dataset not in args.datasets:
+            raise ValueError(
+                f"Trial budget supplied for unselected dataset: {dataset}"
+            )
+        if dataset in seen:
+            raise ValueError(f"Duplicate trial budget for dataset: {dataset}")
+        try:
+            count = int(raw_count)
+        except ValueError as error:
+            raise ValueError(f"Invalid trial count for {dataset}: {raw_count}") from error
+        if count < 1:
+            raise ValueError(f"Trial count for {dataset} must be at least 1")
+        seen.add(dataset)
+        counts[dataset] = count
+    return counts
+
+
+def estimated_gpu_hours(trial_counts: Mapping[str, int]) -> float:
+    """Estimate GPU-hours from summary3 two-run mean durations."""
+    total_seconds = math.fsum(
+        trial_counts[dataset] * REFERENCE_DURATION_SECONDS[dataset]
+        for dataset in trial_counts
+    )
+    return total_seconds / 3600.0
+
+
 def write_manifest(
     args: argparse.Namespace,
     trials: Sequence[Trial],
@@ -880,33 +1235,71 @@ def write_manifest(
 ) -> Path:
     path = args.results_dir / "manifest.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    anchor_counts = {
-        dataset: min(args.trials, 1 + len(SEARCH_EXTRA_ANCHORS.get(dataset, ())))
+    strategies = (
+        "primary_anchor",
+        "secondary_anchor",
+        "local",
+        "elite_random",
+        "global_random",
+    )
+    strategy_counts = {
+        dataset: {
+            strategy: sum(
+                trial.dataset == dataset and trial.strategy == strategy
+                for trial in trials
+            )
+            for strategy in strategies
+        }
         for dataset in args.datasets
     }
-    local_counts = {
-        dataset: min(
-            LOCAL_TRIALS_PER_DATASET,
-            max(0, args.trials - anchor_counts[dataset]),
+    anchor_counts = {
+        dataset: (
+            strategy_counts[dataset]["primary_anchor"]
+            + strategy_counts[dataset]["secondary_anchor"]
         )
         for dataset in args.datasets
     }
-    random_counts = {
-        dataset: args.trials - anchor_counts[dataset] - local_counts[dataset]
+    local_counts = {
+        dataset: strategy_counts[dataset]["local"]
         for dataset in args.datasets
     }
+    elite_random_counts = {
+        dataset: strategy_counts[dataset]["elite_random"]
+        for dataset in args.datasets
+    }
+    global_random_counts = {
+        dataset: strategy_counts[dataset]["global_random"]
+        for dataset in args.datasets
+    }
+    gpu_hours = estimated_gpu_hours(args.trial_counts)
+    gpu_device_count = sum(device_id >= 0 for device_id in devices)
     payload = {
         "search_round": SEARCH_ROUND,
-        "search": "multi_anchor_local_plus_balanced_random_categorical",
+        "search": "multi_anchor_local_plus_elite_mutation_plus_global_balanced",
         "datasets": args.datasets,
-        "trials_per_dataset": args.trials,
+        "trials_per_dataset": args.trial_counts,
         "anchor_trials_per_dataset": anchor_counts,
         "local_trials_per_dataset": local_counts,
-        "balanced_random_trials_per_dataset": random_counts,
-        "runs_per_combination": 1,
+        "elite_random_trials_per_dataset": elite_random_counts,
+        "global_random_trials_per_dataset": global_random_counts,
+        "strategy_counts_per_dataset": strategy_counts,
+        "runs_per_combination": RUNS_PER_COMBINATION,
         "training_seed": args.seed,
         "sampler_seed": args.sampler_seed,
+        "target_seed_offset": args.target_seed_offset,
+        "target_seed_policy": (
+            "runner_run_index_offset"
+            if args.target_seed_offset is None
+            else "fixed_offset"
+        ),
         "devices": list(devices),
+        "estimated_budget_from_summary3": {
+            "gpu_hours": gpu_hours,
+            "ideal_wall_hours": (
+                gpu_hours / gpu_device_count if gpu_device_count else None
+            ),
+            "reference_duration_seconds": REFERENCE_DURATION_SECONDS,
+        },
         "objective": {
             "formula": "ACC + AUC - DP - EO",
             "direction": "maximize",
@@ -922,6 +1315,8 @@ def write_manifest(
             {
                 "dataset": trial.dataset,
                 "trial_id": trial.trial_id,
+                "strategy": trial.strategy,
+                "anchor_index": trial.anchor_index,
                 "parameters": trial.parameters,
             }
             for trial in trials
@@ -934,9 +1329,11 @@ def write_manifest(
 
 def _metric(payload: Mapping[str, Any], metric: str) -> float:
     values = payload["metrics"]["target_after"][metric]
-    if not values:
-        raise ValueError(f"Missing target-after metric: {metric}")
-    return float(values[0])
+    if not isinstance(values, list) or len(values) != RUNS_PER_COMBINATION:
+        raise ValueError(
+            f"Expected {RUNS_PER_COMBINATION} target-after values for {metric}"
+        )
+    return math.fsum(float(value) for value in values) / RUNS_PER_COMBINATION
 
 
 def _pareto_flags(rows: Sequence[Mapping[str, Any]]) -> List[bool]:
@@ -988,11 +1385,14 @@ def aggregate(
             {
                 "dataset": trial.dataset,
                 "trial_id": trial.trial_id,
+                "search_strategy": trial.strategy,
+                "anchor_index": trial.anchor_index,
                 "score": score,
                 "acc": acc,
                 "auc": auc,
                 "dp": dp,
                 "eo": eo,
+                "runs_per_combination": tuning.get("runs_per_combination"),
                 "duration_seconds": tuning.get("duration_seconds"),
                 "parameters": trial.parameters,
                 "result_path": str(path),
@@ -1023,8 +1423,10 @@ def aggregate(
     with json_path.open("w", encoding="utf-8") as output:
         json.dump(rows, output, ensure_ascii=False, indent=2)
     fieldnames = [
-        "dataset", "rank", "trial_id", "score", "is_pareto",
-        "acc", "auc", "dp", "eo", "duration_seconds",
+        "dataset", "rank", "trial_id", "search_strategy", "anchor_index",
+        "score", "is_pareto",
+        "acc", "auc", "dp", "eo", "runs_per_combination",
+        "duration_seconds",
         "parameters", "result_path",
     ]
     with csv_path.open("w", newline="", encoding="utf-8") as output:
@@ -1053,12 +1455,23 @@ def print_dry_run(
     trials: Sequence[Trial],
     devices: Sequence[int],
 ) -> None:
+    gpu_hours = estimated_gpu_hours(args.trial_counts)
+    gpu_count = sum(device_id >= 0 for device_id in devices)
     print_status(
-        f"Dry run: {len(trials)} unique combinations, exactly one run each, "
+        f"Dry run: {len(trials)} unique combinations, exactly "
+        f"{RUNS_PER_COMBINATION} runs per combination, "
+        f"{len(trials) * RUNS_PER_COMBINATION} total runs, "
         f"devices={list(devices)}"
     )
+    estimate = f"estimated={gpu_hours:.1f} GPU-hours from summary3"
+    if gpu_count:
+        estimate += f", ideal wall={gpu_hours / gpu_count:.1f} hours"
+    print_status(f"  budgets={args.trial_counts}; {estimate}")
     for trial in trials:
-        print_status(f"  {trial.dataset} {trial.name}: {trial.parameters}")
+        print_status(
+            f"  {trial.dataset} {trial.name} [{trial.strategy}]: "
+            f"{trial.parameters}"
+        )
     if trials:
         example = trials[0]
         command = build_command(
@@ -1073,8 +1486,10 @@ def print_dry_run(
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    if args.trials < 1:
-        raise ValueError("--trials must be at least 1")
+    if set(args.trial_counts) != set(args.datasets):
+        raise ValueError("Resolved trial budgets must match the selected datasets")
+    if any(count < 1 for count in args.trial_counts.values()):
+        raise ValueError("Every dataset trial budget must be at least 1")
     if args.pokec_min_free_memory_mb < 1:
         raise ValueError("--pokec-min-free-memory-mb must be positive")
     if not 0 <= args.pokec_max_gpu_utilization <= 100:
@@ -1090,6 +1505,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError(f"Unknown datasets: {sorted(unknown)}")
     if not MAIN_SCRIPT.exists():
         raise FileNotFoundError(f"Missing EMBER entry point: {MAIN_SCRIPT}")
+    if not CONFIG_SCRIPT.exists():
+        raise FileNotFoundError(f"Missing EMBER argument parser: {CONFIG_SCRIPT}")
     if not CONFIG_PATH.exists():
         raise FileNotFoundError(f"Missing EMBER config: {CONFIG_PATH}")
 
@@ -1097,8 +1514,8 @@ def validate_args(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Run one EMBER training run per sampled hyperparameter combination "
-            "and parallelize trials across GPUs."
+            "Run two EMBER training runs per sampled hyperparameter "
+            "combination and parallelize combinations across GPUs."
         )
     )
     parser.add_argument(
@@ -1107,11 +1524,21 @@ def build_parser() -> argparse.ArgumentParser:
         choices=tuple(DATASET_DOMAINS),
         default=list(DATASET_DOMAINS),
     )
-    parser.add_argument(
+    budget_group = parser.add_mutually_exclusive_group()
+    budget_group.add_argument(
         "--trials",
         type=int,
-        default=32,
-        help="total unique combinations per dataset, including preserved anchors",
+        default=None,
+        help="uniform unique-combination budget for every selected dataset",
+    )
+    budget_group.add_argument(
+        "--trials-per-dataset",
+        nargs="+",
+        metavar="DATASET=COUNT",
+        help=(
+            "override round-4 defaults per dataset, for example "
+            "bailA=192 germanA=192 pokec=320 syn=192"
+        ),
     )
     parser.add_argument(
         "--gpus",
@@ -1145,8 +1572,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="maximum wait in seconds; 0 waits indefinitely",
     )
     parser.add_argument("--seed", type=int, default=1111)
-    parser.add_argument("--target-seed-offset", type=int, default=100000)
-    parser.add_argument("--sampler-seed", type=int, default=2029)
+    parser.add_argument(
+        "--target-seed-offset",
+        type=int,
+        default=None,
+        help=(
+            "optional fixed target-seed offset; omit to let runner.py use "
+            "seed + run_idx * 1111 for the two runs"
+        ),
+    )
+    parser.add_argument("--sampler-seed", type=int, default=2030)
     parser.add_argument(
         "--results-dir",
         type=Path,
@@ -1163,24 +1598,39 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def interleave_dataset_trials(
+    trials_by_dataset: Mapping[str, Sequence[Trial]],
+    dataset_order: Sequence[str],
+) -> List[Trial]:
+    """Round-robin datasets so every mode is covered before long random tails."""
+    max_count = max((len(trials) for trials in trials_by_dataset.values()), default=0)
+    return [
+        trials_by_dataset[dataset][trial_index]
+        for trial_index in range(max_count)
+        for dataset in dataset_order
+        if trial_index < len(trials_by_dataset[dataset])
+    ]
+
+
 def main() -> None:
     args = build_parser().parse_args()
     args.results_dir = args.results_dir.resolve()
+    args.trial_counts = resolve_trial_counts(args)
     validate_args(args)
     devices = resolve_devices(args.gpus)
     if not args.dry_run and not args.aggregate_only:
         devices = filter_devices_for_pokec(args, devices)
     base_config = load_base_config()
-    trials = [
-        trial
-        for dataset in args.datasets
-        for trial in make_trials(
+    trials_by_dataset = {
+        dataset: make_trials(
             dataset,
-            args.trials,
+            args.trial_counts[dataset],
             args.sampler_seed,
             base_config,
         )
-    ]
+        for dataset in args.datasets
+    }
+    trials = interleave_dataset_trials(trials_by_dataset, args.datasets)
 
     if args.dry_run:
         print_dry_run(args, trials, devices)

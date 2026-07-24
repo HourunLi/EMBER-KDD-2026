@@ -43,7 +43,8 @@ def fair_metric(pred, labels, sens):
       labels: np.array  ground-truth labels {0,1}
       sens  : np.array  binary sensitive attribute {0,1}
     Returns:
-      (parity, equality): scalar floats
+      (parity, equality): scalar floats.  A metric is NaN when one of the
+      demographic subgroups required by its conditional expectation is empty.
     """
     idx_s0 = sens == 0
     idx_s1 = sens == 1
@@ -52,19 +53,22 @@ def fair_metric(pred, labels, sens):
     idx_s0_y1 = np.bitwise_and(idx_s0, labels == 1)
     idx_s1_y1 = np.bitwise_and(idx_s1, labels == 1)
 
-    def safe_gap(left, right):
+    def conditional_gap(left, right):
+        # Eqs. (1)-(2) are undefined when either conditional subgroup is
+        # empty.  Returning NaN preserves that meaning and prevents an
+        # unavailable fairness measurement from being reported as zero gap.
         if left.size == 0 or right.size == 0:
-            return 0.0
+            return float("nan")
         value = abs(float(left.mean()) - float(right.mean()))
-        return value if np.isfinite(value) else 0.0
+        return value if np.isfinite(value) else float("nan")
 
-    parity = safe_gap(pred[idx_s0], pred[idx_s1])
+    parity = conditional_gap(pred[idx_s0], pred[idx_s1])
     # Eq. (2): average the group gap in correct predictions for y=0 and y=1.
-    y0_gap = safe_gap(
+    y0_gap = conditional_gap(
         pred[idx_s0_y0] == 0,
         pred[idx_s1_y0] == 0,
     )
-    y1_gap = safe_gap(
+    y1_gap = conditional_gap(
         pred[idx_s0_y1] == 1,
         pred[idx_s1_y1] == 1,
     )
