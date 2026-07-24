@@ -1,12 +1,23 @@
 import torch
 import numpy as np
 from utils import fair_metric
-from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    f1_score,
+    roc_auc_score,
+)
 
 
 def evaluate_per_class(args, data, encoder):
     """Evaluate source predictions with the paper's ACC, AUC, DP, and EO."""
     accs, auc_rocs, paritys, equalitys = {}, {}, {}, {}
+    diagnostics = {
+        'balanced_acc': {},
+        'macro_f1': {},
+        'positive_rate': {},
+        'predicted_class_count': {},
+    }
 
     encoder.eval()
     with torch.no_grad():
@@ -47,6 +58,10 @@ def evaluate_per_class(args, data, encoder):
                 auc_rocs[split_name] = 50.0
                 paritys[split_name] = float("nan")
                 equalitys[split_name] = float("nan")
+                diagnostics['balanced_acc'][split_name] = float("nan")
+                diagnostics['macro_f1'][split_name] = float("nan")
+                diagnostics['positive_rate'][split_name] = float("nan")
+                diagnostics['predicted_class_count'][split_name] = 0
                 continue
 
             sens = sens_all[mask]
@@ -66,5 +81,19 @@ def evaluate_per_class(args, data, encoder):
             )
             paritys[split_name] = dp * 100
             equalitys[split_name] = eo * 100
+            diagnostics['balanced_acc'][split_name] = (
+                balanced_accuracy_score(y_true, pred) * 100
+            )
+            diagnostics['macro_f1'][split_name] = f1_score(
+                y_true,
+                pred,
+                labels=[0, 1],
+                average='macro',
+                zero_division=0,
+            ) * 100
+            diagnostics['positive_rate'][split_name] = float(pred.mean() * 100)
+            diagnostics['predicted_class_count'][split_name] = int(
+                np.unique(pred).size
+            )
 
-    return accs, auc_rocs, paritys, equalitys
+    return accs, auc_rocs, paritys, equalitys, diagnostics

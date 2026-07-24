@@ -1,18 +1,20 @@
-"""Stage 1: tune only EMBER's source model on source validation data.
+"""Stage 1b: locally refine GermanA's source model.
 
-Every source configuration is trained twice with independent source seeds.  The
-target graph is not loaded.  Results are ranked by
+Round 1 has converged for BailA, Pokec, and Syn.  GermanA still has large AUC
+variance and its best configuration touches several search boundaries.  This
+script therefore keeps four round-1 controls and evaluates matched local
+perturbations around them.  Every configuration uses exactly two source seeds;
+the target graph is not loaded.  Results are ranked by
 
     ACC + AUC - DP - EO
 
-on the source validation split.  After this pass, keep the top few source
-packages and run a separate target-adaptation search with each package frozen.
+on the source validation split.  The next stage will freeze the selected source
+packages and tune target adaptation separately.
 
 Examples
 --------
-python tune.py --dry-run --datasets germanA --trials 3 --gpus 0
+python tune.py --dry-run --trials 3 --gpus 0
 python tune.py --gpus 0 1 2 3 4 5
-python tune.py --datasets pokec --trials 24 --gpus 0 1 2 3 4 5
 """
 
 from __future__ import annotations
@@ -24,7 +26,6 @@ import json
 import math
 import os
 import queue
-import random
 import statistics
 import subprocess
 import sys
@@ -32,7 +33,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import yaml
 
@@ -40,34 +41,21 @@ import yaml
 ROOT = Path(__file__).resolve().parent
 MAIN = ROOT / "main.py"
 CONFIG = ROOT / "config" / "config.yaml"
-DEFAULT_RESULTS_DIR = ROOT / "tune_results_source"
-SEARCH_VERSION = "source_stage_v1"
+DEFAULT_RESULTS_DIR = ROOT / "tune_results_source_round2"
+SEARCH_VERSION = "source_stage_german_round2_v2"
 DEFAULT_SEEDS = (1111, 2222)
+MIN_PREDICTED_CLASS_RATE = 5.0
 
 DATASETS = {
-    "bailA": {
-        "domains": ("_2", "_1"),
-        "trials": 20,
-        "min_meta_step": 0.009,
-        "min_free_mb": 8000,
-    },
     "germanA": {
         "domains": ("_2", "_1"),
-        "trials": 20,
+        "trials": 16,
         "min_meta_step": 0.009,
+        "min_lambda_fair": 4.0,
+        "min_lambda_sen": 1.0,
+        "min_lambda_dec": 1.0,
+        "min_mmd_bandwidth": 0.7,
         "min_free_mb": 6000,
-    },
-    "pokec": {
-        "domains": ("_z", "_n"),
-        "trials": 20,
-        "min_meta_step": 0.012,
-        "min_free_mb": 18000,
-    },
-    "syn": {
-        "domains": ("-2", "-1"),
-        "trials": 20,
-        "min_meta_step": 0.006,
-        "min_free_mb": 8000,
     },
 }
 
@@ -101,86 +89,72 @@ SOURCE_ORDER = (
 )
 
 
-def values(key: str, items: Iterable[Any]) -> tuple[dict[str, Any], ...]:
-    return tuple({key: item} for item in items)
+# Round-1 controls: composite ranks 1--3 plus the highest-AUC 64x1 branch.
+ANCHORS = {
+    "germanA": (
+        {
+            "inter_encoder": "GCN", "hidden_dim": 64, "n_layers": 1,
+            "lr": 0.006, "lr2_reg": 3e-4, "dropout": 0.5,
+            "lambda_fair": 4.0, "meta_lr": 0.012, "lambda_coord": 0.75,
+            "lambda_sen": 4.0, "lambda_dec": 2.0,
+            "source_mmd_bandwidth": 1.0,
+        },
+        {
+            "inter_encoder": "GCN", "hidden_dim": 128, "n_layers": 3,
+            "lr": 0.0045, "lr2_reg": 1e-3, "dropout": 0.4,
+            "lambda_fair": 8.0, "meta_lr": 0.014, "lambda_coord": 1.0,
+            "lambda_sen": 2.0, "lambda_dec": 2.0,
+            "source_mmd_bandwidth": 1.4142136,
+        },
+        {
+            "inter_encoder": "GCN", "hidden_dim": 128, "n_layers": 3,
+            "lr": 0.0045, "lr2_reg": 1e-3, "dropout": 0.3,
+            "lambda_fair": 8.0, "meta_lr": 0.016, "lambda_coord": 0.75,
+            "lambda_sen": 1.0, "lambda_dec": 8.0,
+            "source_mmd_bandwidth": 1.4142136,
+        },
+        {
+            "inter_encoder": "GCN", "hidden_dim": 64, "n_layers": 1,
+            "lr": 0.005, "lr2_reg": 1e-4, "dropout": 0.5,
+            "lambda_fair": 4.0, "meta_lr": 0.014, "lambda_coord": 0.75,
+            "lambda_sen": 4.0, "lambda_dec": 4.0,
+            "source_mmd_bandwidth": 0.70710678,
+        },
+    ),
+}
 
 
-def architectures(*rows: Sequence[Any]) -> tuple[dict[str, Any], ...]:
-    choices = []
-    for row in rows:
-        encoder, hidden, *layers = row
-        choice = {"inter_encoder": encoder, "hidden_dim": hidden}
-        if layers:
-            choice["n_layers"] = layers[0]
-        choices.append(choice)
-    return tuple(choices)
+def variant(base: Mapping[str, Any], **changes: Any) -> dict[str, Any]:
+    return {**base, **changes}
 
 
-# Blocks are sampled independently, so lr/dropout/weight decay and the four
-# source-method mechanisms are not locked into inseparable profiles.  All
-# method weights stay meaningfully positive; this pass never searches ERM-like
-# configurations that silently switch EMBER modules off.
-SPACES = {
-    "bailA": {
-        "architecture": architectures(
-            ("GCN", 64, 1), ("GCN", 64, 2),
-            ("GCN", 128, 2), ("GCN", 128, 3),
+_A, _B, _C, _D = ANCHORS["germanA"]
+
+# Twelve matched local probes.  Each changes only one or two conceptual blocks
+# relative to its anchor, avoiding an uninterpretable 11-dimensional shuffle.
+PROFILES = {
+    "germanA": (
+        _A,
+        _B,
+        _C,
+        _D,
+        variant(_A, lr=0.005),
+        variant(_A, lr=0.007),
+        variant(_A, dropout=0.4),
+        variant(_A, lambda_sen=5.0),
+        variant(_A, lambda_dec=1.0),
+        variant(_A, meta_lr=0.016, lambda_coord=0.6),
+        variant(_A, source_mmd_bandwidth=1.2),
+        variant(_B, lr=0.004),
+        variant(_B, lr=0.005),
+        variant(_B, dropout=0.3),
+        variant(_B, lambda_coord=0.9),
+        variant(
+            _A,
+            hidden_dim=96,
+            source_mmd_bandwidth=1.2247449,
         ),
-        "lr": values("lr", (0.003, 0.004, 0.006)),
-        "weight_decay": values("lr2_reg", (1e-4, 3e-4, 1e-3)),
-        "dropout": values("dropout", (0.4, 0.5, 0.6)),
-        "fairness": values("lambda_fair", (4.0, 8.0, 16.0)),
-        "meta_lr": values("meta_lr", (0.012, 0.016, 0.020)),
-        "coordination": values("lambda_coord", (0.75, 1.0)),
-        "sensitive": values("lambda_sen", (0.5, 1.0, 2.0)),
-        "disentanglement": values("lambda_dec", (1.0, 2.0, 4.0, 8.0)),
-        "mmd_scale": values("_mmd_at_64", (0.5, 0.70710678, 1.0)),
-    },
-    "germanA": {
-        "architecture": architectures(
-            ("GCN", 64, 1), ("GCN", 64, 2),
-            ("GCN", 128, 2), ("GCN", 128, 3),
-        ),
-        "lr": values("lr", (0.003, 0.0045, 0.005, 0.006)),
-        "weight_decay": values("lr2_reg", (1e-4, 3e-4, 1e-3)),
-        "dropout": values("dropout", (0.3, 0.4, 0.5)),
-        "fairness": values("lambda_fair", (2.0, 4.0, 8.0)),
-        "meta_lr": values("meta_lr", (0.012, 0.014, 0.016)),
-        "coordination": values("lambda_coord", (0.75, 1.0)),
-        "sensitive": values("lambda_sen", (1.0, 2.0, 4.0)),
-        "disentanglement": values("lambda_dec", (2.0, 4.0, 8.0)),
-        "mmd_scale": values("_mmd_at_64", (0.5, 0.70710678, 1.0)),
-    },
-    "pokec": {
-        # 128 x 4 is intentionally excluded for memory safety.
-        "architecture": architectures(
-            ("GCN", 64, 2), ("GCN", 64, 4), ("GCN", 128, 2),
-        ),
-        "lr": values("lr", (0.001, 0.0015, 0.002, 0.003)),
-        "weight_decay": values("lr2_reg", (1e-4, 3e-4, 1e-3)),
-        "dropout": values("dropout", (0.3, 0.4, 0.5)),
-        "fairness": values("lambda_fair", (4.0, 8.0, 16.0)),
-        "meta_lr": values("meta_lr", (0.016, 0.020)),
-        "coordination": values("lambda_coord", (0.75, 1.0)),
-        "sensitive": values("lambda_sen", (0.5, 1.0, 2.0)),
-        "disentanglement": values("lambda_dec", (0.5, 1.0, 2.0, 8.0)),
-        "mmd_scale": values("_mmd_at_64", (1.5, 2.0)),
-    },
-    "syn": {
-        # The MLP backbone has two fixed linear layers; n_layers is irrelevant.
-        "architecture": architectures(
-            ("MLP", 128), ("MLP", 256), ("MLP", 512),
-        ),
-        "lr": values("lr", (0.003, 0.004, 0.005, 0.006)),
-        "weight_decay": values("lr2_reg", (1e-4, 3e-4, 1e-3)),
-        "dropout": values("dropout", (0.2, 0.3, 0.4, 0.5)),
-        "fairness": values("lambda_fair", (4.0, 8.0, 16.0)),
-        "meta_lr": values("meta_lr", (0.006, 0.008, 0.012, 0.016)),
-        "coordination": values("lambda_coord", (0.75, 1.0)),
-        "sensitive": values("lambda_sen", (0.5, 1.0, 2.0)),
-        "disentanglement": values("lambda_dec", (4.0, 8.0, 16.0, 32.0)),
-        "mmd_scale": values("_mmd_at_64", (0.5, 0.75, 1.0)),
-    },
+    ),
 }
 
 
@@ -215,97 +189,51 @@ def status(message: str) -> None:
         print(message, flush=True)
 
 
-def stable_seed(*parts: Any) -> int:
-    payload = "|".join(map(str, parts)).encode()
-    return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big")
-
-
-def shuffled_cycle(choices: Sequence[dict[str, Any]], seed: int):
-    cycle = 0
-    while True:
-        order = list(range(len(choices)))
-        random.Random(seed + 1000003 * cycle).shuffle(order)
-        for index in order:
-            yield choices[index]
-        cycle += 1
-
-
-def materialize(raw: Mapping[str, Any]) -> dict[str, Any]:
-    parameters = dict(raw)
-    hidden = int(parameters["hidden_dim"])
-    base_bandwidth = float(parameters.pop("_mmd_at_64"))
-    parameters["source_mmd_bandwidth"] = float(
-        f"{base_bandwidth * math.sqrt(hidden / 64.0):.8g}"
-    )
-    return parameters
-
-
 def valid(dataset: str, parameters: Mapping[str, Any]) -> bool:
     return (
         int(parameters["hidden_dim"]) > 0
         and float(parameters["lr"]) > 0.0
         and float(parameters["lr2_reg"]) >= 0.0
         and 0.0 <= float(parameters["dropout"]) < 1.0
-        and float(parameters["lambda_fair"]) > 0.0
-        and float(parameters["lambda_sen"]) > 0.0
-        and float(parameters["lambda_dec"]) > 0.0
+        and float(parameters["lambda_fair"])
+        >= float(DATASETS[dataset]["min_lambda_fair"])
+        and float(parameters["lambda_sen"])
+        >= float(DATASETS[dataset]["min_lambda_sen"])
+        and float(parameters["lambda_dec"])
+        >= float(DATASETS[dataset]["min_lambda_dec"])
         and 0.0 < float(parameters["lambda_coord"]) <= 1.0
         and float(parameters["meta_lr"]) * float(parameters["lambda_coord"])
         >= float(DATASETS[dataset]["min_meta_step"])
-        and float(parameters["source_mmd_bandwidth"]) > 0.0
+        and float(parameters["source_mmd_bandwidth"])
+        >= float(DATASETS[dataset]["min_mmd_bandwidth"])
     )
 
 
-def baseline_for(dataset: str) -> dict[str, Any]:
-    with CONFIG.open("r", encoding="utf-8") as source:
-        configured = yaml.safe_load(source)[dataset]
-    keys = {
-        key
-        for choices in SPACES[dataset].values()
-        for choice in choices
-        for key in choice
-        if not key.startswith("_")
-    }
-    baseline = {key: configured[key] for key in keys if key in configured}
-    baseline["source_mmd_bandwidth"] = float(configured["source_mmd_bandwidth"])
-    return baseline
-
-
-def make_trials(dataset: str, count: int, sampler_seed: int) -> list[Trial]:
-    space = SPACES[dataset]
-    streams = {
-        block: shuffled_cycle(
-            choices,
-            stable_seed(sampler_seed, dataset, block),
+def make_trials(dataset: str, count: int) -> list[Trial]:
+    profiles = PROFILES[dataset]
+    if count > len(profiles):
+        raise ValueError(
+            f"{dataset} round 2 defines {len(profiles)} local profiles, "
+            f"but {count} were requested"
         )
-        for block, choices in space.items()
+    selected = profiles[:count]
+    signatures = {
+        json.dumps(profile, sort_keys=True, separators=(",", ":"))
+        for profile in selected
     }
-    trials: list[Trial] = []
-    signatures: set[str] = set()
-
-    def add(parameters: Mapping[str, Any]) -> None:
-        parameters = dict(parameters)
-        signature = json.dumps(parameters, sort_keys=True, separators=(",", ":"))
-        if valid(dataset, parameters) and signature not in signatures:
-            signatures.add(signature)
-            trials.append(Trial(dataset, len(trials), parameters))
-
-    add(baseline_for(dataset))
-    attempts = 0
-    while len(trials) < count:
-        raw: dict[str, Any] = {}
-        for block in space:
-            raw.update(next(streams[block]))
-        add(materialize(raw))
-        attempts += 1
-        if attempts > max(10000, count * 1000):
-            raise RuntimeError(f"Could not generate {count} unique {dataset} trials")
-    return trials
+    if len(signatures) != len(selected):
+        raise RuntimeError(f"Duplicate {dataset} local profiles")
+    if not all(valid(dataset, profile) for profile in selected):
+        raise RuntimeError(f"Invalid {dataset} local profile")
+    return [
+        Trial(dataset, number, dict(profile))
+        for number, profile in enumerate(selected)
+    ]
 
 
 def code_fingerprint() -> str:
     files = [
-        Path(__file__),
+        Path(__file__).resolve(),
         MAIN,
         ROOT / "runner.py",
         ROOT / "adaptation.py",
@@ -352,12 +280,42 @@ def source_metrics(payload: Mapping[str, Any]) -> dict[str, float]:
     return result
 
 
+def source_diagnostics(payload: Mapping[str, Any]) -> dict[str, float]:
+    diagnostics = payload["diagnostics"]["source_val"]
+    result: dict[str, float] = {}
+    for name in (
+        "balanced_acc",
+        "macro_f1",
+        "positive_rate",
+        "predicted_class_count",
+    ):
+        values = diagnostics[name]
+        if not isinstance(values, list) or len(values) != 1:
+            raise ValueError(f"source_val.{name} must contain exactly one run")
+        result[name] = float(values[0])
+    if not all(math.isfinite(value) for value in result.values()):
+        raise ValueError("source validation diagnostics must be finite")
+    return result
+
+
+def source_run_eligible(diagnostics: Mapping[str, float]) -> bool:
+    """Require both predicted classes to have meaningful validation support."""
+    return (
+        int(round(diagnostics["predicted_class_count"])) == 2
+        and MIN_PREDICTED_CLASS_RATE
+        <= diagnostics["positive_rate"]
+        <= 100.0 - MIN_PREDICTED_CLASS_RATE
+        and diagnostics["balanced_acc"] > 50.0 + 1e-6
+    )
+
+
 def result_complete(path: Path, task: Task, fingerprint: str) -> bool:
     if not path.exists():
         return False
     try:
         payload = load_json(path)
         source_metrics(payload)
+        source_diagnostics(payload)
         tuning = payload["tuning"]
         return (
             payload.get("stage") == "source"
@@ -421,12 +379,17 @@ def gpu_state(selector: str) -> tuple[int, int]:
     return free_memory, utilization
 
 
-def wait_for_gpu(args: argparse.Namespace, gpu: str, dataset: str) -> None:
+def wait_for_gpu(
+    args: argparse.Namespace,
+    gpu: str,
+    dataset: str,
+    stop: threading.Event,
+) -> None:
     required = max(
         int(args.min_free_mb),
         int(DATASETS[dataset]["min_free_mb"]),
     )
-    while True:
+    while not stop.is_set():
         free_memory, utilization = gpu_state(gpu)
         if free_memory >= required and utilization <= args.max_gpu_util:
             return
@@ -434,7 +397,8 @@ def wait_for_gpu(args: argparse.Namespace, gpu: str, dataset: str) -> None:
             f"[GPU {gpu}] waiting for {dataset}: free={free_memory} MiB "
             f"(need {required}), util={utilization}%"
         )
-        time.sleep(args.gpu_poll_seconds)
+        stop.wait(args.gpu_poll_seconds)
+    raise RuntimeError("cancelled while waiting for an available GPU")
 
 
 def run_task(
@@ -442,6 +406,7 @@ def run_task(
     gpu: str,
     task: Task,
     fingerprint: str,
+    stop: threading.Event,
 ) -> None:
     raw, log, stderr_path = task_paths(args.results_dir, task)
     if result_complete(raw, task, fingerprint):
@@ -455,7 +420,7 @@ def run_task(
     temporary = raw.with_suffix(raw.suffix + ".tmp")
     raw.unlink(missing_ok=True)
     temporary.unlink(missing_ok=True)
-    wait_for_gpu(args, gpu, task.trial.dataset)
+    wait_for_gpu(args, gpu, task.trial.dataset, stop)
     command = build_command(args, gpu, task)
     environment = os.environ.copy()
     environment["CUDA_VISIBLE_DEVICES"] = gpu
@@ -486,6 +451,7 @@ def run_task(
 
     payload = load_json(raw)
     source_metrics(payload)
+    source_diagnostics(payload)
     if (
         payload.get("stage") != "source"
         or payload.get("dataset") != task.trial.dataset
@@ -522,7 +488,7 @@ def worker(
                 return
             if stop.is_set():
                 continue
-            run_task(args, gpu, task, fingerprint)
+            run_task(args, gpu, task, fingerprint, stop)
         except Exception as error:
             with FAILURE_LOCK:
                 failures.append(str(error))
@@ -553,9 +519,19 @@ def aggregate(
             continue
         payloads = [load_json(path) for path in paths]
         metrics = [source_metrics(payload) for payload in payloads]
+        diagnostics = [source_diagnostics(payload) for payload in payloads]
         values_by_metric = {
             name: [item[name] for item in metrics]
             for name in ("acc", "auc", "dp", "eo")
+        }
+        values_by_diagnostic = {
+            name: [item[name] for item in diagnostics]
+            for name in (
+                "balanced_acc",
+                "macro_f1",
+                "positive_rate",
+                "predicted_class_count",
+            )
         }
         means = {
             name: statistics.fmean(values)
@@ -581,8 +557,11 @@ def aggregate(
                 float(payload["tuning"]["duration_seconds"])
                 for payload in payloads
             ),
+            "eligible": all(source_run_eligible(item) for item in diagnostics),
         }
         for name, values in values_by_metric.items():
+            row[name], row[f"{name}_std"] = mean_std(values)
+        for name, values in values_by_diagnostic.items():
             row[name], row[f"{name}_std"] = mean_std(values)
         row.update(trial.parameters)
         rows.append(row)
@@ -592,13 +571,21 @@ def aggregate(
         selected.sort(key=lambda row: (-row["score"], row["trial_number"]))
         for rank, row in enumerate(selected, 1):
             row["rank"] = rank
+            row["eligible_rank"] = ""
+        eligible = [row for row in selected if row["eligible"]]
+        for rank, row in enumerate(eligible, 1):
+            row["eligible_rank"] = rank
     rows.sort(key=lambda row: (args.datasets.index(row["dataset"]), row["rank"]))
 
     args.results_dir.mkdir(parents=True, exist_ok=True)
     core = [
-        "dataset", "rank", "trial_number", "combination_id",
+        "dataset", "rank", "eligible_rank", "eligible",
+        "trial_number", "combination_id",
         "score", "score_std", "acc", "acc_std", "auc", "auc_std",
         "dp", "dp_std", "eo", "eo_std", "duration_seconds", "seeds",
+        "balanced_acc", "balanced_acc_std", "macro_f1", "macro_f1_std",
+        "positive_rate", "positive_rate_std",
+        "predicted_class_count", "predicted_class_count_std",
         "parameters", "result_paths",
     ]
     parameter_keys = [
@@ -616,9 +603,16 @@ def aggregate(
     best_source: dict[str, dict[str, Any]] = {}
     candidates: dict[str, list[dict[str, Any]]] = {}
     for dataset in args.datasets:
-        selected = [row for row in rows if row["dataset"] == dataset]
+        selected = [
+            row
+            for row in rows
+            if row["dataset"] == dataset and row["eligible"]
+        ]
         if not selected:
-            continue
+            raise RuntimeError(
+                f"No non-degenerate {dataset} configuration completed both seeds; "
+                "inspect summary.csv and per-seed diagnostics"
+            )
         best_config = dict(FIXED)
         best_config.update(json.loads(selected[0]["parameters"]))
         best_source[dataset] = {
@@ -628,20 +622,30 @@ def aggregate(
         }
         candidates[dataset] = [
             {
-                "rank": row["rank"],
+                "combination_id": row["combination_id"],
+                "global_rank": row["rank"],
+                "eligible_rank": row["eligible_rank"],
                 "score": float(row["score"]),
                 "score_std": float(row["score_std"]),
+                "balanced_acc": float(row["balanced_acc"]),
+                "macro_f1": float(row["macro_f1"]),
+                "positive_rate": float(row["positive_rate"]),
+                "search_version": SEARCH_VERSION,
+                "fingerprint": fingerprint,
+                "seeds": list(args.seeds),
                 "config": {
                     **FIXED,
                     **json.loads(row["parameters"]),
                 },
             }
-            for row in selected[:3]
+            for row in selected[:5]
         ]
 
-    with (args.results_dir / "best_source.yaml").open("w", encoding="utf-8") as output:
+    with (args.results_dir / "best_source_round2.yaml").open(
+        "w", encoding="utf-8"
+    ) as output:
         yaml.safe_dump(best_source, output, sort_keys=False, allow_unicode=True)
-    with (args.results_dir / "source_candidates.yaml").open(
+    with (args.results_dir / "source_candidates_round2.yaml").open(
         "w", encoding="utf-8"
     ) as output:
         yaml.safe_dump(candidates, output, sort_keys=False, allow_unicode=True)
@@ -650,7 +654,7 @@ def aggregate(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Tune only EMBER source-stage hyperparameters."
+        description="Locally refine GermanA source-stage hyperparameters."
     )
     parser.add_argument(
         "--datasets",
@@ -662,7 +666,7 @@ def parse_args() -> argparse.Namespace:
         "--trials",
         type=int,
         default=None,
-        help="override the default number of source configurations per dataset",
+        help="number of GermanA source configurations, including anchors",
     )
     parser.add_argument(
         "--seeds",
@@ -679,7 +683,6 @@ def parse_args() -> argparse.Namespace:
         help="physical GPU indices or UUID selectors",
     )
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
-    parser.add_argument("--sampler-seed", type=int, default=2027)
     parser.add_argument("--min-free-mb", type=int, default=6000)
     parser.add_argument("--max-gpu-util", type=int, default=70)
     parser.add_argument("--gpu-poll-seconds", type=int, default=30)
@@ -693,6 +696,11 @@ def parse_args() -> argparse.Namespace:
 
     if args.trials is not None and args.trials < 1:
         parser.error("--trials must be positive")
+    if args.trials is not None and args.trials > len(PROFILES["germanA"]):
+        parser.error(
+            f"--trials cannot exceed the {len(PROFILES['germanA'])} "
+            "defined local profiles"
+        )
     if not args.seeds or len(set(args.seeds)) != len(args.seeds):
         parser.error("--seeds must contain distinct values")
     if not args.gpus or len(set(args.gpus)) != len(args.gpus):
@@ -711,7 +719,6 @@ def main() -> None:
         dataset: make_trials(
             dataset,
             args.trials or int(DATASETS[dataset]["trials"]),
-            args.sampler_seed,
         )
         for dataset in args.datasets
     }
@@ -723,7 +730,7 @@ def main() -> None:
     ]
 
     status(
-        "Source-stage trials: "
+        "GermanA source-refinement trials: "
         + ", ".join(
             f"{dataset}={len(trials_by_dataset[dataset])}"
             for dataset in args.datasets
@@ -763,9 +770,35 @@ def main() -> None:
     for thread in workers:
         thread.join()
 
+    expected_tasks = [
+        Task(trial, seed)
+        for trial in trials
+        for seed in args.seeds
+    ]
+    incomplete = [
+        task
+        for task in expected_tasks
+        if not result_complete(
+            task_paths(args.results_dir, task)[0],
+            task,
+            fingerprint,
+        )
+    ]
+    if failures or incomplete:
+        status(
+            f"Search incomplete: failures={len(failures)}, "
+            f"missing_or_invalid_results={len(incomplete)}. "
+            "Completed raw results were kept for resume."
+        )
+        raise RuntimeError("source refinement did not complete all trial/seed tasks")
+
     rows = aggregate(args, trials, fingerprint)
     for dataset in args.datasets:
-        selected = [row for row in rows if row["dataset"] == dataset]
+        selected = [
+            row
+            for row in rows
+            if row["dataset"] == dataset and row["eligible"]
+        ]
         if selected:
             best = selected[0]
             status(
@@ -773,8 +806,6 @@ def main() -> None:
                 f"+/- {best['score_std']:.3f} ({best['combination_id']})"
             )
     status(f"Saved source-stage results under {args.results_dir}")
-    if failures:
-        raise RuntimeError(f"{len(failures)} task(s) failed; inspect stderr logs")
 
 
 if __name__ == "__main__":

@@ -27,7 +27,8 @@ if __name__ == '__main__':
 
     (src_acc, src_auc_roc, src_parity, src_equality,
      tgt_acc, tgt_auc_roc, tgt_parity, tgt_equality,
-     ada_acc, ada_auc_roc, ada_parity, ada_equality) = train_and_adapt(
+     ada_acc, ada_auc_roc, ada_parity, ada_equality,
+     src_diagnostics) = train_and_adapt(
         args,
         source_data,
         target_data,
@@ -69,6 +70,12 @@ if __name__ == '__main__':
                     'auc': _values(src_auc_roc),
                     'dp': _values(src_parity),
                     'eo': _values(src_equality),
+                },
+            },
+            'diagnostics': {
+                source_stage: {
+                    name: _values(values)
+                    for name, values in src_diagnostics.items()
                 },
             },
         }

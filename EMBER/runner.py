@@ -299,6 +299,12 @@ def train_and_adapt(args, source_data, target_data):
     ada_auc_roc  = np.zeros([args.runs, 1])
     ada_parity   = np.zeros([args.runs, 1])
     ada_equality = np.zeros([args.runs, 1])
+    src_diagnostics = {
+        'balanced_acc': np.zeros([args.runs, 1]),
+        'macro_f1': np.zeros([args.runs, 1]),
+        'positive_rate': np.zeros([args.runs, 1]),
+        'predicted_class_count': np.zeros([args.runs, 1]),
+    }
 
     source_only = bool(getattr(args, 'source_only', False))
     source_data = source_data.to(args.device)
@@ -575,19 +581,23 @@ def train_and_adapt(args, source_data, target_data):
                 if not getattr(args, 'disable_checkpoint_save', False):
                     _save_checkpoint(args, run_idx, model, knowledge)
 
-        accs, auc_rocs, tmp_parity, tmp_equality = evaluate_per_class(
-            args, source_data, model
-        )
+        (accs, auc_rocs, tmp_parity, tmp_equality,
+         diagnostics) = evaluate_per_class(args, source_data, model)
         source_metric_split = 'val' if source_only else 'all'
         print(f"[Run {run_idx}] Source {source_metric_split} | "
               f"Acc={accs[source_metric_split]:.2f}  "
               f"AUC={auc_rocs[source_metric_split]:.2f}  "
               f"DP={tmp_parity[source_metric_split]:.2f}  "
-              f"EO={tmp_equality[source_metric_split]:.2f}")
+              f"EO={tmp_equality[source_metric_split]:.2f}  "
+              f"BAcc={diagnostics['balanced_acc'][source_metric_split]:.2f}  "
+              f"Pos={diagnostics['positive_rate'][source_metric_split]:.2f}%  "
+              f"PredCls={diagnostics['predicted_class_count'][source_metric_split]}")
         src_acc[run_idx]      = accs[source_metric_split]
         src_auc_roc[run_idx]  = auc_rocs[source_metric_split]
         src_parity[run_idx]   = tmp_parity[source_metric_split]
         src_equality[run_idx] = tmp_equality[source_metric_split]
+        for name in src_diagnostics:
+            src_diagnostics[name][run_idx] = diagnostics[name][source_metric_split]
 
         if source_only:
             continue
@@ -634,7 +644,8 @@ def train_and_adapt(args, source_data, target_data):
 
     return (src_acc, src_auc_roc, src_parity, src_equality,
             tgt_acc, tgt_auc_roc, tgt_parity, tgt_equality,
-            ada_acc, ada_auc_roc, ada_parity, ada_equality)
+            ada_acc, ada_auc_roc, ada_parity, ada_equality,
+            src_diagnostics)
 
 
 def evaluate_after(args, data, encoder, state, save_visualization=False):
