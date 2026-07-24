@@ -300,8 +300,12 @@ def train_and_adapt(args, source_data, target_data):
     ada_parity   = np.zeros([args.runs, 1])
     ada_equality = np.zeros([args.runs, 1])
 
+    source_only = bool(getattr(args, 'source_only', False))
     source_data = source_data.to(args.device)
-    target_data = target_data.to(args.device)
+    if not source_only:
+        if target_data is None:
+            raise ValueError("target_data is required unless --source-only is set")
+        target_data = target_data.to(args.device)
 
     source_class_labels = source_data.y.long().to(args.device)
     cls_labels  = source_class_labels.float()
@@ -312,29 +316,78 @@ def train_and_adapt(args, source_data, target_data):
     # as the missing-label sentinel so those nodes can still participate in
     # message passing without becoming invalid BCE targets or a third MMD
     # class.
-    source_labeled_mask = (
+    valid_source_labeled_mask = (
         (source_class_labels == 0) | (source_class_labels == 1)
     )
-    if not bool(source_labeled_mask.any()):
+    if not bool(valid_source_labeled_mask.any()):
         raise ValueError("Source graph contains no valid binary labels")
-    source_sensitive_mask = (sens_labels == 0) | (sens_labels == 1)
-    if not bool(source_sensitive_mask.any()):
+    valid_source_sensitive_mask = (sens_labels == 0) | (sens_labels == 1)
+    if not bool(valid_source_sensitive_mask.any()):
         raise ValueError("Source graph contains no valid binary sensitive labels")
+    source_objective_mask = (
+        source_data.train_mask.bool()
+        if source_only
+        else torch.ones_like(valid_source_labeled_mask, dtype=torch.bool)
+    )
+    source_labeled_mask = valid_source_labeled_mask & source_objective_mask
+    source_sensitive_mask = valid_source_sensitive_mask & source_objective_mask
     source_fair_mask = source_labeled_mask & source_sensitive_mask
+    if not bool(source_labeled_mask.any()):
+        raise ValueError("Source training split contains no valid binary labels")
+    if not bool(source_sensitive_mask.any()):
+        raise ValueError("Source training split contains no valid sensitive labels")
+    if source_only:
+        source_val_mask = source_data.val_mask.bool() & valid_source_labeled_mask
+        if not bool(source_val_mask.any()):
+            raise ValueError("Source validation split contains no valid binary labels")
+        minimum_cell = int(getattr(args, 'source_mmd_min_samples', 1))
+        missing_train_cells = []
+        missing_val_cells = []
+        valid_val_sensitive = source_data.val_mask.bool() & valid_source_sensitive_mask
+        for class_id in (0, 1):
+            for group_id in (0, 1):
+                train_count = int((
+                    source_fair_mask
+                    & (source_class_labels == class_id)
+                    & (sens_labels == group_id)
+                ).sum().item())
+                val_count = int((
+                    source_val_mask
+                    & valid_val_sensitive
+                    & (source_class_labels == class_id)
+                    & (sens_labels == group_id)
+                ).sum().item())
+                if train_count < minimum_cell:
+                    missing_train_cells.append((class_id, group_id, train_count))
+                if val_count < 1:
+                    missing_val_cells.append((class_id, group_id, val_count))
+        if missing_train_cells:
+            raise ValueError(
+                "Source training split lacks class/group cells required by MMD: "
+                f"{missing_train_cells}"
+            )
+        if missing_val_cells:
+            raise ValueError(
+                "Source validation split lacks class/group cells required by EO: "
+                f"{missing_val_cells}"
+            )
 
     criterion = nn.BCEWithLogitsLoss()
 
     for run_idx in tqdm(range(args.runs), unit='run'):
 
         model, knowledge = (None, None)
-        if getattr(args, 'use_checkpoint', True):
+        checkpoint_enabled = (
+            getattr(args, 'use_checkpoint', True) and not source_only
+        )
+        if checkpoint_enabled:
             model, knowledge = _load_checkpoint(args, run_idx)
         skip_training = (model is not None and knowledge is not None)
 
         if skip_training:
             print(f"[Run {run_idx}] Loaded checkpoint, skipping training.")
         else:
-            if getattr(args, 'use_checkpoint', True):
+            if checkpoint_enabled:
                 print(f"[Run {run_idx}] No checkpoint found, training from scratch.")
             else:
                 print(f"[Run {run_idx}] Checkpoint loading disabled, training from scratch.")
@@ -408,9 +461,10 @@ def train_and_adapt(args, source_data, target_data):
                     sens_logit.view(-1)[source_sensitive_mask],
                     sens_targets[source_sensitive_mask],
                 )
+                dec_mask = source_objective_mask if source_only else slice(None)
                 L_dec = _disentanglement_loss(
-                    source_task_view,
-                    source_sensitive_view,
+                    source_task_view[dec_mask],
+                    source_sensitive_view[dec_mask],
                     disentangle_batch_size,
                 )
 
@@ -516,20 +570,27 @@ def train_and_adapt(args, source_data, target_data):
                           f"MMD_cls={valid_source_mmd_classes}  "
                           f"Total={loss.item():.4f}")
 
-            knowledge = extract_source_knowledge(source_data, model)
-            if not getattr(args, 'disable_checkpoint_save', False):
-                _save_checkpoint(args, run_idx, model, knowledge)
+            if not source_only:
+                knowledge = extract_source_knowledge(source_data, model)
+                if not getattr(args, 'disable_checkpoint_save', False):
+                    _save_checkpoint(args, run_idx, model, knowledge)
 
         accs, auc_rocs, tmp_parity, tmp_equality = evaluate_per_class(
             args, source_data, model
         )
-        print(f"[Run {run_idx}] Source | "
-              f"Acc={accs['all']:.2f}  AUC={auc_rocs['all']:.2f}  "
-              f"DP={tmp_parity['all']:.2f}  EO={tmp_equality['all']:.2f}")
-        src_acc[run_idx]      = accs['all']
-        src_auc_roc[run_idx]  = auc_rocs['all']
-        src_parity[run_idx]   = tmp_parity['all']
-        src_equality[run_idx] = tmp_equality['all']
+        source_metric_split = 'val' if source_only else 'all'
+        print(f"[Run {run_idx}] Source {source_metric_split} | "
+              f"Acc={accs[source_metric_split]:.2f}  "
+              f"AUC={auc_rocs[source_metric_split]:.2f}  "
+              f"DP={tmp_parity[source_metric_split]:.2f}  "
+              f"EO={tmp_equality[source_metric_split]:.2f}")
+        src_acc[run_idx]      = accs[source_metric_split]
+        src_auc_roc[run_idx]  = auc_rocs[source_metric_split]
+        src_parity[run_idx]   = tmp_parity[source_metric_split]
+        src_equality[run_idx] = tmp_equality[source_metric_split]
+
+        if source_only:
+            continue
 
         cold_state = build_initial_adaptation_state(args, knowledge)
 

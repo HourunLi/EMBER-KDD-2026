@@ -27,7 +27,7 @@ _RUNTIME_OVERRIDE_KEYS = {
     'log_path', 'result_path', 'runs_override', 'seed', 'target_seed',
     'ablation', 'disable_embedding_export',
     'save_visualization_embeddings', 'use_checkpoint',
-    'disable_checkpoint_save', 'override', 'tune', 'verbose',
+    'disable_checkpoint_save', 'source_only', 'override', 'tune', 'verbose',
 }
 
 
@@ -172,6 +172,14 @@ parser.add_argument('--ablation', type=str,
 parser.add_argument('--log_path', type=str, default=None)
 parser.add_argument('--result_path', type=str, default=None)
 parser.add_argument('--runs_override', type=int, default=None)
+parser.add_argument(
+    '--source_only', '--source-only',
+    action='store_true',
+    help=(
+        'tuning-only mode: train source objectives on source train_mask, '
+        'report source val metrics, and skip target loading/adaptation'
+    ),
+)
 parser.add_argument(
     '--override', action='append', default=[], metavar='KEY=VALUE',
     help='override a config value after loading the dataset YAML; repeatable',

@@ -1,81 +1,115 @@
-# Only dataset-sensitive, result-critical hyperparameters belong here.
-# Shared method constants, runtime controls, and memory/chunking options use
-# the documented defaults in config.py.
-
 bailA:
-  # Backbone and source optimization
-  inter_encoder: GCN
+  inter_encoder: "GCN"
+  hidden_dim: 128
+  n_layers: 2
+  lr: 0.004
+  lr2_reg: 0.0001
+  train_epochs: 800
+  dropout: 0.5
+  lambda_fair: 16.0
+  meta_lr: 0.02
+  lambda_coord: 0.75
+  lambda_sen: 0.5
+  lambda_dec: 1.0
+  disentangle_batch_size: 512
+  source_mmd_bandwidth: 1.4142136
+  source_mmd_min_samples: 1
+  source_mmd_max_samples: 1024
+  mmd_chunk_size: 256
+  adapt_epochs: 75
+  tau_c: 0.65
+  proto_temp: 0.6
+  adapt_lr: 0.00088388348
+  residual_inner_steps: 20
+  lambda_residual_l2: 0.1
+  group_pseudocount: 19.1525
+  lambda_pi: 0.7
+  prior_confidence_threshold: 0.65
+  prior_pseudocount: 383.04998
+  prior_discount: 0.8
+germanA:
+  inter_encoder: "GCN"
   hidden_dim: 64
   n_layers: 1
-  lr: 0.006
-  dropout: 0.6
-  # Meta-coordinated source alignment (Eqs. 6-9)
-  lambda_fair: 8.0
-  meta_lr: 0.03
+  lr: 0.003
+  lr2_reg: 0.0001
+  train_epochs: 800
+  dropout: 0.3
+  lambda_fair: 2.0
+  meta_lr: 0.016
+  lambda_coord: 0.75
+  lambda_sen: 2.0
+  lambda_dec: 2.0
+  disentangle_batch_size: 512
   source_mmd_bandwidth: 0.5
-  # Prototype evolution and Bayesian correction (Eqs. 12-18)
-  adapt_epochs: 100
-  adapt_lr: 0.0008
-  residual_inner_steps: 60
-  tau_c: 0.75
-  proto_temp: 0.75
-  lambda_pi: 0.01
-  lambda_residual_l2: 0.0001
-  prior_confidence_threshold: 0.75
-  prior_pseudocount: 1.0
-
-germanA:
-  inter_encoder: GCN
-  hidden_dim: 128
-  n_layers: 3
-  lr: 0.005
-  dropout: 0.4
-  lambda_fair: 4.0
-  meta_lr: 0.02
-  source_mmd_bandwidth: 0.75
-  adapt_epochs: 25
-  adapt_lr: 0.0005
-  residual_inner_steps: 20
-  tau_c: 0.75
-  proto_temp: 0.5
-  lambda_pi: 0.2
-  lambda_residual_l2: 0.001
-  prior_confidence_threshold: 0.75
-  prior_pseudocount: 1.0
-
+  source_mmd_min_samples: 1
+  source_mmd_max_samples: 1024
+  mmd_chunk_size: 256
+  adapt_epochs: 50
+  tau_c: 0.6
+  proto_temp: 0.8
+  adapt_lr: 0.0020833333
+  residual_inner_steps: 15
+  lambda_residual_l2: 0.1
+  group_pseudocount: 9.6
+  lambda_pi: 1.0
+  prior_confidence_threshold: 0.7
+  prior_pseudocount: 38.399452
+  prior_discount: 0.8
 pokec:
-  inter_encoder: GCN
+  inter_encoder: "GCN"
   hidden_dim: 64
   n_layers: 4
   lr: 0.002
-  dropout: 0.4
-  lambda_fair: 2.0
-  meta_lr: 0.01
+  lr2_reg: 0.001
+  train_epochs: 800
+  dropout: 0.5
+  lambda_fair: 16.0
+  meta_lr: 0.02
+  lambda_coord: 0.75
+  lambda_sen: 0.5
+  lambda_dec: 0.5
+  disentangle_batch_size: 512
   source_mmd_bandwidth: 2.0
+  source_mmd_min_samples: 1
+  source_mmd_max_samples: 1024
+  mmd_chunk_size: 256
   adapt_epochs: 50
-  adapt_lr: 0.001
-  residual_inner_steps: 20
-  tau_c: 0.35
-  proto_temp: 1.0
-  lambda_pi: 0.1
-  lambda_residual_l2: 0.001
-  prior_confidence_threshold: 0.35
-  prior_pseudocount: 10.0
-
+  tau_c: 0.6
+  proto_temp: 0.5
+  adapt_lr: 0.0020833333
+  residual_inner_steps: 15
+  lambda_residual_l2: 0.1
+  group_pseudocount: 1664.225
+  lambda_pi: 0.8
+  prior_confidence_threshold: 0.7
+  prior_pseudocount: 1331.38
+  prior_discount: 0.5
 syn:
-  inter_encoder: MLP
-  hidden_dim: 128
-  lr: 0.005
-  dropout: 0.4
+  inter_encoder: "MLP"
+  hidden_dim: 256
+  lr: 0.006
+  lr2_reg: 0.001
+  train_epochs: 800
+  dropout: 0.5
   lambda_fair: 8.0
-  meta_lr: 0.003
-  source_mmd_bandwidth: 0.25
-  adapt_epochs: 150
-  adapt_lr: 0.0005
-  residual_inner_steps: 40
-  tau_c: 0.5
-  proto_temp: 0.1
-  lambda_pi: 0.5
-  lambda_residual_l2: 0.00001
-  prior_confidence_threshold: 0.5
-  prior_pseudocount: 25.0
+  meta_lr: 0.006
+  lambda_coord: 1.0
+  lambda_sen: 1.0
+  lambda_dec: 8.0
+  disentangle_batch_size: 512
+  source_mmd_bandwidth: 1.0
+  source_mmd_min_samples: 1
+  source_mmd_max_samples: 1024
+  mmd_chunk_size: 256
+  adapt_epochs: 100
+  tau_c: 0.6
+  proto_temp: 0.6
+  adapt_lr: 0.0010416667
+  residual_inner_steps: 15
+  lambda_residual_l2: 0.1
+  group_pseudocount: 125.0
+  lambda_pi: 0.7
+  prior_confidence_threshold: 0.65
+  prior_pseudocount: 250.0
+  prior_discount: 0.8

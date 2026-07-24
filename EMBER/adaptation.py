@@ -325,6 +325,45 @@ def _prior_from_evidence(
     return numerator / denominator
 
 
+def update_class_prior(
+    accumulated_evidence: torch.Tensor,
+    round_evidence: torch.Tensor,
+    pseudocount: float,
+    discount: float,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Eq. (17): discount past evidence and return the smoothed prior.
+
+    ``discount=0`` removes the historical-evidence update and re-estimates
+    the target prior from the current round.  This is the EMA ablation; it
+    keeps both the current-round prior estimate and the Bayesian correction.
+    """
+    if accumulated_evidence.shape != round_evidence.shape:
+        raise ValueError(
+            "Accumulated and current-round class-prior evidence must have "
+            "the same shape"
+        )
+    if not bool(torch.isfinite(accumulated_evidence).all()) or bool(
+        (accumulated_evidence < 0).any()
+    ):
+        raise ValueError(
+            "Accumulated class-prior evidence must be finite and non-negative"
+        )
+    if not bool(torch.isfinite(round_evidence).all()) or bool(
+        (round_evidence < 0).any()
+    ):
+        raise ValueError(
+            "Current-round class-prior evidence must be finite and non-negative"
+        )
+
+    omega = _require_unit_interval(
+        "omega",
+        discount,
+        include_one=False,
+    )
+    updated_evidence = omega * accumulated_evidence + round_evidence
+    return updated_evidence, _prior_from_evidence(updated_evidence, pseudocount)
+
+
 def _base_state(
     args,
     class_prototypes: torch.Tensor,
@@ -374,7 +413,7 @@ def run_target_adaptation(
         )
 
     use_bca = ablation != "bca"
-    use_ema = ablation != "ema"
+    use_prior_history = ablation != "ema"
     use_residual = ablation != "residual"
 
     device = args.device
@@ -452,6 +491,7 @@ def run_target_adaptation(
         getattr(args, "prior_discount", 0.9),
         include_one=False,
     )
+    effective_prior_discount = prior_discount if use_prior_history else 0.0
 
     # Eq. (12): task confidence is read from the frozen source classifier,
     # while the pseudo-sensitive group is matched once in the decoupled
@@ -466,13 +506,13 @@ def run_target_adaptation(
 
     print(
         "[EMBER] ablation={} rounds={} residual_inner={} "
-        "residual={} ema={} prior={}".format(
+        "residual={} prototype_average=True prior={} prior_history={}".format(
             ablation,
             epochs,
             residual_inner_steps,
             use_residual,
-            use_ema,
             "count-aware" if use_bca else "disabled",
+            "discounted" if use_prior_history else "current-round-only",
         )
     )
 
@@ -529,18 +569,18 @@ def run_target_adaptation(
                     class_selected = selected & (pseudo_labels == class_id)
                     if not class_selected.any():
                         continue
-                    if use_ema:
-                        class_update_counts[class_id] += 1
-                        mu = 1.0 / float(
-                            class_update_counts[class_id].item() + 1
-                        )
-                        updated_prototypes[class_id] = _safe_normalize(
-                            (1.0 - mu) * class_prototypes[class_id]
-                            + mu * optimized_candidates[class_id],
-                            dim=0,
-                        )
-                    else:
-                        updated_prototypes[class_id] = optimized_candidates[class_id]
+                    # Eq. (16) remains active in every target-side variant.
+                    # Variant 3 now ablates the prior history in Eq. (17), not
+                    # this cumulative prototype average.
+                    class_update_counts[class_id] += 1
+                    mu = 1.0 / float(
+                        class_update_counts[class_id].item() + 1
+                    )
+                    updated_prototypes[class_id] = _safe_normalize(
+                        (1.0 - mu) * class_prototypes[class_id]
+                        + mu * optimized_candidates[class_id],
+                        dim=0,
+                    )
                 class_prototypes = updated_prototypes
 
         with torch.no_grad():
@@ -558,12 +598,11 @@ def run_target_adaptation(
                     source_confidence[prior_selected].unsqueeze(1)
                     * likelihood[prior_selected]
                 ).sum(dim=0)
-                discounted_evidence = (
-                    prior_discount * discounted_evidence + round_evidence
-                )
-                class_prior = _prior_from_evidence(
+                discounted_evidence, class_prior = update_class_prior(
                     discounted_evidence,
+                    round_evidence,
                     prior_pseudocount,
+                    effective_prior_discount,
                 )
                 adapted_probabilities = bayesian_class_posterior(
                     features,
