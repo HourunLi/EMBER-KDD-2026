@@ -72,21 +72,32 @@ class GNN(nn.Module):
         return torch.stack(layer_outputs, dim=1).mean(dim=1)
 
 
-class FairGNN(nn.Module):
-    """EMBER's shared encoder with task and sensitive projection heads."""
+def _build_encoder(args, encoder_type):
+    """Build one independent representation encoder."""
+    if encoder_type == "MLP":
+        return MLP(args, args.num_features, args.hidden_dim)
+    if encoder_type == "vanilla":
+        return GCN_Body(args.num_features, args.hidden_dim, args.dropout)
+    return GNN(args, args.num_features, args.hidden_dim, encoder_type)
 
-    def __init__(self, args, encoder_type, include_sensitive_classifier=True):
+
+class FairGNN(nn.Module):
+    """EMBER with independent task-classification and sensitive encoders."""
+
+    def __init__(
+        self,
+        args,
+        cls_encoder_type,
+        sens_encoder_type,
+        include_sensitive_classifier=True,
+    ):
         super().__init__()
 
-        if encoder_type == "MLP":
-            self.backbone = MLP(args, args.num_features, args.hidden_dim)
-        elif encoder_type == "vanilla":
-            self.backbone = GCN_Body(args.num_features, args.hidden_dim, args.dropout)
-        else:
-            self.backbone = GNN(args, args.num_features, args.hidden_dim, encoder_type)
-
-        self.task_projection = nn.Linear(args.hidden_dim, args.hidden_dim)
-        self.sensitive_projection = nn.Linear(args.hidden_dim, args.hidden_dim)
+        # These calls intentionally create two different modules even when the
+        # configured encoder types are identical.  No representation parameter
+        # is shared between the classification and sensitive branches.
+        self.cls_encoder = _build_encoder(args, cls_encoder_type)
+        self.sens_encoder = _build_encoder(args, sens_encoder_type)
         self.cls_head = Classifier(input_dim=args.hidden_dim, num_cls=1)
         self.sens_head = (
             Classifier(input_dim=args.hidden_dim, num_cls=1)
@@ -103,9 +114,10 @@ class FairGNN(nn.Module):
         return task_view, self.cls_head(task_view)
 
     def encode_views(self, feat, edge_index):
-        """Return the task view ``z`` and sensitive view ``e`` of Eq. (3)."""
-        shared = self.backbone(feat, edge_index)
-        return self.task_projection(shared), self.sensitive_projection(shared)
+        """Return task view ``z`` and sensitive view ``e`` from separate encoders."""
+        task_view = self.cls_encoder(feat, edge_index)
+        sensitive_view = self.sens_encoder(feat, edge_index)
+        return task_view, sensitive_view
 
     def source_forward(self, feat, edge_index):
         """Return both views and both source-only classifier outputs."""

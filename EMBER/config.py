@@ -129,7 +129,10 @@ parser.add_argument('--runs',         type=int,   default=2)
 
 # network
 parser.add_argument('--n_layers',      type=int, default=3)
-parser.add_argument('--inter_encoder', type=str,
+parser.add_argument('--cls_encoder', type=str,
+                    choices=['GCN', 'GAT', 'SAGE', 'MLP', 'vanilla'],
+                    default='GCN')
+parser.add_argument('--sens_encoder', type=str,
                     choices=['GCN', 'GAT', 'SAGE', 'MLP', 'vanilla'],
                     default='GCN')
 parser.add_argument('--hidden_dim',    type=int, default=32)

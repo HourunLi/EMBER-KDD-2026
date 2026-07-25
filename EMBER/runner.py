@@ -38,7 +38,11 @@ from visualization.export_utils import save_visualization_embeddings
 
 def _init_fair_gnn(args):
     """Build the source model, optimizer, and warm-up/cosine scheduler."""
-    model = FairGNN(args, encoder_type=args.inter_encoder).to(args.device)
+    model = FairGNN(
+        args,
+        cls_encoder_type=args.cls_encoder,
+        sens_encoder_type=args.sens_encoder,
+    ).to(args.device)
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=args.lr,
@@ -118,7 +122,7 @@ def extract_source_knowledge(data, model):
     a_g   : {0: [D], 1: [D]}
         Class-agnostic group anchors in the decoupled sensitive space.
 
-    The exported model retains both projection heads and the task classifier,
+    The exported model retains both independent encoders and the task classifier,
     while the source-only sensitive classifier is discarded.
 
     The result contains ``knowledge_version``, ``p_y``, ``a_g``, and the
@@ -168,7 +172,7 @@ def extract_source_knowledge(data, model):
         if not key.startswith("sens_head.")
     }
     return {
-        "knowledge_version": 4,
+        "knowledge_version": 5,
         "p_y": {key: value.cpu() for key, value in p_y.items()},
         "a_g": {key: value.cpu() for key, value in a_g.items()},
         "model_state": exported_state,
@@ -180,7 +184,8 @@ def _get_checkpoint_name(args, run_idx):
     name_parts = [
         f"ds={args.dataset}",
         f"src={args.inid}",
-        f"enc={args.inter_encoder}",
+        f"clsenc={args.cls_encoder}",
+        f"sensenc={args.sens_encoder}",
         f"hid={args.hidden_dim}",
         f"lay={args.n_layers}",
         f"ep={args.train_epochs}",
@@ -200,17 +205,18 @@ def _get_checkpoint_name(args, run_idx):
         f"srcmmdmax={getattr(args, 'source_mmd_max_samples', 0)}",
         f"srcmmdchunk={getattr(args, 'mmd_chunk_size', 1024)}",
         "srcscope=all-labeled-vso",
-        "architecture=dual-head-v1",
-        "knowledge=ember-bank-v4",
+        "architecture=dual-encoder-v1",
+        "knowledge=ember-bank-v5",
         f"run={run_idx}",
         f"seed={args.seed}",
     ]
     signature = "|".join(name_parts)
     digest = hashlib.sha256(signature.encode("utf-8")).hexdigest()[:16]
-    readable_prefix = "ember_{}_{}_{}_run{}_seed{}".format(
+    readable_prefix = "ember_{}_{}_cls-{}_sens-{}_run{}_seed{}".format(
         args.dataset,
         str(args.inid).replace("/", "-").replace("\\", "-"),
-        args.inter_encoder.lower(),
+        args.cls_encoder.lower(),
+        args.sens_encoder.lower(),
         run_idx,
         args.seed,
     )
@@ -247,10 +253,14 @@ def _load_checkpoint(args, run_idx):
     print(f'[Checkpoint] loading ← {path}')
     ckpt = torch.load(path, map_location=args.device)
     knowledge = ckpt.get('knowledge', {})
-    if int(knowledge.get('knowledge_version', 0)) < 4 or 'a_g' not in knowledge:
+    if int(knowledge.get('knowledge_version', 0)) < 5 or 'a_g' not in knowledge:
         print('[Checkpoint] obsolete Source knowledge format; retraining required.')
         return None, None
-    model = FairGNN(args, encoder_type=args.inter_encoder).to(args.device)
+    model = FairGNN(
+        args,
+        cls_encoder_type=args.cls_encoder,
+        sens_encoder_type=args.sens_encoder,
+    ).to(args.device)
     model.load_state_dict({k: v.to(args.device) for k, v in ckpt['model_state'].items()})
     return model, knowledge
 
@@ -260,7 +270,8 @@ def adapt_target(args, target_data, knowledge):
     device = args.device
     model = FairGNN(
         args,
-        encoder_type=args.inter_encoder,
+        cls_encoder_type=args.cls_encoder,
+        sens_encoder_type=args.sens_encoder,
         include_sensitive_classifier=False,
     ).to(device)
     model.load_state_dict({
