@@ -108,9 +108,9 @@ def mprint(*arg, **kwargs):
 
 parser = argparse.ArgumentParser(description='Train and evaluate EMBER.')
 
-# parser.add_argument('--dataset', type=str, default='bailA')
-# parser.add_argument('--inid',    type=str, default='_2')
-# parser.add_argument('--outid',   type=str, default='_1')
+parser.add_argument('--dataset', type=str, default='bailA')
+parser.add_argument('--inid',    type=str, default='_2')
+parser.add_argument('--outid',   type=str, default='_1')
 #parser.add_argument('--dataset', type=str, default='germanA')
 #parser.add_argument('--inid',    type=str, default='_2')
 #parser.add_argument('--outid',   type=str, default='_1')
