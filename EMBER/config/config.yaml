@@ -2,40 +2,39 @@ bailA:
   # === Source + Target: transferred encoder/representation ===
   # Target adaptation freezes this source encoder, but directly uses its
   # representations, classifier predictions, prototypes, and anchors.
-  inter_encoder: "GCN"
-  hidden_dim: 128
-  n_layers: 2
+  inter_encoder: "MLP"
+  hidden_dim: 64
+  train_epochs: 600
 
   # === Source stage: base training and regularization ===
-  lr: 0.004
-  lr2_reg: 0.0001
-  train_epochs: 800
+  lr: 0.005
+  lr2_reg: 0.001
   dropout: 0.5
 
   # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
-  lambda_sen: 0.5                  # lambda_sen, Eq. (19)
-  lambda_dec: 1.0                  # lambda_dec, Eq. (19)
-  lambda_fair: 16.0                # beta, Eq. (9)
-  meta_lr: 0.02                    # alpha, Eqs. (7) and (9)
-  lambda_coord: 0.75               # gamma, Eq. (9)
-  source_mmd_bandwidth: 1.4142136  # RBF-MMD bandwidth; no paper symbol
+  lambda_sen: 4.0                  # lambda_sen, Eq. (19)
+  lambda_dec: 5.0                  # lambda_dec, Eq. (19)
+  lambda_fair: 4.0                 # beta, Eq. (9)
+  meta_lr: 0.05                    # alpha, Eqs. (7) and (9)
+  lambda_coord: 0.8                # gamma, Eq. (9)
+  source_mmd_bandwidth: 1.5  # RBF-MMD bandwidth; no paper symbol
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 75                 # T, Algorithm 1 / Eq. (21)
-  tau_c: 0.65                      # delta, Eqs. (12) and (20)
-  proto_temp: 0.6                  # tau, Eqs. (13) and (18)
+  adapt_epochs: 200                 # T, Algorithm 1 / Eq. (21)
+  tau_c: 0.55                      # delta, Eqs. (12) and (20)
+  proto_temp: 0.8                  # tau, Eqs. (13) and (18)
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.00088388348          # optimizer step for Eq. (15); no paper symbol
+  adapt_lr: 0.005          # optimizer step for Eq. (15); no paper symbol
   residual_inner_steps: 20         # solver steps for Eq. (15); no paper symbol
-  lambda_residual_l2: 0.1          # lambda, Eq. (15)
-  group_pseudocount: 19.1525       # nu_0, Eq. (14)
+  lambda_residual_l2: 0.001          # lambda, Eq. (15)
+  group_pseudocount: 15            # nu_0, Eq. (14)
 
   # === Target: Bayesian Test-Time Adaptation ===
-  lambda_pi: 0.7                   # eta, Eq. (18)
-  prior_confidence_threshold: 0.65 # delta_p, Eq. (17)
-  prior_pseudocount: 383.04998     # n_0, Eq. (17)
-  prior_discount: 0.8              # omega, Eq. (17)
+  lambda_pi: 0.9                   # eta, Eq. (18)
+  prior_confidence_threshold: 0.6  # delta_p, Eq. (17)
+  prior_pseudocount: 100     # n_0, Eq. (17)
+  prior_discount: 0.7              # omega, Eq. (17)
 
 germanA:
   # === Source + Target: transferred encoder/representation ===
@@ -44,72 +43,70 @@ germanA:
   n_layers: 1
 
   # === Source stage: base training and regularization ===
-  lr: 0.003
-  lr2_reg: 0.0001
-  train_epochs: 800
-  dropout: 0.3
+  lr: 0.005
+  lr2_reg: 0.0003
+  dropout: 0.4
 
   # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
   lambda_sen: 2.0
   lambda_dec: 2.0
   lambda_fair: 2.0
-  meta_lr: 0.016
-  lambda_coord: 0.75
+  meta_lr: 0.01
+  lambda_coord: 0.8
   source_mmd_bandwidth: 0.5
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 50
+  adapt_epochs: 150
   tau_c: 0.6
-  proto_temp: 0.8
+  proto_temp: 0.7
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.0020833333
+  adapt_lr: 0.002
   residual_inner_steps: 15
-  lambda_residual_l2: 0.1
-  group_pseudocount: 9.6
+  lambda_residual_l2: 0.001
+  group_pseudocount: 7
 
   # === Target: Bayesian Test-Time Adaptation ===
   lambda_pi: 1.0
   prior_confidence_threshold: 0.7
-  prior_pseudocount: 38.399452
+  prior_pseudocount: 20
   prior_discount: 0.8
 
 pokec:
   # === Source + Target: transferred encoder/representation ===
   inter_encoder: "GCN"
-  hidden_dim: 64
-  n_layers: 4
+  hidden_dim: 128
+  n_layers: 3
 
   # === Source stage: base training and regularization ===
-  lr: 0.002
+  lr: 0.004
   lr2_reg: 0.001
-  train_epochs: 800
-  dropout: 0.5
+  dropout: 0.4
 
   # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
   lambda_sen: 0.5
   lambda_dec: 0.5
-  lambda_fair: 16.0
-  meta_lr: 0.02
+  lambda_fair: 5.0
+  meta_lr: 0.1
   lambda_coord: 0.75
-  source_mmd_bandwidth: 2.0
+  source_mmd_bandwidth: 3.0
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 50
+  adapt_epochs: 100
   tau_c: 0.6
-  proto_temp: 0.5
+  proto_temp: 1
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.0020833333
+  adapt_lr: 0.002
   residual_inner_steps: 15
-  lambda_residual_l2: 0.1
-  group_pseudocount: 1664.225
+  lambda_residual_l2: 0.01
+  group_pseudocount: 1000
 
   # === Target: Bayesian Test-Time Adaptation ===
   lambda_pi: 0.8
   prior_confidence_threshold: 0.7
-  prior_pseudocount: 1331.38
-  prior_discount: 0.5
+  prior_pseudocount: 1000
+  prior_discount: 0.8
 
 syn:
   # === Source + Target: transferred encoder/representation ===
@@ -118,10 +115,9 @@ syn:
   # n_layers is intentionally omitted: the MLP encoder does not read it.
 
   # === Source stage: base training and regularization ===
-  lr: 0.006
+  lr: 0.005
   lr2_reg: 0.001
-  train_epochs: 800
-  dropout: 0.5
+  dropout: 0.1
 
   # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
   lambda_sen: 1.0
