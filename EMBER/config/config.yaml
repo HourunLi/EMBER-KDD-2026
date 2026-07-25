@@ -49,21 +49,21 @@ germanA:
   source_mmd_bandwidth: 1.0
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 100
-  tau_c: 0.6
-  proto_temp: 0.7
+  adapt_epochs: 40
+  tau_c: 0.65
+  proto_temp: 0.5
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.002
-  residual_inner_steps: 30
-  lambda_residual_l2: 0.01
-  group_pseudocount: 10
+  adapt_lr: 0.003
+  residual_inner_steps: 20
+  lambda_residual_l2: 0.001
+  group_pseudocount: 1.0
 
   # === Target: Bayesian Test-Time Adaptation ===
-  lambda_pi: 0.8
-  prior_confidence_threshold: 0.7
-  prior_pseudocount: 20
-  prior_discount: 0.8
+  lambda_pi: 1.0
+  prior_confidence_threshold: 0.6
+  prior_pseudocount: 5.0
+  prior_discount: 0.9
 
 pokec:
   # === Source + Target: independent transferred encoders/representations ===

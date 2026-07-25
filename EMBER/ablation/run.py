@@ -27,8 +27,8 @@ from typing import Callable, Dict, List, Sequence, Tuple
 # ---------------------------------------------------------------------------
 EXPERIMENT = "all"  # metaalign | bca | ema | residual | all
 GPU_IDS = [0, 2, 4, 6, 7]
-DATASETS = ["pokec"]
-RUN_SEEDS = [1111, 2222, 3333, 4444, 5555]
+DATASETS = ["germanA"]
+RUN_SEEDS = [20, 21, 22, 23, 24]
 
 GPU_MAX_MEMORY_MB = 10000
 GPU_MAX_UTILIZATION = 50
