@@ -2,7 +2,7 @@ bailA:
   # === Source + Target: transferred encoder/representation ===
   # Target adaptation freezes this source encoder, but directly uses its
   # representations, classifier predictions, prototypes, and anchors.
-  inter_encoder: "MLP"
+  inter_encoder: "vanilla"
   hidden_dim: 64
   train_epochs: 600
 
@@ -38,9 +38,9 @@ bailA:
 
 germanA:
   # === Source + Target: transferred encoder/representation ===
-  inter_encoder: "GCN"
+  inter_encoder: "vanilla"
   hidden_dim: 64
-  n_layers: 1
+  n_layers: 2
 
   # === Source stage: base training and regularization ===
   lr: 0.005
@@ -110,8 +110,8 @@ pokec:
 
 syn:
   # === Source + Target: transferred encoder/representation ===
-  inter_encoder: "MLP"
-  hidden_dim: 256
+  inter_encoder: "vanilla"
+  hidden_dim: 512
   # n_layers is intentionally omitted: the MLP encoder does not read it.
 
   # === Source stage: base training and regularization ===
