@@ -2,7 +2,8 @@ bailA:
   cls_encoder: "GCN"
   sens_encoder: "MLP"
   hidden_dim: 64
-  n_layers: 1
+  cls_n_layers: 1
+  sens_n_layers: 1  # ignored when sens_encoder is MLP
   train_epochs: 500
   lr: 0.006
   lr2_reg: 0.001
@@ -30,7 +31,8 @@ germanA:
   cls_encoder: "GCN"
   sens_encoder: "MLP"
   hidden_dim: 128
-  n_layers: 2
+  cls_n_layers: 2
+  sens_n_layers: 2  # ignored when sens_encoder is MLP
 
   # === Source stage: base training and regularization ===
   train_epochs: 500
@@ -68,7 +70,8 @@ pokec:
   cls_encoder: "GCN"
   sens_encoder: "MLP"
   hidden_dim: 128
-  n_layers: 3
+  cls_n_layers: 3
+  sens_n_layers: 3  # ignored when sens_encoder is MLP
 
   # === Source stage: base training and regularization ===
   train_epochs: 500
@@ -106,7 +109,8 @@ syn:
   cls_encoder: "GCN"
   sens_encoder: "MLP"
   hidden_dim: 256
-  n_layers: 3
+  cls_n_layers: 3
+  sens_n_layers: 3  # ignored when sens_encoder is MLP
 
   # === Source stage: base training and regularization ===
   train_epochs: 500

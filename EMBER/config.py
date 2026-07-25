@@ -128,7 +128,18 @@ parser.add_argument('--dropout',      type=float, default=0.5)
 parser.add_argument('--runs',         type=int,   default=2)
 
 # network
-parser.add_argument('--n_layers',      type=int, default=3)
+parser.add_argument(
+    '--cls_n_layers',
+    type=int,
+    default=3,
+    help='number of GNN layers in the task encoder; ignored by MLP/vanilla',
+)
+parser.add_argument(
+    '--sens_n_layers',
+    type=int,
+    default=3,
+    help='number of GNN layers in the sensitive encoder; ignored by MLP/vanilla',
+)
 parser.add_argument('--cls_encoder', type=str,
                     choices=['GCN', 'GAT', 'SAGE', 'MLP', 'vanilla'],
                     default='GCN')
@@ -246,7 +257,8 @@ def require(condition, message):
 
 
 require(args.train_epochs >= 2, "train_epochs must be at least 2")
-require(args.n_layers >= 1, "n_layers must be at least 1")
+require(args.cls_n_layers >= 1, "cls_n_layers must be at least 1")
+require(args.sens_n_layers >= 1, "sens_n_layers must be at least 1")
 require(args.lr > 0.0, "lr must be positive")
 require(args.lr2_reg >= 0.0, "lr2_reg must be non-negative")
 require(args.lambda_fair >= 0.0, "lambda_fair (beta) must be non-negative")

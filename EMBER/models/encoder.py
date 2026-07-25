@@ -38,7 +38,7 @@ class GCN_Body(nn.Module):
 class GNN(nn.Module):
     """Multi-layer GNN with layer-mean pooling."""
 
-    def __init__(self, args, input_dim, hidden_dim, encoder_type):
+    def __init__(self, args, input_dim, hidden_dim, encoder_type, layer_count):
         super().__init__()
         self.dropout = nn.Dropout(args.dropout)
         self.feat_proj = nn.Linear(input_dim, hidden_dim)
@@ -46,15 +46,15 @@ class GNN(nn.Module):
         etype = encoder_type.lower()
         if etype == "gcn":
             self.gnn_layers = nn.ModuleList(
-                [GCNConv(hidden_dim, hidden_dim) for _ in range(args.n_layers)]
+                [GCNConv(hidden_dim, hidden_dim) for _ in range(layer_count)]
             )
         elif etype == "sage":
             self.gnn_layers = nn.ModuleList(
-                [SAGEConv(hidden_dim, hidden_dim) for _ in range(args.n_layers)]
+                [SAGEConv(hidden_dim, hidden_dim) for _ in range(layer_count)]
             )
         elif etype == "gat":
             self.gnn_layers = nn.ModuleList(
-                [GATConv(hidden_dim, hidden_dim, heads=1) for _ in range(args.n_layers)]
+                [GATConv(hidden_dim, hidden_dim, heads=1) for _ in range(layer_count)]
             )
         else:
             raise NotImplementedError(
@@ -72,13 +72,18 @@ class GNN(nn.Module):
         return torch.stack(layer_outputs, dim=1).mean(dim=1)
 
 
-def _build_encoder(args, encoder_type):
+def _resolve_n_layers(args, name):
+    return int(getattr(args, name))
+
+
+def _build_encoder(args, encoder_type, layer_count):
     """Build one independent representation encoder."""
-    if encoder_type == "MLP":
+    etype = encoder_type.lower()
+    if etype == "mlp":
         return MLP(args, args.num_features, args.hidden_dim)
-    if encoder_type == "vanilla":
+    if etype == "vanilla":
         return GCN_Body(args.num_features, args.hidden_dim, args.dropout)
-    return GNN(args, args.num_features, args.hidden_dim, encoder_type)
+    return GNN(args, args.num_features, args.hidden_dim, encoder_type, layer_count)
 
 
 class FairGNN(nn.Module):
@@ -96,8 +101,10 @@ class FairGNN(nn.Module):
         # These calls intentionally create two different modules even when the
         # configured encoder types are identical.  No representation parameter
         # is shared between the classification and sensitive branches.
-        self.cls_encoder = _build_encoder(args, cls_encoder_type)
-        self.sens_encoder = _build_encoder(args, sens_encoder_type)
+        self.cls_n_layers = _resolve_n_layers(args, "cls_n_layers")
+        self.sens_n_layers = _resolve_n_layers(args, "sens_n_layers")
+        self.cls_encoder = _build_encoder(args, cls_encoder_type, self.cls_n_layers)
+        self.sens_encoder = _build_encoder(args, sens_encoder_type, self.sens_n_layers)
         self.cls_head = Classifier(input_dim=args.hidden_dim, num_cls=1)
         self.sens_head = (
             Classifier(input_dim=args.hidden_dim, num_cls=1)
