@@ -1,10 +1,12 @@
 bailA:
-  # === Source + Target: transferred encoder/representation ===
-  # Target adaptation freezes this source encoder, but directly uses its
-  # representations, classifier predictions, prototypes, and anchors.
-  inter_encoder: "MLP"
-  hidden_dim: 64
-  train_epochs: 600
+  # === Source + Target: independent transferred encoders/representations ===
+  # Target adaptation freezes both source encoders. The classification branch
+  # provides task representations/predictions; the sensitive branch provides
+  # representations for source anchors and target pseudo-group recovery.
+  cls_encoder: "GCN"
+  sens_encoder: "GCN"
+  hidden_dim: 128
+  n_layers: 2
 
   # === Source stage: base training and regularization ===
   lr: 0.005
@@ -37,8 +39,9 @@ bailA:
   prior_discount: 0.7              # omega, Eq. (17)
 
 germanA:
-  # === Source + Target: transferred encoder/representation ===
-  inter_encoder: "GCN"
+  # === Source + Target: independent transferred encoders/representations ===
+  cls_encoder: "GCN"
+  sens_encoder: "GCN"
   hidden_dim: 64
   n_layers: 1
 
@@ -73,10 +76,11 @@ germanA:
   prior_discount: 0.8
 
 pokec:
-  # === Source + Target: transferred encoder/representation ===
-  inter_encoder: "GCN"
-  hidden_dim: 128
-  n_layers: 3
+  # === Source + Target: independent transferred encoders/representations ===
+  cls_encoder: "GCN"
+  sens_encoder: "GCN"
+  hidden_dim: 64
+  n_layers: 4
 
   # === Source stage: base training and regularization ===
   lr: 0.004
@@ -109,8 +113,9 @@ pokec:
   prior_discount: 0.8
 
 syn:
-  # === Source + Target: transferred encoder/representation ===
-  inter_encoder: "MLP"
+  # === Source + Target: independent transferred encoders/representations ===
+  cls_encoder: "MLP"
+  sens_encoder: "MLP"
   hidden_dim: 256
   # n_layers is intentionally omitted: the MLP encoder does not read it.
 
