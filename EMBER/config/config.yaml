@@ -107,7 +107,7 @@ pokec:
 syn:
   # === Source + Target: independent transferred encoders/representations ===
   cls_encoder: "GCN"
-  sens_encoder: "MLP"
+  sens_encoder: "GCN"
   hidden_dim: 256
   cls_n_layers: 3
   sens_n_layers: 3  # ignored when sens_encoder is MLP
