@@ -62,15 +62,15 @@ from typing import Dict, List, Mapping, MutableMapping, Sequence, Tuple
 # reproducible.
 # ---------------------------------------------------------------------------
 DEFAULT_GROUPS = ("delta", "tau_eta", "beta_gamma")
-DEFAULT_DATASETS = ("bailA", "germanA", "pokec", "syn")
-DEFAULT_GPU_IDS = (0,)
+DEFAULT_DATASETS = ("germanA",)
+DEFAULT_GPU_IDS = (0, 2, 3, 4, 5, 6, 7)
 DEFAULT_RUN_SEEDS = (1111, 2222, 3333, 4444, 5555)
 
-DEFAULT_DELTA_VALUES = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+DEFAULT_DELTA_VALUES = (0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95)
 DEFAULT_TAU_VALUES = (0.1, 0.25, 0.5, 0.75, 1.0)
-DEFAULT_ETA_VALUES = (0.0, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0)
-DEFAULT_BETA_VALUES = (0.0, 1.0, 2.0, 4.0, 8.0)
-DEFAULT_GAMMA_VALUES = (0.0, 0.5, 1.0)
+DEFAULT_ETA_VALUES = (0.0, 0.25, 0.5, 0.75, 1.0)
+DEFAULT_BETA_VALUES = (0.0, 2.0, 4.0, 8.0, 16.0)
+DEFAULT_GAMMA_VALUES = (0.0, 0.25, 0.5, 0.75, 1.0)
 DEFAULT_RESIDUAL_L2_VALUES = (0.0, 1e-5, 1e-4, 1e-3, 1e-2)
 DEFAULT_ADAPT_EPOCH_VALUES = (1, 10, 25, 50, 100, 150)
 
