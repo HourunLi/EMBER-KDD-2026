@@ -21,6 +21,11 @@ visualization/
       coordinates.csv
       tsne.png
       tsne.pdf
+      candidates/
+        sample_seed_<sample_seed>_tsne_seed_<tsne_seed>/
+          coordinates.csv
+          tsne.png
+          tsne.pdf
   README.md
 ```
 
@@ -160,6 +165,30 @@ python visualization/run_tsne.py --datasets bailA,germanA,pokec,syn --methods SF
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods SFFGNN --max-points 3000
+```
+
+针对固定的 embedding 尝试多个节点抽样 seed：
+
+```bash
+python visualization/run_tsne.py --datasets pokec --methods EMBER --sample-seeds 10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29 --tsne-seeds 0 --strict
+```
+
+传入多个 `--sample-seeds` 或 `--tsne-seeds` 时，候选结果分别写入：
+
+```text
+visualization/results/EMBER_pokec/candidates/sample_seed_<sample_seed>_tsne_seed_<tsne_seed>/
+```
+
+`sample_seed` 只控制从 embedding 中抽取哪些节点；`tsne_seed` 只控制 t-SNE 的随机状态。抽样采用分层、无放回方式。只传一个 seed 时不会创建 `candidates` 目录，而是直接生成正式的 `{method}_{dataset}` 结果。例如选定 `sample_seed=17` 后可以运行：
+
+```bash
+python visualization/run_tsne.py --datasets pokec --methods EMBER --sample-seeds 17 --tsne-seeds 0 --strict
+```
+
+论文中比较多个方法时，应对所有方法使用相同的抽样 seed，并检查各方法 `coordinates.csv` 的 `source_index` 是否一致：
+
+```bash
+python visualization/run_tsne.py --datasets pokec --methods DANCE,GraphCTA,EMBER --sample-seeds 17 --tsne-seeds 0 --strict
 ```
 
 缺文件时直接失败：

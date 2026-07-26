@@ -69,6 +69,24 @@ def parse_args() -> argparse.Namespace:
         help="Override tsne.perplexity.",
     )
     parser.add_argument(
+        "--sample-seeds",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated node-sampling seeds. Multiple seeds write separate "
+            "candidate figures; one seed writes the normal result."
+        ),
+    )
+    parser.add_argument(
+        "--tsne-seeds",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated t-SNE seeds. Defaults to tsne.random_state in the "
+            "config."
+        ),
+    )
+    parser.add_argument(
         "--formats",
         type=str,
         default=None,
@@ -90,6 +108,15 @@ def parse_args() -> argparse.Namespace:
         help="Check Python package availability, then exit.",
     )
     return parser.parse_args()
+
+
+def parse_int_list(value: str | None) -> list[int] | None:
+    if not value:
+        return None
+    values = [int(item.strip()) for item in value.split(",") if item.strip()]
+    if not values:
+        raise ValueError("Seed list must contain at least one integer.")
+    return values
 
 
 def check_deps() -> int:
@@ -156,6 +183,13 @@ def main() -> int:
 
     plot_cfg = dict(config.get("plot") or {})
     output_formats = split_csv_arg(args.formats) or list(plot_cfg.get("formats", ["png"]))
+    sample_seeds = parse_int_list(args.sample_seeds) or [
+        int(sampling_cfg.get("random_state", 42))
+    ]
+    tsne_seeds = parse_int_list(args.tsne_seeds) or [
+        int(tsne_cfg.get("random_state", 0))
+    ]
+    is_seed_sweep = len(sample_seeds) > 1 or len(tsne_seeds) > 1
 
     any_plotted = False
     for dataset in selected_datasets:
@@ -167,37 +201,69 @@ def main() -> int:
             try:
                 loaded = load_method_dataset(config, config_path, method_cfg, dataset)
                 max_points = int(sampling_cfg.get("max_points", 3000))
-                emb, labels, source_indices = sample_points(
-                    loaded.embeddings,
-                    loaded.labels,
-                    max_points,
-                    stratify=bool(sampling_cfg.get("stratify", True)),
-                    random_state=int(sampling_cfg.get("random_state", tsne_cfg.get("random_state", 42))),
-                )
                 print(
                     f"[{method}/{dataset}] loaded {loaded.embeddings.shape[0]} points "
-                    f"from {loaded.embedding_path}; plotting {labels.shape[0]} points."
+                    f"from {loaded.embedding_path}."
                 )
+                base_result_dir = output_dir / f"{slugify(method)}_{slugify(dataset)}"
+                for sample_seed in sample_seeds:
+                    emb, labels, source_indices = sample_points(
+                        loaded.embeddings,
+                        loaded.labels,
+                        max_points,
+                        stratify=bool(sampling_cfg.get("stratify", True)),
+                        random_state=sample_seed,
+                    )
+                    print(
+                        f"[{method}/{dataset}] sample_seed={sample_seed}; "
+                        f"plotting {labels.shape[0]} points."
+                    )
 
-                coords = compute_tsne(emb, tsne_cfg)
-                result_dir = output_dir / f"{slugify(method)}_{slugify(dataset)}"
-                write_coordinates_csv(
-                    result_dir / "coordinates.csv",
-                    method,
-                    dataset,
-                    coords,
-                    labels,
-                    source_indices,
-                    loaded.group_names,
-                )
+                    for tsne_seed in tsne_seeds:
+                        current_tsne_cfg = dict(tsne_cfg)
+                        current_tsne_cfg["random_state"] = tsne_seed
+                        coords = compute_tsne(emb, current_tsne_cfg)
 
-                panel = {"method": method, "dataset": dataset, "coords": coords, "labels": labels}
-                for fmt in output_formats:
-                    fmt = fmt.lstrip(".")
-                    out_path = result_dir / f"tsne.{fmt}"
-                    plot_panels(out_path, dataset_title, [panel], loaded.group_names, plot_cfg)
-                    print(f"[saved] {out_path}")
-                any_plotted = True
+                        if is_seed_sweep:
+                            result_dir = (
+                                base_result_dir
+                                / "candidates"
+                                / f"sample_seed_{sample_seed}_tsne_seed_{tsne_seed}"
+                            )
+                        else:
+                            result_dir = base_result_dir
+
+                        write_coordinates_csv(
+                            result_dir / "coordinates.csv",
+                            method,
+                            dataset,
+                            coords,
+                            labels,
+                            source_indices,
+                            loaded.group_names,
+                        )
+
+                        panel = {
+                            "method": method,
+                            "dataset": dataset,
+                            "coords": coords,
+                            "labels": labels,
+                        }
+                        for fmt in output_formats:
+                            fmt = fmt.lstrip(".")
+                            out_path = result_dir / f"tsne.{fmt}"
+                            plot_panels(
+                                out_path,
+                                dataset_title,
+                                [panel],
+                                loaded.group_names,
+                                plot_cfg,
+                            )
+                            print(
+                                f"[saved] {out_path} "
+                                f"(sample_seed={sample_seed}, tsne_seed={tsne_seed})"
+                            )
+                        any_plotted = True
             except Exception as exc:
                 if args.strict:
                     raise
