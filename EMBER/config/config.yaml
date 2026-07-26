@@ -106,39 +106,79 @@ pokec:
 
 syn:
   # === Source + Target: independent transferred encoders/representations ===
-  cls_encoder: "GCN"
-  sens_encoder: "GCN"
-  hidden_dim: 256
+  cls_encoder: "vanilla"
+  sens_encoder: "MLP"
+  hidden_dim: 128
   cls_n_layers: 3
-  sens_n_layers: 3  # ignored when sens_encoder is MLP
+  sens_n_layers: 2  # ignored when sens_encoder is MLP
 
   # === Source stage: base training and regularization ===
   train_epochs: 500
   lr: 0.005
   lr2_reg: 0.001
-  dropout: 0.5
+  dropout: 0.3
 
   # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
   lambda_sen: 2.0
   lambda_dec: 1.0
-  lambda_fair: 16.0
-  meta_lr: 0.01
-  lambda_coord: 0.8
+  lambda_fair: 8
+  meta_lr: 0.04
+  lambda_coord: 0.5
   source_mmd_bandwidth: 1.0
 
   # === Target stage: shared loop controls / Others ===
   adapt_epochs: 200
   tau_c: 0.65
-  proto_temp: 0.7
+  proto_temp: 0.8
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.005
-  residual_inner_steps: 30
+  adapt_lr: 0.001
+  residual_inner_steps: 10
   lambda_residual_l2: 0.0001
   group_pseudocount: 50
 
   # === Target: Bayesian Test-Time Adaptation ===
-  lambda_pi: 0.7
+  lambda_pi: 0.3
   prior_confidence_threshold: 0.75
   prior_pseudocount: 50
   prior_discount: 0.6
+
+
+creditA:
+  # === Source + Target: transferred encoder/representation ===
+  cls_encoder: "GCN"
+  sens_encoder: "MLP"
+  hidden_dim: 128
+  cls_n_layers: 3
+  sens_n_layers: 2  # ignored when sens_encoder is MLP
+
+  # === Source stage: base training and regularization ===
+  train_epochs: 500
+  lr: 0.005
+  lr2_reg: 0.001
+  dropout: 0.4
+
+  # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
+  lambda_sen: 4.0
+  lambda_dec: 2.0
+  lambda_fair: 4.0
+  meta_lr: 0.012
+  lambda_coord: 1.0
+  source_mmd_bandwidth: 1.0
+
+  # === Target stage: shared loop controls / Others ===
+  adapt_epochs: 100
+  tau_c: 0.6
+  proto_temp: 0.7
+
+  # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
+  adapt_lr: 0.002
+  residual_inner_steps: 30
+  lambda_residual_l2: 0.01
+  group_pseudocount: 10
+
+  # === Target: Bayesian Test-Time Adaptation ===
+  lambda_pi: 0.8
+  prior_confidence_threshold: 0.7
+  prior_pseudocount: 20
+  prior_discount: 0.8
