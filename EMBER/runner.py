@@ -7,13 +7,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import f1_score
 from torch.func import functional_call
 from tqdm import tqdm
 
-from learn import evaluate_per_class
+import learn as reference_evaluation
 from models import FairGNN
-from utils import fair_metric, seed_everything
+from utils import seed_everything
 
 try:
     from .adaptation import (
@@ -326,6 +326,112 @@ def adapt_target(args, target_data, knowledge):
     )
     state = run_target_adaptation(args, model, target_view, knowledge)
     return model, state
+
+
+def _source_prediction_diagnostics(
+    data,
+    encoder,
+    split_name,
+    per_class_acc,
+):
+    """Keep tuner diagnostics without changing the reference evaluator API."""
+    split_masks = {
+        'all': data.train_mask | data.val_mask | data.test_mask,
+        'train': data.train_mask,
+        'val': data.val_mask,
+        'test': data.test_mask,
+    }
+    mask = split_masks[split_name].cpu().numpy()
+
+    encoder.eval()
+    with torch.no_grad():
+        _, output = encoder(data.x, data.edge_index)
+        probs = torch.sigmoid(output.squeeze()).cpu().numpy()[mask]
+
+    y_true = data.y.cpu().numpy()[mask]
+    pred = (probs > 0.5).astype(int)
+    per_class_f1 = [
+        f1_score(
+            (y_true == target_class).astype(int),
+            (pred == target_class).astype(int),
+            zero_division=0,
+        ) * 100
+        for target_class in np.unique(y_true)
+    ]
+    return {
+        'balanced_acc': {split_name: per_class_acc},
+        'macro_f1': {split_name: float(np.nanmean(per_class_f1))},
+        'positive_rate': {split_name: float(pred.mean() * 100)},
+        'predicted_class_count': {split_name: int(np.unique(pred).size)},
+    }
+
+
+def _reference_evaluation_view(data):
+    """Keep model inputs in place while matching the reference CPU evaluator."""
+    return SimpleNamespace(
+        x=data.x,
+        edge_index=data.edge_index,
+        y=data.y.cpu(),
+        sens_labels=data.sens_labels.cpu(),
+        train_mask=data.train_mask.cpu(),
+        val_mask=data.val_mask.cpu(),
+        test_mask=data.test_mask.cpu(),
+    )
+
+
+def _evaluate_with_reference(args, data, encoder):
+    """Run the copied evaluator while honoring EMBER's export-disable flag."""
+    if not getattr(args, 'disable_embedding_export', False):
+        return reference_evaluation.evaluate_per_class(args, data, encoder)
+
+    original_savez = reference_evaluation.np.savez
+    reference_evaluation.np.savez = lambda *unused_args, **unused_kwargs: None
+    try:
+        return reference_evaluation.evaluate_per_class(args, data, encoder)
+    finally:
+        reference_evaluation.np.savez = original_savez
+
+
+class _SourceEvaluationEncoder:
+    """Return CPU predictions so the unmodified reference evaluator is safe."""
+
+    def __init__(self, encoder):
+        self.encoder = encoder
+
+    def eval(self):
+        self.encoder.eval()
+        return self
+
+    def __call__(self, x, edge_index):
+        features, logits = self.encoder(x, edge_index)
+        return features.cpu(), logits.cpu()
+
+
+class _TargetEvaluationEncoder:
+    """Expose target posterior probabilities as logits to the shared evaluator."""
+
+    def __init__(self, args, data, encoder, state):
+        self.args = args
+        self.data = data
+        self.encoder = encoder
+        self.state = state
+        self.features = None
+
+    def eval(self):
+        self.encoder.eval()
+        return self
+
+    def __call__(self, x, edge_index):
+        del x, edge_index
+        features, probabilities = predict_target_proba(
+            self.args,
+            self.data,
+            self.encoder,
+            self.state,
+        )
+        self.features = features
+        positive_logits = torch.logit(probabilities[:, 1])
+        return features.cpu(), positive_logits.cpu()
 
 
 def train_and_adapt(args, source_data, target_data):
@@ -656,9 +762,20 @@ def train_and_adapt(args, source_data, target_data):
                         checkpoint_knowledge,
                     )
 
-        (accs, auc_rocs, tmp_parity, tmp_equality,
-         diagnostics) = evaluate_per_class(args, source_data, model)
+        source_evaluation_data = _reference_evaluation_view(source_data)
+        source_evaluation_encoder = _SourceEvaluationEncoder(model)
+        accs, auc_rocs, tmp_parity, tmp_equality = _evaluate_with_reference(
+            args,
+            source_evaluation_data,
+            source_evaluation_encoder,
+        )
         source_metric_split = 'val' if source_only else 'all'
+        diagnostics = _source_prediction_diagnostics(
+            source_data,
+            model,
+            source_metric_split,
+            accs[source_metric_split],
+        )
         print(f"[Run {run_idx}] Source {source_metric_split} | "
               f"Acc={accs[source_metric_split]:.2f}  "
               f"AUC={auc_rocs[source_metric_split]:.2f}  "
@@ -724,26 +841,15 @@ def train_and_adapt(args, source_data, target_data):
 
 
 def evaluate_after(args, data, encoder, state, save_visualization=False):
-    """Evaluate target probabilities with the paper's ACC, AUC, DP, and EO."""
-    accs, auc_rocs, paritys, equalitys = {}, {}, {}, {}
+    """Evaluate target predictions through the shared reference evaluator."""
+    target_encoder = _TargetEvaluationEncoder(args, data, encoder, state)
+    evaluation_data = _reference_evaluation_view(data)
+    metrics = _evaluate_with_reference(args, evaluation_data, target_encoder)
 
-    encoder.eval()
-    with torch.no_grad():
-        feat, q_y = predict_target_proba(args, data, encoder, state)
-        probs = q_y[:, 1].cpu().numpy()
-
-        y_all = data.y.cpu().numpy()
-        sens_all = data.sens_labels.cpu().numpy()
-        valid_label_mask = (data.y == 0) | (data.y == 1)
-        all_mask = (data.train_mask | data.val_mask | data.test_mask) & valid_label_mask
-
-        splits = {
-            'all':   all_mask.cpu().numpy(),
-            'train': (data.train_mask & valid_label_mask).cpu().numpy(),
-            'val':   (data.val_mask & valid_label_mask).cpu().numpy(),
-            'test':  (data.test_mask & valid_label_mask).cpu().numpy(),
-        }
-
+    if (save_visualization
+            and getattr(args, 'save_visualization_embeddings', False)
+            and not getattr(args, 'disable_embedding_export', False)):
+        all_mask = data.train_mask | data.val_mask | data.test_mask
         export_y = data.y[all_mask]
         export_sens = data.sens_labels[all_mask]
         labels = torch.full_like(export_y, -1, dtype=torch.int64)
@@ -751,48 +857,13 @@ def evaluate_after(args, data, encoder, state, save_visualization=False):
         labels[(export_y == 1) & (export_sens == 1)] = 1
         labels[(export_y == 0) & (export_sens == 0)] = 2
         labels[(export_y == 0) & (export_sens == 1)] = 3
-        export_embeddings = not getattr(args, 'disable_embedding_export', False)
-        if export_embeddings:
-            np.savez(f"{args.dataset}_feat.npz",
-                     representations=feat[all_mask].cpu().numpy())
-            np.savez(f"{args.dataset}_labels.npz",
-                     labels=labels.cpu().numpy())
-        if (export_embeddings and save_visualization
-                and getattr(args, 'save_visualization_embeddings', False)):
-            embeddings_root = os.path.join(PROJECT_ROOT, 'visualization', 'embeddings')
-            save_visualization_embeddings(
-                embeddings_root,
-                'EMBER',
-                args.dataset,
-                feat[all_mask].cpu().numpy(),
-                labels=labels.cpu().numpy(),
-            )
+        embeddings_root = os.path.join(PROJECT_ROOT, 'visualization', 'embeddings')
+        save_visualization_embeddings(
+            embeddings_root,
+            'EMBER',
+            args.dataset,
+            target_encoder.features[all_mask].cpu().numpy(),
+            labels=labels.cpu().numpy(),
+        )
 
-        for split_name, mask in splits.items():
-            y_true = y_all[mask]
-            if y_true.size == 0:
-                accs[split_name] = 0.0
-                auc_rocs[split_name] = 50.0
-                paritys[split_name] = float("nan")
-                equalitys[split_name] = float("nan")
-                continue
-
-            sens = sens_all[mask]
-            prob = probs[mask]
-            pred = (prob > 0.5).astype(int)
-            accs[split_name] = accuracy_score(y_true, pred) * 100
-            auc_rocs[split_name] = (
-                roc_auc_score(y_true, prob) * 100
-                if len(np.unique(y_true)) == 2
-                else 50.0
-            )
-            valid_sensitive = (sens == 0) | (sens == 1)
-            dp, eo = fair_metric(
-                pred[valid_sensitive],
-                y_true[valid_sensitive],
-                sens[valid_sensitive],
-            )
-            paritys[split_name] = dp * 100
-            equalitys[split_name] = eo * 100
-
-    return accs, auc_rocs, paritys, equalitys
+    return metrics
