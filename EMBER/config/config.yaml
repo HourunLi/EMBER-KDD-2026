@@ -16,7 +16,7 @@ bailA:
   source_mmd_bandwidth: 1.0
   adapt_epochs: 60
   tau_c: 0.7
-  proto_temp: 0.8
+  proto_temp: 0.52
   adapt_lr: 0.002
   residual_inner_steps: 10
   lambda_residual_l2: 0.004
@@ -51,7 +51,7 @@ germanA:
   # === Target stage: shared loop controls / Others ===
   adapt_epochs: 40
   tau_c: 0.65
-  proto_temp: 0.5
+  proto_temp: 0.35
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
   adapt_lr: 0.003
@@ -71,7 +71,7 @@ pokec:
   sens_encoder: "MLP"
   hidden_dim: 128
   cls_n_layers: 3
-  sens_n_layers: 3  # ignored when sens_encoder is MLP
+  sens_n_layers: 1  # ignored when sens_encoder is MLP
 
   # === Source stage: base training and regularization ===
   train_epochs: 500
@@ -80,29 +80,29 @@ pokec:
   dropout: 0.4
 
   # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
-  lambda_sen: 1.0
-  lambda_dec: 1.0
+  lambda_sen: 0.5
+  lambda_dec: 0.5
   lambda_fair: 2.0
-  meta_lr: 0.01
-  lambda_coord: 0.75
+  meta_lr: 0.1
+  lambda_coord: 1.0
   source_mmd_bandwidth: 2.0
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 200
-  tau_c: 0.7
-  proto_temp: 0.6
+  adapt_epochs: 50
+  tau_c: 0.75
+  proto_temp: 0.5
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
   adapt_lr: 0.002
   residual_inner_steps: 50
-  lambda_residual_l2: 0.01
-  group_pseudocount: 1000
+  lambda_residual_l2: 0.001
+  group_pseudocount: 500
 
   # === Target: Bayesian Test-Time Adaptation ===
   lambda_pi: 0.8
   prior_confidence_threshold: 0.75
-  prior_pseudocount: 1000
-  prior_discount: 0.6
+  prior_pseudocount: 3000
+  prior_discount: 0.8
 
 syn:
   # === Source + Target: independent transferred encoders/representations ===
@@ -132,7 +132,7 @@ syn:
   proto_temp: 0.5
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.0003
+  adapt_lr: 0.0005
   residual_inner_steps: 5
   lambda_residual_l2: 0.005
   group_pseudocount: 100
@@ -141,7 +141,7 @@ syn:
   lambda_pi: 0.3
   prior_confidence_threshold: 0.65
   prior_pseudocount: 100
-  prior_discount: 0.95
+  prior_discount: 0.955
 
 
 creditA:

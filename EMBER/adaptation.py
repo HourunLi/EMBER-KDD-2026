@@ -22,7 +22,17 @@ JOINT_KEYS = tuple(
     for class_id in CLASS_IDS
     for group_id in GROUP_IDS
 )
-ABLATION_MODES = ("full", "metaalign", "bca", "ema", "residual")
+PAPER_ABLATION_MODES = (
+    "decouple",
+    "metaalign",
+    "minority",
+    "bca",
+    "groupinit",
+)
+# Keep the two former modes callable for old tuning scripts and checkpoints,
+# but do not include them in the paper's five-ablation runner.
+LEGACY_ABLATION_MODES = ("ema", "residual")
+ABLATION_MODES = ("full", *PAPER_ABLATION_MODES, *LEGACY_ABLATION_MODES)
 
 
 def _safe_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
@@ -226,7 +236,7 @@ def _source_class_prototypes(
     return _source_bank(knowledge, "p_y", CLASS_IDS, device)
 
 
-def _source_sensitive_anchors(
+def _source_group_anchors(
     knowledge: Mapping,
     device: torch.device,
 ) -> torch.Tensor:
@@ -234,13 +244,13 @@ def _source_sensitive_anchors(
 
 
 def infer_pseudo_sensitive(
-    sensitive_features: torch.Tensor,
-    source_sensitive_anchors: torch.Tensor,
+    group_features: torch.Tensor,
+    source_group_anchors: torch.Tensor,
 ) -> torch.Tensor:
-    """Eq. (12): match each sensitive view to its nearest source anchor."""
+    """Eq. (12): match each group-recovery view to its nearest source anchor."""
     similarities = (
-        _safe_normalize(sensitive_features, dim=1)
-        @ _safe_normalize(source_sensitive_anchors, dim=1).t()
+        _safe_normalize(group_features, dim=1)
+        @ _safe_normalize(source_group_anchors, dim=1).t()
     )
     return similarities.argmax(dim=1)
 
@@ -334,8 +344,9 @@ def update_class_prior(
     """Eq. (17): discount past evidence and return the smoothed prior.
 
     ``discount=0`` removes the historical-evidence update and re-estimates
-    the target prior from the current round.  This is the EMA ablation; it
-    keeps both the current-round prior estimate and the Bayesian correction.
+    the target prior from the current round.  The legacy ``ema`` mode exposes
+    this prior-history ablation for compatibility; it is not the Eq. (16)
+    prototype-average ablation and is not part of the five paper variants.
     """
     if accumulated_evidence.shape != round_evidence.shape:
         raise ValueError(
@@ -415,6 +426,8 @@ def run_target_adaptation(
     use_bca = ablation != "bca"
     use_prior_history = ablation != "ema"
     use_residual = ablation != "residual"
+    use_minority_weights = ablation != "minority"
+    anchor_space = "task" if ablation == "decouple" else "sensitive"
 
     device = args.device
     source_model.eval()
@@ -435,7 +448,17 @@ def run_target_adaptation(
         source_probabilities = source_classifier_probabilities(source_logits.detach())
 
     source_class_prototypes = _source_class_prototypes(knowledge, device)
-    source_sensitive_anchors = _source_sensitive_anchors(knowledge, device)
+    knowledge_anchor_space = str(knowledge.get("anchor_space", "sensitive"))
+    if knowledge_anchor_space != anchor_space:
+        raise ValueError(
+            "Source anchor space mismatch: ablation={!r} requires {!r} anchors, "
+            "but the knowledge package contains {!r} anchors".format(
+                ablation,
+                anchor_space,
+                knowledge_anchor_space,
+            )
+        )
+    source_group_anchors = _source_group_anchors(knowledge, device)
     class_prototypes = source_class_prototypes.detach().clone()
 
     discounted_evidence = torch.zeros(len(CLASS_IDS), device=device)
@@ -493,24 +516,28 @@ def run_target_adaptation(
     )
     effective_prior_discount = prior_discount if use_prior_history else 0.0
 
-    # Eq. (12): task confidence is read from the frozen source classifier,
-    # while the pseudo-sensitive group is matched once in the decoupled
-    # sensitive space and then held fixed for all adaptation rounds.
+    # Eq. (12): task confidence is read from the frozen source classifier.
+    # The full method recovers groups in the decoupled sensitive space; the
+    # decouple ablation deliberately uses the fairness-aligned task space.
     source_confidence, pseudo_labels = source_probabilities.max(dim=1)
     source_confidence = source_confidence.detach()
+    group_features = features if ablation == "decouple" else sensitive_features
     pseudo_sensitive = infer_pseudo_sensitive(
-        sensitive_features,
-        source_sensitive_anchors,
+        group_features,
+        source_group_anchors,
     )
     selected = select_high_confidence(source_confidence, threshold)
 
     print(
         "[EMBER] ablation={} rounds={} residual_inner={} "
-        "residual={} prototype_average=True prior={} prior_history={}".format(
+        "residual={} group_weights={} anchors={} prototype_average=True "
+        "prior={} prior_history={}".format(
             ablation,
             epochs,
             residual_inner_steps,
             use_residual,
+            "inverse-frequency" if use_minority_weights else "uniform",
+            anchor_space,
             "count-aware" if use_bca else "disabled",
             "discounted" if use_prior_history else "current-round-only",
         )
@@ -520,15 +547,20 @@ def run_target_adaptation(
         residual_nll = _graph_zero(class_prototypes)
         residual_l2 = _graph_zero(class_prototypes)
         if use_residual:
-            inverse_group_weights, _ = minority_aware_weights(
-                pseudo_labels,
-                pseudo_sensitive,
-                selected,
-                group_pseudocount,
-            )
+            if use_minority_weights:
+                group_weights, _ = minority_aware_weights(
+                    pseudo_labels,
+                    pseudo_sensitive,
+                    selected,
+                    group_pseudocount,
+                )
+            else:
+                # Ablate Eq. (14) only: confidence weighting, residual
+                # optimization and cumulative prototype averaging all remain.
+                group_weights = torch.ones_like(source_confidence)
             step_residuals = nn.Parameter(torch.zeros_like(class_prototypes))
             step_optimizer = torch.optim.Adam([step_residuals], lr=adapt_lr)
-            node_weights = source_confidence * inverse_group_weights
+            node_weights = source_confidence * group_weights
             normalizer = node_weights[selected].sum()
 
             for _ in range(residual_inner_steps):
@@ -569,9 +601,7 @@ def run_target_adaptation(
                     class_selected = selected & (pseudo_labels == class_id)
                     if not class_selected.any():
                         continue
-                    # Eq. (16) remains active in every target-side variant.
-                    # Variant 3 now ablates the prior history in Eq. (17), not
-                    # this cumulative prototype average.
+                    # Eq. (16) remains active for all five paper ablations.
                     class_update_counts[class_id] += 1
                     mu = 1.0 / float(
                         class_update_counts[class_id].item() + 1

@@ -55,6 +55,12 @@ methods:
     enabled: true
   - name: GraphCTA
     enabled: true
+  - name: SHOT
+    enabled: true
+  - name: NRC
+    enabled: true
+  - name: GALA
+    enabled: true
 
 labels:
   groups:
