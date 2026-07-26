@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Plot SFFGNN parameter-analysis results with a polished publication style.
+"""Plot EMBER parameter-analysis results with a polished publication style.
 
 The figures use the supplied scientific colour references, compact typography,
-subtle grids, and legends outside the data region.  Beta-gamma grids are
-written as shaded 3D bars.
+subtle grids, and consistent two-dimensional heatmaps for the three paper
+parameter groups.
 
 The input is the aggregate ``summary.csv`` written by
-``SFFGNN/parameter/run.py``.  All generated figures are PDF files with
+``EMBER/parameter/run.py``.  All generated figures are PDF files with
 embedded TrueType fonts.
 """
 
@@ -28,12 +28,26 @@ from matplotlib.ticker import FormatStrFormatter, MaxNLocator
 from matplotlib.transforms import Bbox
 
 
-GROUPS = (
+PAPER_GROUPS = ("beta_gamma", "nu0_delta", "eta_omega")
+SUPPLEMENTARY_GROUPS = (
     "delta",
     "tau_eta",
-    "beta_gamma",
     "lambda_residual_l2",
     "adapt_epochs",
+)
+GROUPS = PAPER_GROUPS + SUPPLEMENTARY_GROUPS
+
+PAIR_PARAMETERS = {
+    "beta_gamma": ("lambda_coord", "lambda_fair"),
+    "nu0_delta": ("tau_c", "group_pseudocount"),
+    "eta_omega": ("prior_discount", "lambda_pi"),
+}
+
+HEATMAP_METRICS = (
+    ("target_after_acc", "acc", "Accuracy", False),
+    ("target_after_auc", "auc", "ROC-AUC", False),
+    ("target_after_dp", "dp", "DP", True),
+    ("target_after_eo", "eo", "EO", True),
 )
 
 DATASET_LABELS = {
@@ -47,6 +61,8 @@ PARAMETER_LABELS = {
     "tau_c": r"Confidence threshold $\delta$",
     "proto_temp": r"Prototype temperature $\tau$",
     "lambda_pi": r"Prior strength $\eta$",
+    "prior_discount": r"Prior discount $\omega$",
+    "group_pseudocount": r"Group pseudocount $\nu_0$",
     "lambda_fair": r"Fairness weight $\beta$",
     "lambda_coord": r"Coordination weight $\gamma$",
     "lambda_residual_l2": r"Residual regularization $\lambda$",
@@ -58,6 +74,8 @@ NUMERIC_COLUMNS = {
     "tau_c",
     "proto_temp",
     "lambda_pi",
+    "prior_discount",
+    "group_pseudocount",
     "lambda_fair",
     "lambda_coord",
     "lambda_residual_l2",
@@ -156,8 +174,26 @@ def load_summary(path: Path) -> List[Dict[str, object]]:
         raise ValueError(
             "Summary contains beta-gamma rows outside paper Section 3.3's "
             "gamma range [0, 1]. Re-aggregate the raw results with "
-            "SFFGNN/parameter/run.py before plotting."
+            "EMBER/parameter/run.py before plotting."
         )
+    invalid_nu0_rows = [
+        row
+        for row in rows
+        if row.get("group") == "nu0_delta"
+        and _finite(row.get("group_pseudocount"))
+        and float(row["group_pseudocount"]) <= 0.0
+    ]
+    if invalid_nu0_rows:
+        raise ValueError("Summary contains nu0-delta rows with non-positive nu_0.")
+    invalid_omega_rows = [
+        row
+        for row in rows
+        if row.get("group") == "eta_omega"
+        and _finite(row.get("prior_discount"))
+        and not 0.0 <= float(row["prior_discount"]) < 1.0
+    ]
+    if invalid_omega_rows:
+        raise ValueError("Summary contains eta-omega rows with omega outside [0, 1).")
     return rows
 
 
@@ -592,6 +628,7 @@ def plot_parameter_heatmap(
     y_key: str,
     metric: str,
     metric_label: str,
+    lower_is_better: bool,
     output_path: Path,
 ) -> None:
     """Draw a readable two-dimensional map of a parameter grid."""
@@ -652,7 +689,8 @@ def plot_parameter_heatmap(
             )
 
     colorbar = fig.colorbar(image, ax=axis, fraction=0.047, pad=0.035)
-    colorbar.set_label(f"{metric_label} (lower is better)", fontsize=50)
+    direction = "lower is better" if lower_is_better else "higher is better"
+    colorbar.set_label(f"{metric_label} ({direction})", fontsize=50)
     colorbar.outline.set_visible(False)
     colorbar.ax.tick_params(labelsize=45, length=2)
     fig.tight_layout(pad=3.0)
@@ -744,7 +782,22 @@ def generate_figures(
             if not group_rows:
                 continue
 
-            if group == "delta":
+            if group in PAIR_PARAMETERS:
+                x_key, y_key = PAIR_PARAMETERS[group]
+                for metric, suffix, label, lower_is_better in HEATMAP_METRICS:
+                    path = output_dir / f"{group}_{dataset}_{suffix}.pdf"
+                    plot_parameter_heatmap(
+                        group_rows,
+                        dataset,
+                        x_key,
+                        y_key,
+                        metric,
+                        label,
+                        lower_is_better,
+                        path,
+                    )
+                    generated.append(path)
+            elif group == "delta":
                 path = output_dir / f"delta_{dataset}.pdf"
                 plot_single_parameter(group_rows, dataset, group, "tau_c", path)
                 generated.append(path)
@@ -786,35 +839,12 @@ def generate_figures(
                     eo_path,
                 )
                 generated.extend((dp_path, eo_path))
-            elif group == "beta_gamma":
-                dp_3d_path = output_dir / f"beta_gamma_{dataset}_dp.pdf"
-                eo_3d_path = output_dir / f"beta_gamma_{dataset}_eo.pdf"
-                plot_3d_fairness_bars(
-                    group_rows,
-                    dataset,
-                    "lambda_coord",
-                    "lambda_fair",
-                    "target_after_dp",
-                    "DP",
-                    dp_3d_path,
-                )
-                plot_3d_fairness_bars(
-                    group_rows,
-                    dataset,
-                    "lambda_coord",
-                    "lambda_fair",
-                    "target_after_eo",
-                    "EO",
-                    eo_3d_path,
-                )
-                generated.extend((dp_3d_path, eo_3d_path))
-
     return [path for path in generated if path.exists()]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Plot SFFGNN parameter-analysis summary data."
+        description="Plot EMBER parameter-analysis summary data."
     )
     parser.add_argument("--summary", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)

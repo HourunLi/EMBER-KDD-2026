@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
-"""Run and plot the EMBER/SFFGNN parameter-analysis experiments.
+"""Run and plot the three EMBER parameter-analysis experiments.
 
-The runner performs the three parameter groups recommended for the paper:
+Each paper group is a two-parameter sweep tied to one technical module:
 
-``delta``
-    Confidence threshold ``tau_c`` (paper notation: delta).
-``tau_eta``
-    Prototype temperature ``proto_temp`` and Bayesian prior strength
-    ``lambda_pi`` (paper notation: tau and eta).
 ``beta_gamma``
-    Source fairness and coordination weights ``lambda_fair`` and
-    ``lambda_coord`` (paper notation: beta and gamma).
+    Source-domain fairness coordination (Section 3.3): ``lambda_fair``
+    (beta) by ``lambda_coord`` (gamma).
+``nu0_delta``
+    Minority-group-aware residual evolution (Section 3.4):
+    ``group_pseudocount`` (nu_0) by ``tau_c`` (delta).
+``eta_omega``
+    Bayesian test-time correction (Section 3.5): ``lambda_pi`` (eta) by
+    ``prior_discount`` (omega).
 
-Two supplementary one-dimensional groups are also available:
-``lambda_residual_l2`` and ``adapt_epochs``.
+Legacy and supplementary scans remain available for appendix experiments,
+but a default run contains only the three paper groups above.
 
 Every subprocess writes one raw JSON result.  This script adds experiment
 metadata, supports safe resume, aggregates repeated seeds into CSV/JSON, and
 then calls ``pilot/parameter_analysis.py`` to generate polished PDF figures
-under ``SFFGNN/parameter/results``.
+under ``EMBER/parameter/results``.
 
 Typical usage
 -------------
@@ -26,9 +27,9 @@ Run the three paper groups on four datasets with four GPUs::
 
     python parameter/run.py --gpus 0 1 2 3
 
-Run only the target-stage scans on GermanA and Pokec::
+Run only the two target-stage scans on GermanA and Pokec::
 
-    python parameter/run.py --groups delta tau_eta \
+    python parameter/run.py --groups nu0_delta eta_omega \
         --datasets germanA pokec --gpus 0 1
 
 Regenerate summaries and figures without launching experiments::
@@ -61,16 +62,25 @@ from typing import Dict, List, Mapping, MutableMapping, Sequence, Tuple
 # the file; keeping them here also makes a plain ``python parameter/run.py``
 # reproducible.
 # ---------------------------------------------------------------------------
-DEFAULT_GROUPS = ("delta", "tau_eta", "beta_gamma")
-DEFAULT_DATASETS = ("germanA",)
+PAPER_GROUPS = ("beta_gamma", "nu0_delta", "eta_omega")
+SUPPLEMENTARY_GROUPS = (
+    "delta",
+    "tau_eta",
+    "lambda_residual_l2",
+    "adapt_epochs",
+)
+DEFAULT_GROUPS = PAPER_GROUPS
+DEFAULT_DATASETS = ("bailA", "germanA", "pokec", "syn")
 DEFAULT_GPU_IDS = (0, 2, 3, 4, 5, 6, 7)
 DEFAULT_RUN_SEEDS = (1111, 2222, 3333, 4444, 5555)
 
-DEFAULT_DELTA_VALUES = (0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95)
+DEFAULT_DELTA_VALUES = (0.5, 0.6, 0.7, 0.8, 0.9)
 DEFAULT_TAU_VALUES = (0.1, 0.25, 0.5, 0.75, 1.0)
 DEFAULT_ETA_VALUES = (0.0, 0.25, 0.5, 0.75, 1.0)
-DEFAULT_BETA_VALUES = (0.0, 2.0, 4.0, 8.0, 16.0)
+DEFAULT_BETA_VALUES = (0.0, 1.0, 2.0, 4.0, 8.0, 16.0)
 DEFAULT_GAMMA_VALUES = (0.0, 0.25, 0.5, 0.75, 1.0)
+DEFAULT_NU0_VALUES = (0.1, 1.0, 10.0, 100.0, 1000.0)
+DEFAULT_OMEGA_VALUES = (0.0, 0.3, 0.6, 0.8, 0.9, 0.99)
 DEFAULT_RESIDUAL_L2_VALUES = (0.0, 1e-5, 1e-4, 1e-3, 1e-2)
 DEFAULT_ADAPT_EPOCH_VALUES = (1, 10, 25, 50, 100, 150)
 
@@ -78,13 +88,7 @@ GPU_MAX_MEMORY_MB = 10000
 GPU_MAX_UTILIZATION = 50
 GPU_POLL_SECONDS = 30
 
-GROUPS = (
-    "delta",
-    "tau_eta",
-    "beta_gamma",
-    "lambda_residual_l2",
-    "adapt_epochs",
-)
+GROUPS = PAPER_GROUPS + SUPPLEMENTARY_GROUPS
 
 DATASET_DOMAINS = {
     "bailA": ("_2", "_1"),
@@ -97,6 +101,8 @@ PARAMETER_COLUMNS = (
     "tau_c",
     "proto_temp",
     "lambda_pi",
+    "prior_discount",
+    "group_pseudocount",
     "lambda_fair",
     "lambda_coord",
     "lambda_residual_l2",
@@ -104,9 +110,9 @@ PARAMETER_COLUMNS = (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SFFGNN_DIR = SCRIPT_DIR.parent
-PROJECT_ROOT = SFFGNN_DIR.parent
-MAIN_SCRIPT = SFFGNN_DIR / "main.py"
+EMBER_DIR = SCRIPT_DIR.parent
+PROJECT_ROOT = EMBER_DIR.parent
+MAIN_SCRIPT = EMBER_DIR / "main.py"
 PLOT_SCRIPT = PROJECT_ROOT / "pilot" / "parameter_analysis.py"
 DEFAULT_RESULTS_DIR = SCRIPT_DIR / "results"
 PRINT_LOCK = threading.Lock()
@@ -190,6 +196,24 @@ def make_specs(args: argparse.Namespace) -> List[ExperimentSpec]:
             )
             for beta in args.beta_values
             for gamma in args.gamma_values
+        )
+    if "nu0_delta" in selected:
+        specs.extend(
+            ExperimentSpec(
+                "nu0_delta",
+                (("group_pseudocount", nu0), ("tau_c", delta)),
+            )
+            for nu0 in args.nu0_values
+            for delta in args.delta_values
+        )
+    if "eta_omega" in selected:
+        specs.extend(
+            ExperimentSpec(
+                "eta_omega",
+                (("lambda_pi", eta), ("prior_discount", omega)),
+            )
+            for eta in args.eta_values
+            for omega in args.omega_values
         )
     if "lambda_residual_l2" in selected:
         specs.extend(
@@ -442,7 +466,7 @@ def run_experiment(
     environment["PYTHONIOENCODING"] = "utf-8"
     completed = subprocess.run(
         command,
-        cwd=SFFGNN_DIR,
+        cwd=EMBER_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         text=True,
@@ -781,17 +805,40 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("GPU ids must be non-negative, or -1 for CPU")
     if -1 in args.gpus and len(args.gpus) != 1:
         raise ValueError("CPU id -1 cannot be combined with GPU ids")
-    if any(value <= 0 for value in args.tau_values):
+    if any(not math.isfinite(value) or value <= 0 for value in args.tau_values):
         raise ValueError("Prototype temperatures must be positive")
-    if any(value < 0 for value in args.eta_values):
-        raise ValueError("Prior strengths must be non-negative")
-    if any(value < 0 or value > 1 for value in args.delta_values):
+    if any(
+        not math.isfinite(value) or value < 0 or value > 1
+        for value in args.eta_values
+    ):
+        raise ValueError("Prior strengths eta must lie in [0, 1]")
+    if any(
+        not math.isfinite(value) or value < 0 or value > 1
+        for value in args.delta_values
+    ):
         raise ValueError("Confidence thresholds must lie in [0, 1]")
-    if any(value < 0 or value > 1 for value in args.gamma_values):
+    if any(
+        not math.isfinite(value) or value < 0 or value > 1
+        for value in args.gamma_values
+    ):
         raise ValueError(
             "Coordination strengths gamma must lie in [0, 1]; "
             "gamma=1 is the full fairness update"
         )
+    if any(not math.isfinite(value) or value < 0 for value in args.beta_values):
+        raise ValueError("Fairness strengths beta must be non-negative")
+    if any(not math.isfinite(value) or value <= 0 for value in args.nu0_values):
+        raise ValueError("Group pseudocounts nu_0 must be positive")
+    if any(
+        not math.isfinite(value) or value < 0 or value >= 1
+        for value in args.omega_values
+    ):
+        raise ValueError("Prior discounts omega must lie in [0, 1)")
+    if any(
+        not math.isfinite(value) or value < 0
+        for value in args.residual_l2_values
+    ):
+        raise ValueError("Residual L2 strengths must be non-negative")
     if any(value < 1 for value in args.adapt_epoch_values):
         raise ValueError(
             "adapt_epochs must be at least 1; use target_before metrics as the T=0 reference"
@@ -802,7 +849,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run SFFGNN parameter analysis and generate publication-ready PDFs."
+        description="Run EMBER parameter analysis and generate publication-ready PDFs."
     )
     parser.add_argument(
         "--groups",
@@ -834,11 +881,27 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_RESULTS_DIR,
     )
-    parser.add_argument("--delta-values", nargs="+", type=float, default=list(DEFAULT_DELTA_VALUES))
-    parser.add_argument("--tau-values", nargs="+", type=float, default=list(DEFAULT_TAU_VALUES))
-    parser.add_argument("--eta-values", nargs="+", type=float, default=list(DEFAULT_ETA_VALUES))
-    parser.add_argument("--beta-values", nargs="+", type=float, default=list(DEFAULT_BETA_VALUES))
-    parser.add_argument("--gamma-values", nargs="+", type=float, default=list(DEFAULT_GAMMA_VALUES))
+    parser.add_argument(
+        "--delta-values", nargs="+", type=float, default=list(DEFAULT_DELTA_VALUES)
+    )
+    parser.add_argument(
+        "--tau-values", nargs="+", type=float, default=list(DEFAULT_TAU_VALUES)
+    )
+    parser.add_argument(
+        "--eta-values", nargs="+", type=float, default=list(DEFAULT_ETA_VALUES)
+    )
+    parser.add_argument(
+        "--beta-values", nargs="+", type=float, default=list(DEFAULT_BETA_VALUES)
+    )
+    parser.add_argument(
+        "--gamma-values", nargs="+", type=float, default=list(DEFAULT_GAMMA_VALUES)
+    )
+    parser.add_argument(
+        "--nu0-values", nargs="+", type=float, default=list(DEFAULT_NU0_VALUES)
+    )
+    parser.add_argument(
+        "--omega-values", nargs="+", type=float, default=list(DEFAULT_OMEGA_VALUES)
+    )
     parser.add_argument(
         "--residual-l2-values",
         nargs="+",
@@ -856,7 +919,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="common SFFGNN override applied before the varied parameters",
+        help="common EMBER override applied before the varied parameters",
     )
     parser.add_argument("--target-seed-offset", type=int, default=100000)
     parser.add_argument("--gpu-max-memory-mb", type=int, default=GPU_MAX_MEMORY_MB)
@@ -904,7 +967,7 @@ def main() -> None:
     if not args.plot_only and not args.aggregate_only:
         write_manifest(args, specs, common_overrides)
         if not MAIN_SCRIPT.exists():
-            raise FileNotFoundError(f"Missing SFFGNN entry point: {MAIN_SCRIPT}")
+            raise FileNotFoundError(f"Missing EMBER entry point: {MAIN_SCRIPT}")
         if not args.skip_gpu_wait:
             for gpu_id in args.gpus:
                 if gpu_id >= 0:
