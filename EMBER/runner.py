@@ -17,6 +17,7 @@ from utils import fair_metric, seed_everything
 
 try:
     from .adaptation import (
+        ABLATION_MODES,
         build_initial_adaptation_state,
         class_conditional_mmd_loss,
         predict_target_proba,
@@ -24,6 +25,7 @@ try:
     )
 except ImportError:
     from adaptation import (
+        ABLATION_MODES,
         build_initial_adaptation_state,
         class_conditional_mmd_loss,
         predict_target_proba,
@@ -34,6 +36,10 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 from visualization.export_utils import save_visualization_embeddings
+
+
+SOURCE_KNOWLEDGE_VERSION = 6
+PACKAGE_ONLY_ABLATIONS = frozenset({"decouple", "groupinit"})
 
 
 def _init_fair_gnn(args):
@@ -108,19 +114,21 @@ def _normalized_masked_mean(features, mask, name):
     return F.normalize(mean, p=2, dim=0, eps=1e-12)
 
 
-def extract_source_knowledge(data, model):
+def extract_source_knowledge(data, model, ablation="full"):
     """
     Export the source-free package defined by Eqs. (10)-(11).
 
     p_y   : {0: [D], 1: [D]}
         Group-balanced class prototype.  We first compute one normalized
         prototype for every (y,s) group, then average sensitive groups equally
-        within each class, using all labeled nodes in V^so.
+        within each class, using all labeled nodes in V^so.  ``groupinit``
+        replaces this with the ordinary per-class node mean.
 
             p_y^S = Norm((1 / |S|) * sum_s p_{y,s}^S)
 
     a_g   : {0: [D], 1: [D]}
         Class-agnostic group anchors in the decoupled sensitive space.
+        ``decouple`` deliberately constructs them in the task space instead.
 
     The exported model retains both independent encoders and the task classifier,
     while the source-only sensitive classifier is discarded.
@@ -128,6 +136,12 @@ def extract_source_knowledge(data, model):
     The result contains ``knowledge_version``, ``p_y``, ``a_g``, and the
     exported source-model state.
     """
+    ablation = str(ablation)
+    if ablation not in ABLATION_MODES:
+        raise ValueError(
+            f"ablation must be one of {ABLATION_MODES}; got {ablation!r}"
+        )
+
     model.eval()
     with torch.no_grad():
         task_view, sensitive_view = model.encode_views(
@@ -140,30 +154,40 @@ def extract_source_knowledge(data, model):
     y = data.y.cpu().long()
     s = data.sens_labels.cpu().long()
 
+    use_group_balanced_initialization = ablation != "groupinit"
     p_y = {}
     for yv in (0, 1):
-        group_prototypes = []
-        for sv in (0, 1):
-            mask = (y == yv) & (s == sv)
-            group_prototypes.append(
-                _normalized_masked_mean(
-                    task_view,
-                    mask,
-                    f"task prototype for class={yv}, group={sv}",
+        if use_group_balanced_initialization:
+            group_prototypes = []
+            for sv in (0, 1):
+                mask = (y == yv) & (s == sv)
+                group_prototypes.append(
+                    _normalized_masked_mean(
+                        task_view,
+                        mask,
+                        f"task prototype for class={yv}, group={sv}",
+                    )
                 )
+            p_y[yv] = _normalized_masked_mean(
+                torch.stack(group_prototypes),
+                torch.ones(2, dtype=torch.bool),
+                f"group-balanced task prototype for class={yv}",
             )
-        p_y[yv] = _normalized_masked_mean(
-            torch.stack(group_prototypes),
-            torch.ones(2, dtype=torch.bool),
-            f"group-balanced task prototype for class={yv}",
-        )
+        else:
+            p_y[yv] = _normalized_masked_mean(
+                task_view,
+                y == yv,
+                f"node-mean task prototype for class={yv}",
+            )
 
+    anchor_space = "task" if ablation == "decouple" else "sensitive"
+    anchor_features = task_view if anchor_space == "task" else sensitive_view
     a_g = {}
     for sv in (0, 1):
         a_g[sv] = _normalized_masked_mean(
-            sensitive_view,
+            anchor_features,
             s == sv,
-            f"sensitive anchor for group={sv}",
+            f"{anchor_space} anchor for group={sv}",
         )
 
     exported_state = {
@@ -172,7 +196,13 @@ def extract_source_knowledge(data, model):
         if not key.startswith("sens_head.")
     }
     return {
-        "knowledge_version": 5,
+        "knowledge_version": SOURCE_KNOWLEDGE_VERSION,
+        "anchor_space": anchor_space,
+        "prototype_initialization": (
+            "group_balanced"
+            if use_group_balanced_initialization
+            else "node_mean"
+        ),
         "p_y": {key: value.cpu() for key, value in p_y.items()},
         "a_g": {key: value.cpu() for key, value in a_g.items()},
         "model_state": exported_state,
@@ -181,6 +211,10 @@ def extract_source_knowledge(data, model):
 
 def _get_checkpoint_name(args, run_idx):
     """Return a short, deterministic name for the complete source config."""
+    ablation = str(getattr(args, 'ablation', 'full'))
+    # Only MetaAlign changes source optimization.  Decouple and GroupInit
+    # reuse the identical full source model and rebuild only the exported bank.
+    source_training = 'metaalign' if ablation == 'metaalign' else 'full'
     name_parts = [
         f"ds={args.dataset}",
         f"src={args.inid}",
@@ -194,7 +228,7 @@ def _get_checkpoint_name(args, run_idx):
         f"wd={args.lr2_reg}",
         f"drop={args.dropout}",
         f"lfair={args.lambda_fair}",
-        f"srcmeta={getattr(args, 'ablation', 'full') != 'metaalign'}",
+        f"sourcetraining={source_training}",
         f"metalr={getattr(args, 'meta_lr', 0.01)}",
         f"lcoord={getattr(args, 'lambda_coord', 1.0)}",
         f"lsen={getattr(args, 'lambda_sen', 1.0)}",
@@ -207,7 +241,7 @@ def _get_checkpoint_name(args, run_idx):
         f"srcmmdchunk={getattr(args, 'mmd_chunk_size', 1024)}",
         "srcscope=all-labeled-vso",
         "architecture=dual-encoder-v1",
-        "knowledge=ember-bank-v5",
+        f"knowledge=ember-bank-v{SOURCE_KNOWLEDGE_VERSION}",
         f"run={run_idx}",
         f"seed={args.seed}",
     ]
@@ -254,7 +288,10 @@ def _load_checkpoint(args, run_idx):
     print(f'[Checkpoint] loading ← {path}')
     ckpt = torch.load(path, map_location=args.device)
     knowledge = ckpt.get('knowledge', {})
-    if int(knowledge.get('knowledge_version', 0)) < 5 or 'a_g' not in knowledge:
+    if (
+        int(knowledge.get('knowledge_version', 0)) < SOURCE_KNOWLEDGE_VERSION
+        or 'a_g' not in knowledge
+    ):
         print('[Checkpoint] obsolete Source knowledge format; retraining required.')
         return None, None
     model = FairGNN(
@@ -404,6 +441,14 @@ def train_and_adapt(args, source_data, target_data):
 
         if skip_training:
             print(f"[Run {run_idx}] Loaded checkpoint, skipping training.")
+            if not source_only:
+                # Rebuild the requested bank from the shared frozen source
+                # model, so package-only ablations never reuse another bank.
+                knowledge = extract_source_knowledge(
+                    source_data,
+                    model,
+                    ablation=getattr(args, 'ablation', 'full'),
+                )
         else:
             if checkpoint_enabled:
                 print(f"[Run {run_idx}] No checkpoint found, training from scratch.")
@@ -589,9 +634,27 @@ def train_and_adapt(args, source_data, target_data):
                           f"Total={loss.item():.4f}")
 
             if not source_only:
-                knowledge = extract_source_knowledge(source_data, model)
+                knowledge = extract_source_knowledge(
+                    source_data,
+                    model,
+                    ablation=getattr(args, 'ablation', 'full'),
+                )
                 if not getattr(args, 'disable_checkpoint_save', False):
-                    _save_checkpoint(args, run_idx, model, knowledge)
+                    checkpoint_knowledge = knowledge
+                    if getattr(args, 'ablation', 'full') in PACKAGE_ONLY_ABLATIONS:
+                        # The shared checkpoint stores the canonical bank;
+                        # this run continues with its ablated bank in memory.
+                        checkpoint_knowledge = extract_source_knowledge(
+                            source_data,
+                            model,
+                            ablation='full',
+                        )
+                    _save_checkpoint(
+                        args,
+                        run_idx,
+                        model,
+                        checkpoint_knowledge,
+                    )
 
         (accs, auc_rocs, tmp_parity, tmp_equality,
          diagnostics) = evaluate_per_class(args, source_data, model)

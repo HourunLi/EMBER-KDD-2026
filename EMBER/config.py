@@ -6,6 +6,7 @@ import sys
 import torch
 import yaml
 
+from adaptation import ABLATION_MODES
 from utils import Logger
 
 
@@ -183,7 +184,7 @@ parser.add_argument('--prior_pseudocount', type=float, default=1.0)  # n_0 in Eq
 parser.add_argument('--prior_discount', type=float, default=0.9)  # omega in Eq. (17)
 parser.add_argument('--proto_temp',   type=float, default=0.1)   # softmax temperature for posterior sharpening
 parser.add_argument('--ablation', type=str,
-                    choices=['full', 'metaalign', 'bca', 'ema', 'residual'],
+                    choices=ABLATION_MODES,
                     default='full')
 
 # misc

@@ -1,10 +1,8 @@
-"""Run and aggregate the four EMBER ablation variants.
+"""Run the five paper-aligned EMBER ablations and aggregate their metrics.
 
-Each ablation has an explicit runner so its meaning is visible at the call
-site. ``run_all_ablations`` is the single batch entry point used for every
-dataset/seed task. Variant 3 removes the historical part of the prior update
-in Eq. (17) (equivalently, omega=0); it does not disable the cumulative
-prototype average in Eq. (16).
+Each variant removes exactly one mechanism while retaining the rest of EMBER:
+decoupled group recovery, meta-coordination, minority-aware update weighting,
+Bayesian prior correction, or group-balanced prototype initialization.
 """
 
 from __future__ import annotations
@@ -19,13 +17,13 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 
 # ---------------------------------------------------------------------------
 # Edit these defaults, then run: python ablation/run.py
 # ---------------------------------------------------------------------------
-EXPERIMENT = "metaalign"  # metaalign | bca | ema | residual | all
+EXPERIMENT = "all"  # decouple | metaalign | minority | bca | groupinit | all
 GPU_IDS = [0, 2, 4, 6, 7]
 DATASETS = ["bailA"]
 RUN_SEEDS = [1111, 2222, 3333, 4444, 5555]
@@ -44,45 +42,87 @@ DATASET_DOMAINS = {
 
 @dataclass(frozen=True)
 class AblationSpec:
-    """Stable identifiers and reporting metadata for one ablation."""
+    """Execution and paper-mapping metadata for one single-module ablation."""
 
     name: str
     paper_variant: str
     variant: str
+    paper_section: str
+    equation: str
+    challenge: str
     removed_module: str
+    intervention: str
 
 
-METAALIGN_SPEC = AblationSpec(
-    name="metaalign",
-    paper_variant="var1",
-    variant="wo_metaalign",
-    removed_module="meta-coordinated fair alignment",
-)
-BCA_SPEC = AblationSpec(
-    name="bca",
-    paper_variant="var2",
-    variant="wo_bca",
-    removed_module="Bayesian prior correction",
-)
-EMA_SPEC = AblationSpec(
-    name="ema",
-    paper_variant="var3",
-    variant="wo_ema",
-    removed_module=(
-        "discounted prior-evidence history in Eq. (17) "
-        "(omega=0; current-round prior retained)"
+ABLATION_SPECS: Tuple[AblationSpec, ...] = (
+    AblationSpec(
+        name="decouple",
+        paper_variant="var1",
+        variant="wo_decouple",
+        paper_section="3.2",
+        equation="Eqs. (3)-(5), (11)-(12)",
+        challenge="1(b)",
+        removed_module="decoupled sensitive representation for group recovery",
+        intervention=(
+            "build and match group anchors in task space z instead of "
+            "sensitive space e"
+        ),
+    ),
+    AblationSpec(
+        name="metaalign",
+        paper_variant="var2",
+        variant="wo_metaalign",
+        paper_section="3.3",
+        equation="Eqs. (7)-(9)",
+        challenge="1(a)",
+        removed_module="meta-coordinated fair alignment",
+        intervention=(
+            "set coordination strength gamma to zero while retaining "
+            "class-conditional MMD"
+        ),
+    ),
+    AblationSpec(
+        name="minority",
+        paper_variant="var3",
+        variant="wo_minority",
+        paper_section="3.4",
+        equation="Eq. (14)",
+        challenge="2(a)",
+        removed_module="minority-aware inverse-frequency update weighting",
+        intervention=(
+            "use uniform group weights while retaining confidence weighting "
+            "and residual evolution"
+        ),
+    ),
+    AblationSpec(
+        name="bca",
+        paper_variant="var4",
+        variant="wo_bca",
+        paper_section="3.5",
+        equation="Eqs. (17)-(18)",
+        challenge="2(b)",
+        removed_module="Bayesian target-prior correction",
+        intervention=(
+            "set prior strength eta to zero and predict from prototype "
+            "likelihoods"
+        ),
+    ),
+    AblationSpec(
+        name="groupinit",
+        paper_variant="var5",
+        variant="wo_groupinit",
+        paper_section="3.4",
+        equation="Eq. (10)",
+        challenge="2(a)",
+        removed_module="group-balanced source prototype initialization",
+        intervention=(
+            "initialize each class prototype from its unbalanced source-node "
+            "mean"
+        ),
     ),
 )
-RESIDUAL_SPEC = AblationSpec(
-    name="residual",
-    paper_variant="var4",
-    variant="wo_residual",
-    removed_module="minority-aware residual evolution",
-)
-
-ABLATION_SPECS: Dict[str, AblationSpec] = {
-    spec.name: spec
-    for spec in (METAALIGN_SPEC, BCA_SPEC, EMA_SPEC, RESIDUAL_SPEC)
+ABLATION_BY_NAME: Dict[str, AblationSpec] = {
+    spec.name: spec for spec in ABLATION_SPECS
 }
 
 
@@ -101,12 +141,12 @@ def print_status(message: str) -> None:
 
 def variant_specs() -> List[AblationSpec]:
     """Return the variants selected by ``EXPERIMENT`` in paper order."""
-    ablation_names = tuple(ABLATION_SPECS)
+    ablation_names = tuple(ABLATION_BY_NAME)
     if EXPERIMENT not in {*ablation_names, "all"}:
         raise ValueError(f"Unknown EXPERIMENT: {EXPERIMENT}")
     if EXPERIMENT == "all":
-        return [ABLATION_SPECS[name] for name in ablation_names]
-    return [ABLATION_SPECS[EXPERIMENT]]
+        return list(ABLATION_SPECS)
+    return [ABLATION_BY_NAME[EXPERIMENT]]
 
 
 def gpu_status(gpu_id: int) -> Tuple[int, int]:
@@ -187,74 +227,12 @@ def run_variant(
         raise RuntimeError(f"Missing result file: {output_path}")
 
 
-def run_metaalign_ablation(
-    gpu_id: int,
-    dataset: str,
-    run_index: int,
-    seed: int,
-) -> None:
-    """Variant 1: remove source meta-coordinated fair alignment."""
-    run_variant(gpu_id, dataset, run_index, seed, METAALIGN_SPEC)
-
-
-def run_bca_ablation(
-    gpu_id: int,
-    dataset: str,
-    run_index: int,
-    seed: int,
-) -> None:
-    """Variant 2: remove the Bayesian prior correction."""
-    run_variant(gpu_id, dataset, run_index, seed, BCA_SPEC)
-
-
-def run_ema_ablation(
-    gpu_id: int,
-    dataset: str,
-    run_index: int,
-    seed: int,
-) -> None:
-    """Variant 3: set omega=0 in Eq. (17), removing prior history only."""
-    run_variant(gpu_id, dataset, run_index, seed, EMA_SPEC)
-
-
-def run_residual_ablation(
-    gpu_id: int,
-    dataset: str,
-    run_index: int,
-    seed: int,
-) -> None:
-    """Variant 4: remove minority-aware residual prototype evolution."""
-    run_variant(gpu_id, dataset, run_index, seed, RESIDUAL_SPEC)
-
-
-ABLATION_RUNNERS: Dict[str, Callable[[int, str, int, int], None]] = {
-    "metaalign": run_metaalign_ablation,
-    "bca": run_bca_ablation,
-    "ema": run_ema_ablation,
-    "residual": run_residual_ablation,
-}
-
-
-def run_all_ablations(
-    gpu_id: int,
-    dataset: str,
-    run_index: int,
-    seed: int,
-) -> None:
-    """Batch entry point: invoke all four ablation methods for one task."""
-    run_metaalign_ablation(gpu_id, dataset, run_index, seed)
-    run_bca_ablation(gpu_id, dataset, run_index, seed)
-    run_ema_ablation(gpu_id, dataset, run_index, seed)
-    run_residual_ablation(gpu_id, dataset, run_index, seed)
-
-
 def run_task(gpu_id: int, task: Tuple[str, int, int]) -> None:
+    """Run the selected single-module ablations for one dataset/seed pair."""
     dataset, run_index, seed = task
-    wait_for_gpu(gpu_id)
-    if EXPERIMENT == "all":
-        run_all_ablations(gpu_id, dataset, run_index, seed)
-    else:
-        ABLATION_RUNNERS[EXPERIMENT](gpu_id, dataset, run_index, seed)
+    for spec in variant_specs():
+        wait_for_gpu(gpu_id)
+        run_variant(gpu_id, dataset, run_index, seed, spec)
 
 
 def worker(
@@ -299,7 +277,11 @@ def aggregate(specs: Sequence[AblationSpec]) -> None:
                 "variant": spec.variant,
                 "ablation": spec.name,
                 "paper_variant": spec.paper_variant,
+                "paper_section": spec.paper_section,
+                "equation": spec.equation,
+                "challenge": spec.challenge,
                 "removed_module": spec.removed_module,
+                "intervention": spec.intervention,
                 "runs": len(records),
             }
             for stage in stages:
@@ -342,8 +324,8 @@ def main() -> None:
 
     tasks = queue.Queue()
     failures = []
-    # Four dataset tasks call the same four-method batch entry point for every
-    # seed, while GPU workers only provide scheduling and resource isolation.
+    # Each dataset/seed task runs the same ordered five-ablation suite; GPU
+    # workers provide scheduling and resource isolation only.
     for dataset in DATASETS:
         for run_index, seed in enumerate(RUN_SEEDS):
             tasks.put((dataset, run_index, seed))
