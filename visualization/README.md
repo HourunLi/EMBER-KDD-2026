@@ -22,10 +22,7 @@ visualization/
       <method>.png
       <method>.pdf
       candidates/
-        sample_seed_<sample_seed>_tsne_seed_<tsne_seed>/
-          coordinates.csv
-          <method>.png
-          <method>.pdf
+        <method>_sample_seed_<sample_seed>_tsne_seed_<tsne_seed>.png
   README.md
 ```
 
@@ -173,13 +170,13 @@ python visualization/run_tsne.py --datasets pokec --methods SFFGNN --max-points 
 python visualization/run_tsne.py --datasets pokec --methods EMBER --sample-seeds 10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29 --tsne-seeds 0 --strict
 ```
 
-传入多个 `--sample-seeds` 或 `--tsne-seeds` 时，候选结果分别写入：
+传入多个 `--sample-seeds` 或 `--tsne-seeds` 时进入批量候选模式。该模式只生成 PNG，不生成 PDF 或 `coordinates.csv`；所有候选图平铺在同一个目录中：
 
 ```text
-visualization/results/EMBER_pokec/candidates/sample_seed_<sample_seed>_tsne_seed_<tsne_seed>/
+visualization/results/EMBER_pokec/candidates/EMBER_sample_seed_<sample_seed>_tsne_seed_<tsne_seed>.png
 ```
 
-`sample_seed` 只控制从 embedding 中抽取哪些节点；`tsne_seed` 只控制 t-SNE 的随机状态。抽样采用分层、无放回方式。只传一个 seed 时不会创建 `candidates` 目录，而是直接生成正式的 `{method}_{dataset}` 结果。例如选定 `sample_seed=17` 后可以运行：
+批量模式会忽略 `--formats` 和配置中的 `plot.formats`。`sample_seed` 只控制从 embedding 中抽取哪些节点；`tsne_seed` 只控制 t-SNE 的随机状态。抽样采用分层、无放回方式。只传一个 seed 时不会进入批量模式，而是生成正式的 `coordinates.csv`、PNG 和 PDF。例如选定 `sample_seed=17` 后可以运行：
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods EMBER --sample-seeds 17 --tsne-seeds 0 --strict
