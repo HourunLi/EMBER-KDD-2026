@@ -109,18 +109,18 @@ def mprint(*arg, **kwargs):
 
 parser = argparse.ArgumentParser(description='Train and evaluate EMBER.')
 
-# parser.add_argument('--dataset', type=str, default='bailA')
-# parser.add_argument('--inid',    type=str, default='_2')
-# parser.add_argument('--outid',   type=str, default='_1')
+parser.add_argument('--dataset', type=str, default='bailA')
+parser.add_argument('--inid',    type=str, default='_2')
+parser.add_argument('--outid',   type=str, default='_1')
 #parser.add_argument('--dataset', type=str, default='germanA')
 #parser.add_argument('--inid',    type=str, default='_2')
 #parser.add_argument('--outid',   type=str, default='_1')
 #parser.add_argument('--dataset', type=str, default='pokec')
 #parser.add_argument('--inid',    type=str, default='_z')
 #parser.add_argument('--outid',   type=str, default='_n')
-parser.add_argument('--dataset', type=str, default='syn')
-parser.add_argument('--inid',    type=str, default='-2')
-parser.add_argument('--outid',   type=str, default='-1')
+# parser.add_argument('--dataset', type=str, default='syn')
+# parser.add_argument('--inid',    type=str, default='-2')
+# parser.add_argument('--outid',   type=str, default='-1')
 # parser.add_argument('--dataset', type=str, default='creditA')
 # parser.add_argument('--inid',    type=str, default='_2')
 # parser.add_argument('--outid',   type=str, default='_1')
@@ -129,7 +129,7 @@ parser.add_argument('--lr',           type=float, default=0.004)
 parser.add_argument('--lr2_reg',      type=float, default=0.001)
 parser.add_argument('--train_epochs', type=int,   default=800)
 parser.add_argument('--dropout',      type=float, default=0.5)
-parser.add_argument('--runs',         type=int,   default=5)
+parser.add_argument('--runs',         type=int,   default=2)
 
 # network
 parser.add_argument(

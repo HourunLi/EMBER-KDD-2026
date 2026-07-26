@@ -15,16 +15,16 @@ bailA:
   lambda_coord: 0.75
   source_mmd_bandwidth: 1.0
   adapt_epochs: 60
-  tau_c: 0.7
-  proto_temp: 0.52
-  adapt_lr: 0.002
-  residual_inner_steps: 10
-  lambda_residual_l2: 0.004
-  group_pseudocount: 15
-  lambda_pi: 0.95
-  prior_confidence_threshold: 0.7
-  prior_pseudocount: 100
-  prior_discount: 0.95
+  tau_c: 0.85
+  proto_temp: 0.7
+  adapt_lr: 0.0002
+  residual_inner_steps: 3
+  lambda_residual_l2: 0.02
+  group_pseudocount: 300
+  lambda_pi: 0.1
+  prior_confidence_threshold: 0.85
+  prior_pseudocount: 1000
+  prior_discount: 0.98
 
 germanA:
   # === Source + Target: transferred encoder/representation ===
