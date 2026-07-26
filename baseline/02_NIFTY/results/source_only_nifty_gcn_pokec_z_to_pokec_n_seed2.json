@@ -1,0 +1,20 @@
+{
+  "experiment": "source_only_nifty_gcn",
+  "source_domain": "pokec_z",
+  "target_domain": "pokec_n",
+  "dataset_schema": "pokec",
+  "label_column": "I_am_working_in_field",
+  "sensitive_column": "region",
+  "uses_sensitive_feature": true,
+  "uses_sensitive_counterfactual_augmentation": true,
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_pokec_z_seed2.pt",
+  "target_graph_nodes": 66569,
+  "target_labeled_nodes": 8797,
+  "target_nodes": 8797,
+  "metrics": {
+    "accuracy": 0.5904285551892691,
+    "roc_auc": 0.6350642922422608,
+    "parity": 0.030208967793398545,
+    "equality": 0.004935721349302313
+  }
+}

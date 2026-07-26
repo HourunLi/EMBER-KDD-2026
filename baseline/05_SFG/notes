@@ -5,6 +5,99 @@
 论文：https://openreview.net/forum?id=oJQWvsStNh
 代码：https://github.com/sh-qiangchen/SFG
 
+bailA:
+python sfg.py \
+  --mode='cross_domain' \
+  --dataset='bailA' \
+  --source_domain='bailA_2' \
+  --target_domain='bailA_1' \
+  --checkpoint='checkpoints/sfg_bailA_2.pt' \
+  --summary_output='logs/bailA_2_to_bailA_1_five_seeds.json' \
+  --encoder='SAGE' \
+  --hidden=16 \
+  --K=10 \
+  --d_epochs=5 \
+  --g_epochs=10 \
+  --c_epochs=5 \
+  --c_lr=0.01 \
+  --e_lr=0.001 \
+  --ratio=1 \
+  --epochs=100 \
+  --with_constraint \
+  --rho=2 \
+  --loss_alpha=0.5
+
+germanA:
+python sfg.py \
+  --mode='cross_domain' \
+  --dataset='germanA' \
+  --source_domain='germanA_2' \
+  --target_domain='germanA_1' \
+  --checkpoint='checkpoints/sfg_germanA_2.pt' \
+  --summary_output='logs/germanA_2_to_germanA_1_five_seeds.json' \
+  --encoder='SAGE' \
+  --hidden=16 \
+  --K=10 \
+  --d_epochs=5 \
+  --g_epochs=10 \
+  --c_epochs=10 \
+  --c_lr=0.001 \
+  --e_lr=0.01 \
+  --ratio=0.5 \
+  --epochs=100 \
+  --with_constraint \
+  --rho=2 \
+  --loss_alpha=0.5
+
+pokec:
+python sfg.py \
+  --mode='cross_domain' \
+  --dataset='pokec' \
+  --source_domain='pokec_z' \
+  --target_domain='pokec_n' \
+  --checkpoint='checkpoints/sfg_pokec_z.pt' \
+  --summary_output='logs/pokec_z_to_pokec_n_five_seeds.json' \
+  --encoder='SAGE' \
+  --hidden=16 \
+  --K=10 \
+  --d_epochs=5 \
+  --g_epochs=10 \
+  --c_epochs=10 \
+  --c_lr=0.001 \
+  --e_lr=0.01 \
+  --ratio=0.5 \
+  --epochs=150 \
+  --with_constraint \
+  --rho=2 \
+  --loss_alpha=0.5 \
+  --runs=1
+
+syn:
+python sfg.py \
+  --mode='cross_domain' \
+  --dataset='syn' \
+  --source_domain='syn-2' \
+  --target_domain='syn-1' \
+  --checkpoint='checkpoints/sfg_syn-2.pt' \
+  --summary_output='logs/syn-2_to_syn-1_five_seeds.json' \
+  --encoder='SAGE' \
+  --hidden=16 \
+  --K=10 \
+  --d_epochs=5 \
+  --g_epochs=10 \
+  --c_epochs=5 \
+  --c_lr=0.001 \
+  --e_lr=0.001 \
+  --ratio=1 \
+  --epochs=100 \
+  --with_constraint \
+  --rho=2 \
+  --loss_alpha=0.5
+
+
+
+
+
 五、SFG
 (一)Bail
 命令：python sfg.py --dataset='bail' --encoder='SAGE' --d_epochs=5 --g_epochs=10 --c_epochs=5 --c_lr=0.01 --e_lr=0.001 --ratio=1 --epochs=160 --with_constraint --rho=2 --loss_alpha=0.5 --runs=5

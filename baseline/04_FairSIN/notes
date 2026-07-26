@@ -21,6 +21,86 @@ pip install -r requirements.txt
 装pyg：pip install --no-index torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-2.0.0+cu118.html
 pip install torch_geometric==2.2.0
 
+7.20
+启动命令：
+bailA:
+python domain_transfer_fairsin.py --source='bailA_2' --target='bailA_1' --encoder='GCN' --runs=5 --epochs=500 --hidden=18 --delta=0.5 --c-lr=0.1 --e-lr=0.1 --c-wd=0.001 --e-wd=0.001
+
+germanA:（不用这个
+python domain_transfer_fairsin.py \
+  --dataset-family germanA \
+  --encoder GCN \
+  --normalization source-minmax \
+  --runs 5 \
+  --epochs 500 \
+  --hidden 18 \
+  --delta 0.5 \
+  --m-lr 0.001 
+  --e-lr 0.01 \
+  --c-lr 0.01 \
+  --d-lr 0.001 \
+  --adv-weight 0.1
+
+上面那个参数太激进了，试一下这个：
+germanA:
+adv-weight: 0是完全关闭对抗项
+python domain_transfer_fairsin.py \
+  --dataset-family germanA \
+  --normalization source-minmax \
+  --seed 1 \
+  --runs 5 \
+  --epochs 150 \
+  --predictor-warmup-epochs 100 \
+  --task-steps 1 \
+  --discriminator-steps 1 \
+  --m-lr 0.001 \
+  --e-lr 0.01 \
+  --c-lr 0.01 \
+  --d-lr 0.001 \
+  --neutral-weight 1.0 \
+  --delta 0.5 \
+  --adv-weight 0.05
+  
+pokec:
+python domain_transfer_fairsin.py \
+  --dataset-family pokec \
+  --encoder GCN \
+  --runs 1 \
+  --epochs 200 \
+  --predictor-warmup-epochs 100 \
+  --task-steps 1 \
+  --discriminator-steps 1 \
+  --hidden 18 \
+  --delta 0.5 \
+  --c-lr 0.1 \
+  --e-lr 0.005 \
+  --m-lr 0.001 \
+  --d-lr 0.001 \
+  --adv-weight 0.01 \
+  --neutral-weight 1.0
+
+syn:
+python domain_transfer_fairsin.py \
+  --dataset-family syn \
+  --encoder GCN \
+  --runs 5 \
+  --epochs 150 \
+  --predictor-warmup-epochs 100 \
+  --task-steps 1 \
+  --discriminator-steps 1 \
+  --hidden 18 \
+  --delta 0.5 \
+  --c-lr 0.01 \
+  --e-lr 0.005 \
+  --m-lr 0.001 \
+  --d-lr 0.001 \
+  --adv-weight 0.01 \
+  --neutral-weight 1.0
+
+
+
+
+
 四、FairSIN
 (一)Bail
 命令：python in-train.py --dataset='bail' --encoder='GCN' --c_epochs=10 --runs=5 --hidden=18 --epoch=150 --c_lr=0.1 --e_lr=0.1 --delta=0.5 --d='yes' --c_wd=0.001 --e_wd=0.001

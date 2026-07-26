@@ -1,0 +1,20 @@
+{
+  "experiment": "source_only_nifty_gcn",
+  "source_domain": "germanA_2",
+  "target_domain": "germanA_1",
+  "dataset_schema": "germanA",
+  "label_column": "GoodCustomer",
+  "sensitive_column": "Gender",
+  "uses_sensitive_feature": true,
+  "uses_sensitive_counterfactual_augmentation": true,
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed2.pt",
+  "target_graph_nodes": 384,
+  "target_labeled_nodes": 384,
+  "target_nodes": 384,
+  "metrics": {
+    "accuracy": 0.7265625,
+    "roc_auc": 0.6075137338295233,
+    "parity": 0.0625,
+    "equality": 0.045362903225806495
+  }
+}

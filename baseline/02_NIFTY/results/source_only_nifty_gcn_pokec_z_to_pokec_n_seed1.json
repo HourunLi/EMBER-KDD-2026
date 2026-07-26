@@ -1,0 +1,37 @@
+{
+  "experiment": "source_only_nifty_gcn",
+  "source_domain": "pokec_z",
+  "target_domain": "pokec_n",
+  "dataset_schema": "pokec",
+  "label_column": "I_am_working_in_field",
+  "sensitive_column": "region",
+  "uses_sensitive_feature": true,
+  "uses_sensitive_counterfactual_augmentation": true,
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_pokec_z_seed1.pt",
+  "target_graph_nodes": 66569,
+  "target_labeled_nodes": 8797,
+  "target_nodes": 8797,
+  "metrics": {
+    "accuracy": 0.5853131749460043,
+    "roc_auc": 0.7175581102461575,
+    "parity": 0.014405700577352465,
+    "equality": 0.015002746950884549
+  },
+  "visualization": {
+    "method": "NIFTY-GCN_seed1",
+    "dataset": "pokec",
+    "seed": 1,
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed1/pokec/feat.npz",
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed1/pokec/labels.npz",
+    "representations_shape": [
+      8797,
+      16
+    ],
+    "label_encoding": {
+      "0": "predicted_Y=1,S=0",
+      "1": "predicted_Y=1,S=1",
+      "2": "predicted_Y=0,S=0",
+      "3": "predicted_Y=0,S=1"
+    }
+  }
+}

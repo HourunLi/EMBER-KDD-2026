@@ -361,3 +361,60 @@ def evaluate_ged3(x, classifier, discriminator, generator, encoder, data, args):
     ).numpy(), data.sens[data.test_mask].cpu().numpy())
 
     return accs, auc_rocs, F1s, paritys, equalitys
+
+
+def evaluate_ged3_on_mask(classifier, generator, encoder, data, eval_mask, args,
+                          return_artifacts=False):
+    """Evaluate SFG on one explicitly supplied node mask.
+
+    Standard training can use this function for held-out source masks. The
+    isolated target-test process uses it with the all-node target mask after
+    loading frozen model parameters.
+    """
+    if eval_mask.dtype != torch.bool:
+        raise TypeError("eval_mask must be a boolean tensor.")
+    if eval_mask.sum().item() == 0:
+        raise ValueError("Cannot evaluate an empty node mask.")
+
+    classifier.eval()
+    generator.eval()
+    encoder.eval()
+
+    with torch.no_grad():
+        if args.f_mask == 'yes':
+            outputs = []
+            representations = [] if return_artifacts else None
+            feature_weights = generator()
+            for _ in range(args.K):
+                mask = F.gumbel_softmax(feature_weights, tau=1, hard=True)[:, 0]
+                h = encoder(data.x * mask, data.edge_index)
+                if return_artifacts:
+                    representations.append(h)
+                outputs.append(classifier(h))
+            output = torch.stack(outputs).mean(dim=0)
+            if return_artifacts:
+                representation = torch.stack(representations).mean(dim=0)
+        else:
+            representation = encoder(data.x, data.edge_index)
+            output = classifier(representation)
+
+    labels = data.y[eval_mask]
+    scores = output[eval_mask].view(-1)
+    predictions = (scores > 0).type_as(labels)
+    sensitive_attributes = data.sens[eval_mask]
+
+    metrics = {}
+    metrics['acc'] = predictions.eq(labels).float().mean().item()
+    metrics['f1'] = f1_score(labels.cpu().numpy(), predictions.cpu().numpy())
+    metrics['auc_roc'] = roc_auc_score(labels.cpu().numpy(), scores.detach().cpu().numpy())
+    metrics['parity'], metrics['equality'] = fair_metric(
+        predictions.cpu().numpy(), labels.cpu().numpy(),
+        sensitive_attributes.cpu().numpy())
+    if return_artifacts:
+        artifacts = {
+            'representations': representation[eval_mask].detach(),
+            'predictions': predictions.detach(),
+            'sensitive_attributes': sensitive_attributes.detach(),
+        }
+        return metrics, artifacts
+    return metrics

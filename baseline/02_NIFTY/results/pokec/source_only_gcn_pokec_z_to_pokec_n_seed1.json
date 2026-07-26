@@ -1,0 +1,18 @@
+{
+  "experiment": "source_only_gcn",
+  "source_domain": "pokec_z",
+  "target_domain": "pokec_n",
+  "dataset_schema": "pokec",
+  "label_column": "I_am_working_in_field",
+  "sensitive_column": "region",
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/pokec/source_only_gcn_pokec_z_seed1.pt",
+  "target_graph_nodes": 66569,
+  "target_labeled_nodes": 8797,
+  "target_nodes": 8797,
+  "metrics": {
+    "accuracy": 0.5994088893941116,
+    "roc_auc": 0.6734209338085493,
+    "parity": 0.009762386983325877,
+    "equality": 0.010232575174889291
+  }
+}

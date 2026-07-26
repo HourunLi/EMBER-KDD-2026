@@ -1,0 +1,41 @@
+{
+  "dataset_family": "pokec",
+  "evaluated_node_count": 8797,
+  "excluded_from_metrics_count": 57772,
+  "experiment": "pokec_z_to_pokec_n_strict_original_nrc_gcn",
+  "nrc": {
+    "accuracy": 0.5351824760437012,
+    "equality": 0.0026238858699798584,
+    "parity": 0.011725425720214844,
+    "positive_prediction_rate": {
+      "0": 0.3993305563926697,
+      "1": 0.4110559821128845
+    },
+    "roc_auc": 0.5497604783605569,
+    "true_positive_rate": {
+      "0": 0.43578946590423584,
+      "1": 0.4384133517742157
+    }
+  },
+  "seed": 3,
+  "source_only": {
+    "accuracy": 0.6640900373458862,
+    "equality": 0.005022168159484863,
+    "parity": 0.02932831645011902,
+    "positive_prediction_rate": {
+      "0": 0.4425104558467865,
+      "1": 0.4131821393966675
+    },
+    "roc_auc": 0.7055859332370281,
+    "true_positive_rate": {
+      "0": 0.601403534412384,
+      "1": 0.5963813662528992
+    }
+  },
+  "target_label_and_sensitive_attribute_loaded_only_in_final_evaluation": true,
+  "target_node_count": 66569,
+  "visualization_feature_dim": 256,
+  "visualization_feature_path": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/pokec_z_to_pokec_n_nrc_gcn/seed_3/evaluation/feat.npz",
+  "visualization_label_path": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/pokec_z_to_pokec_n_nrc_gcn/seed_3/evaluation/labels.npz",
+  "visualization_node_count": 8797
+}

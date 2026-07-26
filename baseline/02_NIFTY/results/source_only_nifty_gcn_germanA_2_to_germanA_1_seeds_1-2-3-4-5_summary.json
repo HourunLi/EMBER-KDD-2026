@@ -1,0 +1,120 @@
+{
+  "experiment": "source_only_nifty_gcn_multi_seed",
+  "source_domain": "germanA_2",
+  "target_domain": "germanA_1",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "number_of_runs": 5,
+  "standard_deviation_ddof": 0,
+  "uses_sensitive_feature": true,
+  "uses_sensitive_counterfactual_augmentation": true,
+  "counterfactual_operation": "s <- 1 - s",
+  "per_seed": [
+    {
+      "seed": 1,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed1.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed1.json",
+      "metrics": {
+        "accuracy": 0.7213541666666666,
+        "roc_auc": 0.6163033847244374,
+        "parity": 0.05859375,
+        "equality": 0.045362903225806495
+      }
+    },
+    {
+      "seed": 2,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed2.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed2.json",
+      "metrics": {
+        "accuracy": 0.7265625,
+        "roc_auc": 0.6075137338295233,
+        "parity": 0.0625,
+        "equality": 0.045362903225806495
+      }
+    },
+    {
+      "seed": 3,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed3.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed3.json",
+      "metrics": {
+        "accuracy": 0.7239583333333334,
+        "roc_auc": 0.6149211412369306,
+        "parity": 0.046875,
+        "equality": 0.03981854838709675
+      }
+    },
+    {
+      "seed": 4,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed4.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed4.json",
+      "metrics": {
+        "accuracy": 0.7447916666666666,
+        "roc_auc": 0.5948608895977316,
+        "parity": 0.0234375,
+        "equality": 0.003864247311827995
+      }
+    },
+    {
+      "seed": 5,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed5.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed5.json",
+      "metrics": {
+        "accuracy": 0.7317708333333334,
+        "roc_auc": 0.6333864965443913,
+        "parity": 0.05859375,
+        "equality": 0.03981854838709675
+      }
+    }
+  ],
+  "aggregate": {
+    "accuracy": {
+      "mean": 0.7296875,
+      "std": 0.008300717422140213,
+      "values": [
+        0.7213541666666666,
+        0.7265625,
+        0.7239583333333334,
+        0.7447916666666666,
+        0.7317708333333334
+      ]
+    },
+    "roc_auc": {
+      "mean": 0.6133971291866029,
+      "std": 0.012558266284556132,
+      "values": [
+        0.6163033847244374,
+        0.6075137338295233,
+        0.6149211412369306,
+        0.5948608895977316,
+        0.6333864965443913
+      ]
+    },
+    "parity": {
+      "mean": 0.05,
+      "std": 0.014277864751950833,
+      "values": [
+        0.05859375,
+        0.0625,
+        0.046875,
+        0.0234375,
+        0.05859375
+      ]
+    },
+    "equality": {
+      "mean": 0.0348454301075269,
+      "std": 0.015687778554359832,
+      "values": [
+        0.045362903225806495,
+        0.045362903225806495,
+        0.03981854838709675,
+        0.003864247311827995,
+        0.03981854838709675
+      ]
+    }
+  }
+}

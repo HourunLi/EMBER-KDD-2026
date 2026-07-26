@@ -1,0 +1,311 @@
+==========================================
+==========       config      =============
+==========================================
+method:DANNE
+pl:spa
+gpu_id:7
+s:0
+t:1
+output:san
+seed:0
+batch_size:128
+worker:4
+bottleneck_dim:64
+max_epoch:30
+momentum:0.3
+K:5
+smooth:0.1
+tar_par:0.2
+validate:False
+net:mlp
+dset:bailA
+lr:0.01
+ifcorrect:True
+ifsvd:True
+svd_par:1.0
+laplac:laplac1
+ap:gauss
+weight_decay:1e-05
+hidden:64
+dropout:0.5
+source_csv:./dataset/bailA/bailA_2.csv
+target_csv:./dataset/bailA/bailA_1.csv
+log_interval:10
+eval_epoch:3.0
+class_num:2
+data_root:
+s_dset_path:./dataset/bailA
+t_dset_path:./dataset/bailA
+test_dset_path:./dataset/bailA
+output_dir:san/spa_0.2/bailA/BB
+name:BB
+log:DANNE
+out_file:<_io.TextIOWrapper name='san/spa_0.2/bailA/BB/DANNE.txt' mode='w' encoding='UTF-8'>
+
+==========================================
+
+Iter 10/2640: total=1.41351, trans=0.62517, cls=0.70650, pl=0.00050, svd=0.08135, target_acc=66.61%, entropy=0.6085
+Iter 20/2640: total=1.29365, trans=0.55759, cls=0.67674, pl=0.00078, svd=0.05855, target_acc=67.77%, entropy=0.6430
+Iter 30/2640: total=1.28417, trans=0.52662, cls=0.68182, pl=0.00121, svd=0.07452, target_acc=70.64%, entropy=0.6300
+Iter 40/2640: total=1.23430, trans=0.53376, cls=0.63252, pl=0.00160, svd=0.06641, target_acc=71.84%, entropy=0.5941
+Iter 50/2640: total=1.15155, trans=0.49274, cls=0.59998, pl=0.00190, svd=0.05693, target_acc=73.52%, entropy=0.6057
+Iter 60/2640: total=1.17613, trans=0.51350, cls=0.63559, pl=0.00252, svd=0.02452, target_acc=74.55%, entropy=0.6198
+Iter 70/2640: total=1.17122, trans=0.48042, cls=0.65247, pl=0.00266, svd=0.03566, target_acc=75.39%, entropy=0.6050
+Iter 80/2640: total=1.13669, trans=0.49120, cls=0.60434, pl=0.00297, svd=0.03818, target_acc=75.90%, entropy=0.6079
+Iter 90/2640: total=1.15040, trans=0.48509, cls=0.62383, pl=0.00360, svd=0.03787, target_acc=76.26%, entropy=0.5994
+Iter 100/2640: total=1.04375, trans=0.45920, cls=0.54738, pl=0.00346, svd=0.03371, target_acc=76.23%, entropy=0.5882
+Iter 110/2640: total=1.17382, trans=0.48904, cls=0.65770, pl=0.00494, svd=0.02214, target_acc=76.80%, entropy=0.6004
+Iter 120/2640: total=1.17821, trans=0.53198, cls=0.60810, pl=0.00483, svd=0.03331, target_acc=77.10%, entropy=0.5897
+Iter 130/2640: total=1.23390, trans=0.53563, cls=0.65649, pl=0.00482, svd=0.03696, target_acc=76.87%, entropy=0.6006
+Iter 140/2640: total=1.17684, trans=0.53254, cls=0.60556, pl=0.00425, svd=0.03450, target_acc=76.95%, entropy=0.5998
+Iter 150/2640: total=1.28180, trans=0.61609, cls=0.63779, pl=0.00495, svd=0.02297, target_acc=77.93%, entropy=0.5888
+Iter 160/2640: total=1.33604, trans=0.66194, cls=0.64093, pl=0.00592, svd=0.02725, target_acc=78.49%, entropy=0.5920
+Iter 170/2640: total=1.33345, trans=0.69515, cls=0.60320, pl=0.00657, svd=0.02852, target_acc=78.66%, entropy=0.5929
+Iter 180/2640: total=1.34151, trans=0.68479, cls=0.60891, pl=0.00770, svd=0.04010, target_acc=78.92%, entropy=0.5832
+Iter 190/2640: total=1.26754, trans=0.68508, cls=0.54992, pl=0.00661, svd=0.02593, target_acc=78.72%, entropy=0.5717
+Iter 200/2640: total=1.33834, trans=0.65624, cls=0.64643, pl=0.00794, svd=0.02773, target_acc=79.21%, entropy=0.5796
+Iter 210/2640: total=1.28040, trans=0.64168, cls=0.60547, pl=0.00799, svd=0.02525, target_acc=79.30%, entropy=0.5818
+Iter 220/2640: total=1.20586, trans=0.61912, cls=0.55891, pl=0.00745, svd=0.02039, target_acc=79.56%, entropy=0.5788
+Iter 230/2640: total=1.25118, trans=0.60561, cls=0.60637, pl=0.00909, svd=0.03012, target_acc=79.75%, entropy=0.5776
+Iter 240/2640: total=1.26551, trans=0.60172, cls=0.62102, pl=0.00790, svd=0.03487, target_acc=79.74%, entropy=0.5820
+Iter 250/2640: total=1.18235, trans=0.58816, cls=0.56374, pl=0.00866, svd=0.02179, target_acc=79.78%, entropy=0.5871
+Iter 260/2640: total=1.16216, trans=0.58041, cls=0.55749, pl=0.00990, svd=0.01436, target_acc=80.67%, entropy=0.5718
+Iter 270/2640: total=1.27834, trans=0.58996, cls=0.65992, pl=0.00964, svd=0.01883, target_acc=80.49%, entropy=0.5751
+Iter 280/2640: total=1.23650, trans=0.57598, cls=0.63846, pl=0.00890, svd=0.01316, target_acc=80.42%, entropy=0.5759
+Iter 290/2640: total=1.17973, trans=0.58869, cls=0.56416, pl=0.00904, svd=0.01784, target_acc=80.51%, entropy=0.5724
+Iter 300/2640: total=1.28383, trans=0.59253, cls=0.65730, pl=0.00881, svd=0.02518, target_acc=80.46%, entropy=0.5715
+Iter 310/2640: total=1.16501, trans=0.58089, cls=0.55657, pl=0.01026, svd=0.01729, target_acc=79.99%, entropy=0.5773
+Iter 320/2640: total=1.20297, trans=0.59972, cls=0.57922, pl=0.01070, svd=0.01332, target_acc=79.98%, entropy=0.5755
+Iter 330/2640: total=1.23436, trans=0.58633, cls=0.62141, pl=0.00970, svd=0.01692, target_acc=80.41%, entropy=0.5675
+Iter 340/2640: total=1.19718, trans=0.60812, cls=0.55714, pl=0.01211, svd=0.01980, target_acc=80.43%, entropy=0.5646
+Iter 350/2640: total=1.20605, trans=0.59226, cls=0.58869, pl=0.01089, svd=0.01421, target_acc=79.91%, entropy=0.5732
+Iter 360/2640: total=1.23832, trans=0.60630, cls=0.60887, pl=0.00949, svd=0.01366, target_acc=80.26%, entropy=0.5717
+Iter 370/2640: total=1.20204, trans=0.60669, cls=0.56184, pl=0.00962, svd=0.02388, target_acc=80.92%, entropy=0.5672
+Iter 380/2640: total=1.23219, trans=0.61948, cls=0.58073, pl=0.01184, svd=0.02014, target_acc=81.07%, entropy=0.5637
+Iter 390/2640: total=1.21229, trans=0.62639, cls=0.56221, pl=0.01094, svd=0.01275, target_acc=80.62%, entropy=0.5616
+Iter 400/2640: total=1.25089, trans=0.61042, cls=0.61510, pl=0.01054, svd=0.01484, target_acc=80.50%, entropy=0.5625
+Iter 410/2640: total=1.20776, trans=0.60701, cls=0.57726, pl=0.01245, svd=0.01104, target_acc=80.34%, entropy=0.5629
+Iter 420/2640: total=1.23988, trans=0.60885, cls=0.60619, pl=0.01071, svd=0.01413, target_acc=80.63%, entropy=0.5576
+Iter 430/2640: total=1.22858, trans=0.61777, cls=0.58520, pl=0.01102, svd=0.01458, target_acc=79.98%, entropy=0.5678
+Iter 440/2640: total=1.22407, trans=0.61277, cls=0.58655, pl=0.01195, svd=0.01280, target_acc=80.26%, entropy=0.5644
+Iter 450/2640: total=1.22764, trans=0.63599, cls=0.56595, pl=0.01265, svd=0.01304, target_acc=80.75%, entropy=0.5559
+Iter 460/2640: total=1.19974, trans=0.60644, cls=0.55885, pl=0.01176, svd=0.02268, target_acc=80.86%, entropy=0.5529
+Iter 470/2640: total=1.24679, trans=0.61556, cls=0.60176, pl=0.01292, svd=0.01655, target_acc=80.26%, entropy=0.5624
+Iter 480/2640: total=1.17758, trans=0.61624, cls=0.53061, pl=0.01207, svd=0.01866, target_acc=80.09%, entropy=0.5662
+Iter 490/2640: total=1.16607, trans=0.64035, cls=0.49626, pl=0.01198, svd=0.01749, target_acc=80.79%, entropy=0.5624
+Iter 500/2640: total=1.22752, trans=0.61485, cls=0.59047, pl=0.01208, svd=0.01012, target_acc=81.29%, entropy=0.5585
+Iter 510/2640: total=1.24591, trans=0.64966, cls=0.57005, pl=0.01448, svd=0.01173, target_acc=81.26%, entropy=0.5571
+Iter 520/2640: total=1.23923, trans=0.64074, cls=0.56906, pl=0.01514, svd=0.01429, target_acc=80.72%, entropy=0.5638
+Iter 530/2640: total=1.16453, trans=0.61142, cls=0.53091, pl=0.01173, svd=0.01047, target_acc=81.24%, entropy=0.5582
+Iter 540/2640: total=1.20652, trans=0.64290, cls=0.52780, pl=0.01352, svd=0.02230, target_acc=81.10%, entropy=0.5607
+Iter 550/2640: total=1.22658, trans=0.62840, cls=0.56534, pl=0.01585, svd=0.01700, target_acc=80.26%, entropy=0.5666
+Iter 560/2640: total=1.17678, trans=0.62311, cls=0.52445, pl=0.01380, svd=0.01541, target_acc=80.36%, entropy=0.5645
+Iter 570/2640: total=1.16490, trans=0.61057, cls=0.52807, pl=0.01405, svd=0.01222, target_acc=80.85%, entropy=0.5591
+Iter 580/2640: total=1.15200, trans=0.62359, cls=0.50856, pl=0.01352, svd=0.00633, target_acc=80.77%, entropy=0.5559
+Iter 590/2640: total=1.13689, trans=0.60915, cls=0.49892, pl=0.01374, svd=0.01508, target_acc=81.03%, entropy=0.5488
+Iter 600/2640: total=1.23507, trans=0.62891, cls=0.57251, pl=0.01689, svd=0.01676, target_acc=81.27%, entropy=0.5425
+Iter 610/2640: total=1.14849, trans=0.63833, cls=0.48238, pl=0.01599, svd=0.01180, target_acc=81.39%, entropy=0.5392
+Iter 620/2640: total=1.22427, trans=0.61674, cls=0.58267, pl=0.01301, svd=0.01186, target_acc=81.02%, entropy=0.5452
+Iter 630/2640: total=1.33989, trans=0.66029, cls=0.64960, pl=0.01414, svd=0.01585, target_acc=80.86%, entropy=0.5468
+Iter 640/2640: total=1.14581, trans=0.63432, cls=0.48910, pl=0.01474, svd=0.00765, target_acc=80.58%, entropy=0.5504
+Iter 650/2640: total=1.13277, trans=0.63911, cls=0.47013, pl=0.01480, svd=0.00873, target_acc=81.22%, entropy=0.5444
+Iter 660/2640: total=1.21849, trans=0.63366, cls=0.55278, pl=0.01551, svd=0.01654, target_acc=81.13%, entropy=0.5444
+Iter 670/2640: total=1.24006, trans=0.64665, cls=0.56718, pl=0.01292, svd=0.01331, target_acc=81.54%, entropy=0.5397
+Iter 680/2640: total=1.19981, trans=0.62780, cls=0.54129, pl=0.01591, svd=0.01482, target_acc=81.18%, entropy=0.5444
+Iter 690/2640: total=1.19520, trans=0.65162, cls=0.51058, pl=0.01464, svd=0.01836, target_acc=81.15%, entropy=0.5445
+Iter 700/2640: total=1.25820, trans=0.64692, cls=0.58434, pl=0.01674, svd=0.01021, target_acc=81.41%, entropy=0.5408
+Iter 710/2640: total=1.20831, trans=0.62980, cls=0.54386, pl=0.01475, svd=0.01990, target_acc=81.48%, entropy=0.5402
+Iter 720/2640: total=1.28817, trans=0.67535, cls=0.57867, pl=0.01593, svd=0.01823, target_acc=81.67%, entropy=0.5377
+Iter 730/2640: total=1.18146, trans=0.62539, cls=0.52889, pl=0.01418, svd=0.01300, target_acc=81.54%, entropy=0.5404
+Iter 740/2640: total=1.16120, trans=0.64231, cls=0.49545, pl=0.01447, svd=0.00897, target_acc=81.31%, entropy=0.5417
+Iter 750/2640: total=1.20428, trans=0.64648, cls=0.52867, pl=0.01641, svd=0.01271, target_acc=81.60%, entropy=0.5349
+Iter 760/2640: total=1.21186, trans=0.64549, cls=0.53804, pl=0.01551, svd=0.01282, target_acc=82.08%, entropy=0.5277
+Iter 770/2640: total=1.29496, trans=0.65099, cls=0.60256, pl=0.01816, svd=0.02325, target_acc=81.39%, entropy=0.5340
+Iter 780/2640: total=1.22582, trans=0.65120, cls=0.54263, pl=0.01689, svd=0.01509, target_acc=80.59%, entropy=0.5401
+Iter 790/2640: total=1.24771, trans=0.66734, cls=0.54376, pl=0.01804, svd=0.01857, target_acc=81.03%, entropy=0.5368
+Iter 800/2640: total=1.31246, trans=0.66869, cls=0.62038, pl=0.01627, svd=0.00711, target_acc=80.86%, entropy=0.5333
+Iter 810/2640: total=1.13247, trans=0.66189, cls=0.43590, pl=0.01854, svd=0.01613, target_acc=80.38%, entropy=0.5343
+Iter 820/2640: total=1.20801, trans=0.66048, cls=0.51441, pl=0.01666, svd=0.01646, target_acc=80.72%, entropy=0.5297
+Iter 830/2640: total=1.18571, trans=0.65113, cls=0.50903, pl=0.01646, svd=0.00909, target_acc=80.63%, entropy=0.5294
+Iter 840/2640: total=1.34845, trans=0.68408, cls=0.61945, pl=0.01658, svd=0.02834, target_acc=80.66%, entropy=0.5277
+Iter 850/2640: total=1.18889, trans=0.65354, cls=0.49345, pl=0.01744, svd=0.02445, target_acc=80.75%, entropy=0.5254
+Iter 860/2640: total=1.20614, trans=0.67283, cls=0.50565, pl=0.01704, svd=0.01063, target_acc=81.22%, entropy=0.5205
+Iter 870/2640: total=1.24992, trans=0.66788, cls=0.55117, pl=0.01667, svd=0.01421, target_acc=81.39%, entropy=0.5224
+Iter 880/2640: total=1.14988, trans=0.65225, cls=0.46569, pl=0.02009, svd=0.01184, target_acc=81.27%, entropy=0.5277
+Iter 890/2640: total=1.19215, trans=0.64759, cls=0.51712, pl=0.01870, svd=0.00875, target_acc=81.02%, entropy=0.5278
+Iter 900/2640: total=1.38624, trans=0.66627, cls=0.67987, pl=0.01957, svd=0.02052, target_acc=81.15%, entropy=0.5263
+Iter 910/2640: total=1.25711, trans=0.67006, cls=0.53984, pl=0.01899, svd=0.02822, target_acc=81.09%, entropy=0.5251
+Iter 920/2640: total=1.16430, trans=0.66406, cls=0.47115, pl=0.01744, svd=0.01167, target_acc=81.24%, entropy=0.5245
+Iter 930/2640: total=1.34999, trans=0.65104, cls=0.66049, pl=0.01801, svd=0.02045, target_acc=82.17%, entropy=0.5168
+Iter 940/2640: total=1.13137, trans=0.64698, cls=0.45854, pl=0.01686, svd=0.00898, target_acc=82.40%, entropy=0.5195
+Iter 950/2640: total=1.18523, trans=0.65558, cls=0.49698, pl=0.01772, svd=0.01494, target_acc=82.22%, entropy=0.5211
+Iter 960/2640: total=1.22872, trans=0.66489, cls=0.51680, pl=0.02084, svd=0.02619, target_acc=82.44%, entropy=0.5187
+Iter 970/2640: total=1.31047, trans=0.66551, cls=0.60192, pl=0.02239, svd=0.02064, target_acc=82.68%, entropy=0.5144
+Iter 980/2640: total=1.19271, trans=0.65927, cls=0.49301, pl=0.02151, svd=0.01892, target_acc=82.69%, entropy=0.5094
+Iter 990/2640: total=1.24024, trans=0.65762, cls=0.55282, pl=0.02045, svd=0.00935, target_acc=82.53%, entropy=0.5142
+Iter 1000/2640: total=1.16059, trans=0.64389, cls=0.47612, pl=0.01988, svd=0.02070, target_acc=82.42%, entropy=0.5159
+Iter 1010/2640: total=1.15025, trans=0.65263, cls=0.46826, pl=0.02017, svd=0.00920, target_acc=82.91%, entropy=0.5105
+Iter 1020/2640: total=1.18506, trans=0.65929, cls=0.48824, pl=0.01871, svd=0.01882, target_acc=83.12%, entropy=0.5065
+Iter 1030/2640: total=1.27367, trans=0.66736, cls=0.57359, pl=0.01974, svd=0.01298, target_acc=83.07%, entropy=0.5096
+Iter 1040/2640: total=1.16987, trans=0.67218, cls=0.46704, pl=0.01848, svd=0.01217, target_acc=83.10%, entropy=0.5062
+Iter 1050/2640: total=1.17775, trans=0.64380, cls=0.50429, pl=0.01893, svd=0.01072, target_acc=83.14%, entropy=0.5056
+Iter 1060/2640: total=1.25879, trans=0.65682, cls=0.56814, pl=0.01937, svd=0.01445, target_acc=83.04%, entropy=0.5056
+Iter 1070/2640: total=1.15057, trans=0.66050, cls=0.46193, pl=0.01646, svd=0.01167, target_acc=83.20%, entropy=0.5005
+Iter 1080/2640: total=1.19577, trans=0.66492, cls=0.49350, pl=0.01967, svd=0.01768, target_acc=83.20%, entropy=0.5007
+Iter 1090/2640: total=1.20964, trans=0.65214, cls=0.52629, pl=0.02052, svd=0.01069, target_acc=83.28%, entropy=0.5001
+Iter 1100/2640: total=1.24336, trans=0.66602, cls=0.54417, pl=0.01954, svd=0.01364, target_acc=83.32%, entropy=0.4992
+Iter 1110/2640: total=1.22492, trans=0.66606, cls=0.53041, pl=0.01821, svd=0.01025, target_acc=83.27%, entropy=0.5031
+Iter 1120/2640: total=1.16777, trans=0.66230, cls=0.47025, pl=0.01755, svd=0.01767, target_acc=83.34%, entropy=0.5029
+Iter 1130/2640: total=1.22064, trans=0.66439, cls=0.51677, pl=0.02016, svd=0.01933, target_acc=83.75%, entropy=0.4916
+Iter 1140/2640: total=1.09880, trans=0.66307, cls=0.41033, pl=0.01760, svd=0.00780, target_acc=83.80%, entropy=0.4897
+Iter 1150/2640: total=1.14857, trans=0.65970, cls=0.44590, pl=0.01935, svd=0.02363, target_acc=83.84%, entropy=0.4916
+Iter 1160/2640: total=1.15115, trans=0.65740, cls=0.46877, pl=0.01848, svd=0.00651, target_acc=83.74%, entropy=0.4923
+Iter 1170/2640: total=1.18760, trans=0.66022, cls=0.49256, pl=0.02180, svd=0.01302, target_acc=83.55%, entropy=0.4936
+Iter 1180/2640: total=1.16072, trans=0.67106, cls=0.44399, pl=0.01867, svd=0.02701, target_acc=83.84%, entropy=0.4861
+Iter 1190/2640: total=1.32035, trans=0.65913, cls=0.63368, pl=0.01902, svd=0.00851, target_acc=83.97%, entropy=0.4825
+Iter 1200/2640: total=1.23421, trans=0.65177, cls=0.54618, pl=0.02106, svd=0.01521, target_acc=83.94%, entropy=0.4845
+Iter 1210/2640: total=1.26208, trans=0.66025, cls=0.57374, pl=0.02062, svd=0.00748, target_acc=83.97%, entropy=0.4923
+Iter 1220/2640: total=1.20130, trans=0.65866, cls=0.49784, pl=0.02127, svd=0.02353, target_acc=84.09%, entropy=0.4909
+Iter 1230/2640: total=1.20150, trans=0.66707, cls=0.50353, pl=0.01995, svd=0.01096, target_acc=84.01%, entropy=0.4894
+Iter 1240/2640: total=1.22623, trans=0.65563, cls=0.54337, pl=0.01874, svd=0.00850, target_acc=84.35%, entropy=0.4832
+Iter 1250/2640: total=1.21332, trans=0.64857, cls=0.53297, pl=0.01994, svd=0.01185, target_acc=84.41%, entropy=0.4839
+Iter 1260/2640: total=1.23795, trans=0.66818, cls=0.53916, pl=0.02123, svd=0.00938, target_acc=84.18%, entropy=0.4870
+Iter 1270/2640: total=1.14384, trans=0.64374, cls=0.45623, pl=0.02205, svd=0.02182, target_acc=84.18%, entropy=0.4868
+Iter 1280/2640: total=1.35364, trans=0.65953, cls=0.65932, pl=0.01977, svd=0.01502, target_acc=84.40%, entropy=0.4812
+Iter 1290/2640: total=1.22673, trans=0.66699, cls=0.51810, pl=0.02443, svd=0.01721, target_acc=84.53%, entropy=0.4771
+Iter 1300/2640: total=1.19622, trans=0.65958, cls=0.50970, pl=0.02111, svd=0.00583, target_acc=84.51%, entropy=0.4770
+Iter 1310/2640: total=1.22727, trans=0.66488, cls=0.53008, pl=0.01854, svd=0.01376, target_acc=84.52%, entropy=0.4786
+Iter 1320/2640: total=1.18785, trans=0.65471, cls=0.49884, pl=0.02472, svd=0.00959, target_acc=84.53%, entropy=0.4813
+Iter 1330/2640: total=1.15671, trans=0.66136, cls=0.45760, pl=0.02135, svd=0.01640, target_acc=84.60%, entropy=0.4773
+Iter 1340/2640: total=1.22272, trans=0.65424, cls=0.54224, pl=0.01944, svd=0.00680, target_acc=84.65%, entropy=0.4732
+Iter 1350/2640: total=1.27193, trans=0.66546, cls=0.57053, pl=0.02229, svd=0.01364, target_acc=84.82%, entropy=0.4686
+Iter 1360/2640: total=1.25014, trans=0.65807, cls=0.56257, pl=0.01910, svd=0.01040, target_acc=84.77%, entropy=0.4702
+Iter 1370/2640: total=1.21897, trans=0.66360, cls=0.52707, pl=0.02374, svd=0.00456, target_acc=84.83%, entropy=0.4721
+Iter 1380/2640: total=1.27003, trans=0.67750, cls=0.55076, pl=0.02168, svd=0.02009, target_acc=84.83%, entropy=0.4744
+Iter 1390/2640: total=1.18990, trans=0.67515, cls=0.47569, pl=0.02572, svd=0.01335, target_acc=84.94%, entropy=0.4716
+Iter 1400/2640: total=1.19112, trans=0.65110, cls=0.50010, pl=0.02246, svd=0.01746, target_acc=84.92%, entropy=0.4741
+Iter 1410/2640: total=1.22299, trans=0.65417, cls=0.52603, pl=0.02320, svd=0.01960, target_acc=85.16%, entropy=0.4675
+Iter 1420/2640: total=1.23534, trans=0.67504, cls=0.52398, pl=0.02065, svd=0.01567, target_acc=85.08%, entropy=0.4637
+Iter 1430/2640: total=1.19345, trans=0.65618, cls=0.50394, pl=0.02390, svd=0.00943, target_acc=85.07%, entropy=0.4611
+Iter 1440/2640: total=1.14592, trans=0.66429, cls=0.44177, pl=0.02412, svd=0.01574, target_acc=85.13%, entropy=0.4600
+Iter 1450/2640: total=1.26259, trans=0.65862, cls=0.57302, pl=0.01836, svd=0.01260, target_acc=85.05%, entropy=0.4642
+Iter 1460/2640: total=1.15517, trans=0.67239, cls=0.44557, pl=0.01972, svd=0.01749, target_acc=85.22%, entropy=0.4593
+Iter 1470/2640: total=1.21998, trans=0.67894, cls=0.50116, pl=0.02382, svd=0.01606, target_acc=85.22%, entropy=0.4599
+Iter 1480/2640: total=1.24467, trans=0.67168, cls=0.54355, pl=0.01992, svd=0.00952, target_acc=85.25%, entropy=0.4559
+Iter 1490/2640: total=1.25387, trans=0.67449, cls=0.54587, pl=0.02127, svd=0.01223, target_acc=85.32%, entropy=0.4560
+Iter 1500/2640: total=1.18867, trans=0.65689, cls=0.49988, pl=0.02120, svd=0.01070, target_acc=85.42%, entropy=0.4537
+Iter 1510/2640: total=1.22153, trans=0.67110, cls=0.52234, pl=0.02143, svd=0.00665, target_acc=85.33%, entropy=0.4549
+Iter 1520/2640: total=1.24126, trans=0.66342, cls=0.53320, pl=0.02466, svd=0.01998, target_acc=85.38%, entropy=0.4535
+Iter 1530/2640: total=1.22107, trans=0.66641, cls=0.51989, pl=0.02218, svd=0.01260, target_acc=85.50%, entropy=0.4483
+Iter 1540/2640: total=1.13327, trans=0.67548, cls=0.41547, pl=0.02177, svd=0.02055, target_acc=85.51%, entropy=0.4493
+Iter 1550/2640: total=1.21400, trans=0.65817, cls=0.51851, pl=0.02508, svd=0.01224, target_acc=85.55%, entropy=0.4525
+Iter 1560/2640: total=1.16104, trans=0.67456, cls=0.45653, pl=0.02316, svd=0.00679, target_acc=85.17%, entropy=0.4560
+Iter 1570/2640: total=1.12815, trans=0.66643, cls=0.43189, pl=0.02141, svd=0.00842, target_acc=85.26%, entropy=0.4545
+Iter 1580/2640: total=1.19238, trans=0.65060, cls=0.51110, pl=0.02482, svd=0.00586, target_acc=85.64%, entropy=0.4480
+Iter 1590/2640: total=1.19512, trans=0.66804, cls=0.48866, pl=0.02225, svd=0.01617, target_acc=85.69%, entropy=0.4455
+Iter 1600/2640: total=1.14790, trans=0.66580, cls=0.44500, pl=0.02375, svd=0.01336, target_acc=85.79%, entropy=0.4425
+Iter 1610/2640: total=1.27208, trans=0.66372, cls=0.56959, pl=0.01941, svd=0.01936, target_acc=85.75%, entropy=0.4419
+Iter 1620/2640: total=1.23412, trans=0.66883, cls=0.52806, pl=0.02292, svd=0.01431, target_acc=85.85%, entropy=0.4408
+Iter 1630/2640: total=1.32410, trans=0.67103, cls=0.61462, pl=0.02247, svd=0.01598, target_acc=85.90%, entropy=0.4405
+Iter 1640/2640: total=1.19705, trans=0.66673, cls=0.48494, pl=0.02193, svd=0.02344, target_acc=85.92%, entropy=0.4418
+Iter 1650/2640: total=1.16006, trans=0.67109, cls=0.44887, pl=0.02943, svd=0.01067, target_acc=85.92%, entropy=0.4417
+Iter 1660/2640: total=1.29737, trans=0.66759, cls=0.57978, pl=0.02005, svd=0.02996, target_acc=85.72%, entropy=0.4450
+Iter 1670/2640: total=1.18907, trans=0.65660, cls=0.49591, pl=0.02364, svd=0.01292, target_acc=85.75%, entropy=0.4451
+Iter 1680/2640: total=1.12506, trans=0.66834, cls=0.42630, pl=0.02091, svd=0.00950, target_acc=85.77%, entropy=0.4428
+Iter 1690/2640: total=1.14168, trans=0.66443, cls=0.44743, pl=0.02361, svd=0.00621, target_acc=85.98%, entropy=0.4354
+Iter 1700/2640: total=1.21368, trans=0.66918, cls=0.51251, pl=0.02297, svd=0.00902, target_acc=85.93%, entropy=0.4380
+Iter 1710/2640: total=1.28829, trans=0.66746, cls=0.57992, pl=0.02380, svd=0.01711, target_acc=85.82%, entropy=0.4436
+Iter 1720/2640: total=1.22531, trans=0.66860, cls=0.51708, pl=0.02587, svd=0.01376, target_acc=85.88%, entropy=0.4430
+Iter 1730/2640: total=1.25092, trans=0.67217, cls=0.53349, pl=0.02733, svd=0.01793, target_acc=85.88%, entropy=0.4399
+Iter 1740/2640: total=1.21809, trans=0.67585, cls=0.50974, pl=0.02133, svd=0.01117, target_acc=86.15%, entropy=0.4356
+Iter 1750/2640: total=1.18214, trans=0.65002, cls=0.49284, pl=0.02906, svd=0.01023, target_acc=86.11%, entropy=0.4364
+Iter 1760/2640: total=1.20189, trans=0.65975, cls=0.51041, pl=0.02355, svd=0.00818, target_acc=86.01%, entropy=0.4428
+Iter 1770/2640: total=1.15108, trans=0.66535, cls=0.43769, pl=0.02736, svd=0.02068, target_acc=85.97%, entropy=0.4463
+Iter 1780/2640: total=1.17717, trans=0.67145, cls=0.46965, pl=0.02272, svd=0.01336, target_acc=86.15%, entropy=0.4427
+Iter 1790/2640: total=1.12511, trans=0.66513, cls=0.41782, pl=0.02489, svd=0.01727, target_acc=86.15%, entropy=0.4413
+Iter 1800/2640: total=1.24551, trans=0.68631, cls=0.51973, pl=0.02219, svd=0.01728, target_acc=86.12%, entropy=0.4409
+Iter 1810/2640: total=1.14995, trans=0.66994, cls=0.42809, pl=0.03051, svd=0.02141, target_acc=86.10%, entropy=0.4416
+Iter 1820/2640: total=1.18209, trans=0.66828, cls=0.47514, pl=0.02576, svd=0.01291, target_acc=86.35%, entropy=0.4355
+Iter 1830/2640: total=1.24660, trans=0.68515, cls=0.52296, pl=0.02975, svd=0.00874, target_acc=86.35%, entropy=0.4359
+Iter 1840/2640: total=1.20175, trans=0.66709, cls=0.49806, pl=0.02209, svd=0.01451, target_acc=86.26%, entropy=0.4377
+Iter 1850/2640: total=1.20672, trans=0.67489, cls=0.49499, pl=0.02421, svd=0.01263, target_acc=86.24%, entropy=0.4380
+Iter 1860/2640: total=1.13976, trans=0.66256, cls=0.42671, pl=0.02671, svd=0.02378, target_acc=86.49%, entropy=0.4335
+Iter 1870/2640: total=1.20895, trans=0.65648, cls=0.51560, pl=0.02868, svd=0.00819, target_acc=86.48%, entropy=0.4352
+Iter 1880/2640: total=1.24638, trans=0.66248, cls=0.54843, pl=0.02619, svd=0.00929, target_acc=86.41%, entropy=0.4364
+Iter 1890/2640: total=1.19188, trans=0.66236, cls=0.49158, pl=0.02383, svd=0.01410, target_acc=86.35%, entropy=0.4377
+Iter 1900/2640: total=1.29969, trans=0.67562, cls=0.58615, pl=0.02229, svd=0.01563, target_acc=86.42%, entropy=0.4364
+Iter 1910/2640: total=1.16768, trans=0.66799, cls=0.46171, pl=0.02372, svd=0.01426, target_acc=86.42%, entropy=0.4339
+Iter 1920/2640: total=1.18839, trans=0.65955, cls=0.48765, pl=0.02436, svd=0.01683, target_acc=86.50%, entropy=0.4311
+Iter 1930/2640: total=1.21457, trans=0.68162, cls=0.49935, pl=0.02644, svd=0.00716, target_acc=86.67%, entropy=0.4275
+Iter 1940/2640: total=1.13836, trans=0.66047, cls=0.44065, pl=0.02790, svd=0.00934, target_acc=86.40%, entropy=0.4310
+Iter 1950/2640: total=1.35847, trans=0.67602, cls=0.63848, pl=0.02470, svd=0.01927, target_acc=86.23%, entropy=0.4322
+Iter 1960/2640: total=1.14921, trans=0.66563, cls=0.43981, pl=0.02914, svd=0.01464, target_acc=86.31%, entropy=0.4347
+Iter 1970/2640: total=1.23869, trans=0.68030, cls=0.52278, pl=0.02649, svd=0.00912, target_acc=86.53%, entropy=0.4303
+Iter 1980/2640: total=1.28692, trans=0.66859, cls=0.57902, pl=0.02548, svd=0.01382, target_acc=86.57%, entropy=0.4297
+Iter 1990/2640: total=1.18777, trans=0.67514, cls=0.47197, pl=0.02903, svd=0.01163, target_acc=86.63%, entropy=0.4276
+Iter 2000/2640: total=1.23636, trans=0.66481, cls=0.52362, pl=0.02664, svd=0.02129, target_acc=86.57%, entropy=0.4281
+Iter 2010/2640: total=1.23872, trans=0.66677, cls=0.52966, pl=0.02840, svd=0.01388, target_acc=86.37%, entropy=0.4301
+Iter 2020/2640: total=1.23034, trans=0.65410, cls=0.54248, pl=0.02513, svd=0.00863, target_acc=86.42%, entropy=0.4296
+Iter 2030/2640: total=1.17605, trans=0.66100, cls=0.48019, pl=0.02612, svd=0.00874, target_acc=86.52%, entropy=0.4308
+Iter 2040/2640: total=1.15616, trans=0.66323, cls=0.44921, pl=0.03016, svd=0.01357, target_acc=86.52%, entropy=0.4281
+Iter 2050/2640: total=1.26893, trans=0.67979, cls=0.54962, pl=0.02927, svd=0.01024, target_acc=86.71%, entropy=0.4236
+Iter 2060/2640: total=1.26100, trans=0.67527, cls=0.55219, pl=0.02603, svd=0.00751, target_acc=86.52%, entropy=0.4252
+Iter 2070/2640: total=1.21790, trans=0.65167, cls=0.53058, pl=0.02591, svd=0.00973, target_acc=86.56%, entropy=0.4268
+Iter 2080/2640: total=1.24188, trans=0.66493, cls=0.53092, pl=0.02783, svd=0.01819, target_acc=86.50%, entropy=0.4275
+Iter 2090/2640: total=1.41191, trans=0.67815, cls=0.68596, pl=0.02727, svd=0.02054, target_acc=86.56%, entropy=0.4252
+Iter 2100/2640: total=1.22752, trans=0.68163, cls=0.50058, pl=0.03445, svd=0.01086, target_acc=86.72%, entropy=0.4231
+Iter 2110/2640: total=1.18370, trans=0.67430, cls=0.46548, pl=0.03384, svd=0.01008, target_acc=86.61%, entropy=0.4262
+Iter 2120/2640: total=1.05646, trans=0.68486, cls=0.32380, pl=0.03007, svd=0.01772, target_acc=86.66%, entropy=0.4203
+Iter 2130/2640: total=1.15583, trans=0.66713, cls=0.45031, pl=0.03101, svd=0.00737, target_acc=86.79%, entropy=0.4179
+Iter 2140/2640: total=1.21362, trans=0.67004, cls=0.49327, pl=0.03293, svd=0.01737, target_acc=86.69%, entropy=0.4207
+Iter 2150/2640: total=1.21696, trans=0.69008, cls=0.48293, pl=0.02852, svd=0.01544, target_acc=86.59%, entropy=0.4249
+Iter 2160/2640: total=1.14727, trans=0.67990, cls=0.42627, pl=0.02703, svd=0.01407, target_acc=86.42%, entropy=0.4265
+Iter 2170/2640: total=1.22649, trans=0.67820, cls=0.50644, pl=0.03265, svd=0.00920, target_acc=86.59%, entropy=0.4224
+Iter 2180/2640: total=1.19685, trans=0.67373, cls=0.47683, pl=0.02657, svd=0.01972, target_acc=86.75%, entropy=0.4185
+Iter 2190/2640: total=1.18196, trans=0.66793, cls=0.47781, pl=0.02788, svd=0.00834, target_acc=86.59%, entropy=0.4206
+Iter 2200/2640: total=1.17923, trans=0.67535, cls=0.46442, pl=0.03204, svd=0.00742, target_acc=86.37%, entropy=0.4225
+Iter 2210/2640: total=1.17476, trans=0.67094, cls=0.46074, pl=0.03014, svd=0.01295, target_acc=86.42%, entropy=0.4193
+Iter 2220/2640: total=1.27356, trans=0.67225, cls=0.55532, pl=0.02939, svd=0.01660, target_acc=86.66%, entropy=0.4129
+Iter 2230/2640: total=1.19044, trans=0.67003, cls=0.48876, pl=0.02735, svd=0.00430, target_acc=86.67%, entropy=0.4119
+Iter 2240/2640: total=1.24010, trans=0.67831, cls=0.51983, pl=0.03073, svd=0.01123, target_acc=86.86%, entropy=0.4100
+Iter 2250/2640: total=1.27060, trans=0.66834, cls=0.55469, pl=0.03262, svd=0.01494, target_acc=86.63%, entropy=0.4168
+Iter 2260/2640: total=1.17413, trans=0.67051, cls=0.46550, pl=0.02582, svd=0.01229, target_acc=86.56%, entropy=0.4191
+Iter 2270/2640: total=1.16149, trans=0.67645, cls=0.44732, pl=0.02792, svd=0.00981, target_acc=86.50%, entropy=0.4217
+Iter 2280/2640: total=1.13944, trans=0.66559, cls=0.42551, pl=0.03467, svd=0.01367, target_acc=86.54%, entropy=0.4215
+Iter 2290/2640: total=1.21729, trans=0.66793, cls=0.50110, pl=0.02824, svd=0.02003, target_acc=86.57%, entropy=0.4215
+Iter 2300/2640: total=1.22676, trans=0.68076, cls=0.50116, pl=0.02956, svd=0.01527, target_acc=86.65%, entropy=0.4190
+Iter 2310/2640: total=1.24846, trans=0.68424, cls=0.52113, pl=0.03560, svd=0.00748, target_acc=86.71%, entropy=0.4178
+Iter 2320/2640: total=1.14741, trans=0.68147, cls=0.42168, pl=0.03198, svd=0.01227, target_acc=86.58%, entropy=0.4192
+Iter 2330/2640: total=1.13015, trans=0.67530, cls=0.41271, pl=0.02972, svd=0.01243, target_acc=86.39%, entropy=0.4226
+Iter 2340/2640: total=1.25771, trans=0.67793, cls=0.52870, pl=0.03021, svd=0.02086, target_acc=86.31%, entropy=0.4211
+Iter 2350/2640: total=1.15680, trans=0.67247, cls=0.44375, pl=0.03017, svd=0.01040, target_acc=86.53%, entropy=0.4171
+Iter 2360/2640: total=1.36986, trans=0.68126, cls=0.63928, pl=0.02715, svd=0.02217, target_acc=86.75%, entropy=0.4123
+Iter 2370/2640: total=1.36194, trans=0.67690, cls=0.63121, pl=0.03194, svd=0.02188, target_acc=86.71%, entropy=0.4141
+Iter 2380/2640: total=1.29040, trans=0.67943, cls=0.56139, pl=0.03279, svd=0.01678, target_acc=86.66%, entropy=0.4136
+Iter 2390/2640: total=1.21180, trans=0.66538, cls=0.50684, pl=0.03022, svd=0.00936, target_acc=86.58%, entropy=0.4137
+Iter 2400/2640: total=1.20988, trans=0.68961, cls=0.47031, pl=0.02802, svd=0.02193, target_acc=86.86%, entropy=0.4112
+Iter 2410/2640: total=1.18169, trans=0.67297, cls=0.45362, pl=0.03607, svd=0.01902, target_acc=86.88%, entropy=0.4084
+Iter 2420/2640: total=1.23204, trans=0.67551, cls=0.51012, pl=0.02287, svd=0.02354, target_acc=86.93%, entropy=0.4086
+Iter 2430/2640: total=1.20499, trans=0.67797, cls=0.48728, pl=0.03149, svd=0.00825, target_acc=86.83%, entropy=0.4085
+Iter 2440/2640: total=1.21064, trans=0.68131, cls=0.48106, pl=0.02959, svd=0.01868, target_acc=86.95%, entropy=0.4057
+Iter 2450/2640: total=1.27888, trans=0.67264, cls=0.54954, pl=0.03384, svd=0.02285, target_acc=86.99%, entropy=0.4013
+Iter 2460/2640: total=1.19551, trans=0.67983, cls=0.47222, pl=0.02812, svd=0.01535, target_acc=86.89%, entropy=0.4056
+Iter 2470/2640: total=1.21874, trans=0.66948, cls=0.51106, pl=0.03030, svd=0.00790, target_acc=86.76%, entropy=0.4073
+Iter 2480/2640: total=1.17222, trans=0.67067, cls=0.46977, pl=0.02802, svd=0.00375, target_acc=86.80%, entropy=0.4043
+Iter 2490/2640: total=1.18296, trans=0.68227, cls=0.46162, pl=0.03153, svd=0.00755, target_acc=86.97%, entropy=0.4019
+Iter 2500/2640: total=1.26143, trans=0.67243, cls=0.55237, pl=0.02868, svd=0.00795, target_acc=86.88%, entropy=0.4026
+Iter 2510/2640: total=1.23328, trans=0.67644, cls=0.50987, pl=0.03236, svd=0.01461, target_acc=86.71%, entropy=0.4091
+Iter 2520/2640: total=1.22365, trans=0.67159, cls=0.50697, pl=0.03355, svd=0.01153, target_acc=86.44%, entropy=0.4148
+Iter 2530/2640: total=1.19186, trans=0.68364, cls=0.46578, pl=0.03588, svd=0.00656, target_acc=86.75%, entropy=0.4081
+Iter 2540/2640: total=1.15578, trans=0.67796, cls=0.42948, pl=0.03526, svd=0.01308, target_acc=86.93%, entropy=0.4025
+Iter 2550/2640: total=1.20884, trans=0.67469, cls=0.47507, pl=0.02651, svd=0.03257, target_acc=86.93%, entropy=0.4008
+Iter 2560/2640: total=1.17917, trans=0.67391, cls=0.46657, pl=0.03171, svd=0.00697, target_acc=86.89%, entropy=0.4022
+Iter 2570/2640: total=1.14986, trans=0.67931, cls=0.42512, pl=0.03185, svd=0.01357, target_acc=86.86%, entropy=0.4027
+Iter 2580/2640: total=1.27263, trans=0.65802, cls=0.56894, pl=0.03729, svd=0.00839, target_acc=86.92%, entropy=0.4028
+Iter 2590/2640: total=1.08750, trans=0.66751, cls=0.37209, pl=0.03201, svd=0.01588, target_acc=86.92%, entropy=0.4025
+Iter 2600/2640: total=1.17017, trans=0.66739, cls=0.46254, pl=0.03026, svd=0.00998, target_acc=86.87%, entropy=0.4002
+Iter 2610/2640: total=1.22494, trans=0.68168, cls=0.50061, pl=0.03524, svd=0.00741, target_acc=86.78%, entropy=0.4034
+Iter 2620/2640: total=1.21004, trans=0.67711, cls=0.49005, pl=0.03456, svd=0.00832, target_acc=86.79%, entropy=0.4027
+Iter 2630/2640: total=1.15508, trans=0.67683, cls=0.43420, pl=0.02974, svd=0.01430, target_acc=86.76%, entropy=0.4015
+Iter 2640/2640: total=1.20366, trans=0.68391, cls=0.46935, pl=0.03615, svd=0.01424, target_acc=86.88%, entropy=0.3983
+Best target accuracy: 86.99% (best entropy: 0.3983)

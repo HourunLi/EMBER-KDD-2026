@@ -1,0 +1,228 @@
+{
+  "aggregate": {
+    "source_only": {
+      "accuracy": {
+        "display": "77.55% +/- 11.97%",
+        "mean": 0.775460135936737,
+        "mean_percent": "77.55%",
+        "std": 0.11968871057709535,
+        "std_percent": "11.97%",
+        "values": [
+          0.8806944489479065,
+          0.8164730668067932,
+          0.6843754053115845,
+          0.6161075830459595,
+          0.8796501755714417
+        ]
+      },
+      "equality": {
+        "display": "3.69% +/- 3.35%",
+        "mean": 0.036852788925170896,
+        "mean_percent": "3.69%",
+        "std": 0.0335025126373747,
+        "std_percent": "3.35%",
+        "values": [
+          0.06814771890640259,
+          0.03322422504425049,
+          0.0026718974113464355,
+          0.006142556667327881,
+          0.0740775465965271
+        ]
+      },
+      "parity": {
+        "display": "5.84% +/- 4.15%",
+        "mean": 0.05835906863212585,
+        "mean_percent": "5.84%",
+        "std": 0.04153832625512437,
+        "std_percent": "4.15%",
+        "values": [
+          0.04237809777259827,
+          0.003548353910446167,
+          0.10648173093795776,
+          0.09281706809997559,
+          0.04657009243965149
+        ]
+      },
+      "roc_auc": {
+        "display": "87.53% +/- 2.90%",
+        "mean": 0.875310694167046,
+        "mean_percent": "87.53%",
+        "std": 0.02899512920861659,
+        "std_percent": "2.90%",
+        "values": [
+          0.8904834601530363,
+          0.9041410268948042,
+          0.8410792557319622,
+          0.8471661548115633,
+          0.8936835732438637
+        ]
+      }
+    },
+    "strict_shot": {
+      "accuracy": {
+        "display": "53.46% +/- 3.68%",
+        "mean": 0.5345516264438629,
+        "mean_percent": "53.46%",
+        "std": 0.03683034257949944,
+        "std_percent": "3.68%",
+        "values": [
+          0.4909280836582184,
+          0.5571074485778809,
+          0.5452290773391724,
+          0.5774703025817871,
+          0.5020232200622559
+        ]
+      },
+      "equality": {
+        "display": "10.01% +/- 0.48%",
+        "mean": 0.10007250905036927,
+        "mean_percent": "10.01%",
+        "std": 0.004787520060963949,
+        "std_percent": "0.48%",
+        "values": [
+          0.09223097562789917,
+          0.10342970490455627,
+          0.10437703132629395,
+          0.10059595108032227,
+          0.09972888231277466
+        ]
+      },
+      "parity": {
+        "display": "11.26% +/- 0.61%",
+        "mean": 0.11257860660552979,
+        "mean_percent": "11.26%",
+        "std": 0.006124455217198147,
+        "std_percent": "0.61%",
+        "values": [
+          0.11288619041442871,
+          0.11133629083633423,
+          0.11004185676574707,
+          0.10607004165649414,
+          0.12255865335464478
+        ]
+      },
+      "roc_auc": {
+        "display": "57.28% +/- 2.64%",
+        "mean": 0.5727903798196816,
+        "mean_percent": "57.28%",
+        "std": 0.026431703119895227,
+        "std_percent": "2.64%",
+        "values": [
+          0.5574941323162681,
+          0.5695088573187443,
+          0.5413594909157473,
+          0.6102739396481145,
+          0.5853154788995335
+        ]
+      }
+    }
+  },
+  "experiment": "bailA_2_to_bailA_1_strict_shot_gcn_5seeds",
+  "metric_definitions": {
+    "accuracy": "target node classification accuracy; higher is better",
+    "equality": "absolute equal opportunity difference (TPR gap) across WHITE groups; lower is better",
+    "parity": "absolute demographic parity difference across WHITE groups; lower is better",
+    "roc_auc": "binary ROC-AUC using P(RECID=1); higher is better"
+  },
+  "number_of_runs": 5,
+  "runs": [
+    {
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/bailA_2_to_bailA_1/seed_1/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.8806944489479065,
+          "equality": 0.06814771890640259,
+          "parity": 0.04237809777259827,
+          "roc_auc": 0.8904834601530363
+        },
+        "strict_shot": {
+          "accuracy": 0.4909280836582184,
+          "equality": 0.09223097562789917,
+          "parity": 0.11288619041442871,
+          "roc_auc": 0.5574941323162681
+        }
+      },
+      "seed": 1
+    },
+    {
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/bailA_2_to_bailA_1/seed_2/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.8164730668067932,
+          "equality": 0.03322422504425049,
+          "parity": 0.003548353910446167,
+          "roc_auc": 0.9041410268948042
+        },
+        "strict_shot": {
+          "accuracy": 0.5571074485778809,
+          "equality": 0.10342970490455627,
+          "parity": 0.11133629083633423,
+          "roc_auc": 0.5695088573187443
+        }
+      },
+      "seed": 2
+    },
+    {
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/bailA_2_to_bailA_1/seed_3/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6843754053115845,
+          "equality": 0.0026718974113464355,
+          "parity": 0.10648173093795776,
+          "roc_auc": 0.8410792557319622
+        },
+        "strict_shot": {
+          "accuracy": 0.5452290773391724,
+          "equality": 0.10437703132629395,
+          "parity": 0.11004185676574707,
+          "roc_auc": 0.5413594909157473
+        }
+      },
+      "seed": 3
+    },
+    {
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/bailA_2_to_bailA_1/seed_4/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6161075830459595,
+          "equality": 0.006142556667327881,
+          "parity": 0.09281706809997559,
+          "roc_auc": 0.8471661548115633
+        },
+        "strict_shot": {
+          "accuracy": 0.5774703025817871,
+          "equality": 0.10059595108032227,
+          "parity": 0.10607004165649414,
+          "roc_auc": 0.6102739396481145
+        }
+      },
+      "seed": 4
+    },
+    {
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/bailA_2_to_bailA_1/seed_5/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.8796501755714417,
+          "equality": 0.0740775465965271,
+          "parity": 0.04657009243965149,
+          "roc_auc": 0.8936835732438637
+        },
+        "strict_shot": {
+          "accuracy": 0.5020232200622559,
+          "equality": 0.09972888231277466,
+          "parity": 0.12255865335464478,
+          "roc_auc": 0.5853154788995335
+        }
+      },
+      "seed": 5
+    }
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "standard_deviation": "sample standard deviation (n-1)"
+}

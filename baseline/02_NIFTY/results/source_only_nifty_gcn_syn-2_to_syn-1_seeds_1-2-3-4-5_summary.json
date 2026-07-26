@@ -1,0 +1,120 @@
+{
+  "experiment": "source_only_nifty_gcn_multi_seed",
+  "source_domain": "syn-2",
+  "target_domain": "syn-1",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "number_of_runs": 5,
+  "standard_deviation_ddof": 0,
+  "uses_sensitive_feature": true,
+  "uses_sensitive_counterfactual_augmentation": true,
+  "counterfactual_operation": "s <- 1 - s",
+  "per_seed": [
+    {
+      "seed": 1,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_syn-2_seed1.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_syn-2_to_syn-1_seed1.json",
+      "metrics": {
+        "accuracy": 0.6688,
+        "roc_auc": 0.7384139723895917,
+        "parity": 0.28448140658417725,
+        "equality": 0.31019780241541234
+      }
+    },
+    {
+      "seed": 2,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_syn-2_seed2.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_syn-2_to_syn-1_seed2.json",
+      "metrics": {
+        "accuracy": 0.687,
+        "roc_auc": 0.7912550448924811,
+        "parity": 0.18260602929700875,
+        "equality": 0.12185232766238685
+      }
+    },
+    {
+      "seed": 3,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_syn-2_seed3.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_syn-2_to_syn-1_seed3.json",
+      "metrics": {
+        "accuracy": 0.7088,
+        "roc_auc": 0.8340693110649854,
+        "parity": 0.007974002313494544,
+        "equality": 0.007920388921480614
+      }
+    },
+    {
+      "seed": 4,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_syn-2_seed4.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_syn-2_to_syn-1_seed4.json",
+      "metrics": {
+        "accuracy": 0.6844,
+        "roc_auc": 0.7794544337996953,
+        "parity": 0.21323422563549077,
+        "equality": 0.15735329427286382
+      }
+    },
+    {
+      "seed": 5,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_syn-2_seed5.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_syn-2_to_syn-1_seed5.json",
+      "metrics": {
+        "accuracy": 0.7066,
+        "roc_auc": 0.8604681609007208,
+        "parity": 0.013215213242867674,
+        "equality": 0.007737215617256821
+      }
+    }
+  ],
+  "aggregate": {
+    "accuracy": {
+      "mean": 0.69112,
+      "std": 0.014916621601421692,
+      "values": [
+        0.6688,
+        0.687,
+        0.7088,
+        0.6844,
+        0.7066
+      ]
+    },
+    "roc_auc": {
+      "mean": 0.8007321846094948,
+      "std": 0.04267521363695765,
+      "values": [
+        0.7384139723895917,
+        0.7912550448924811,
+        0.8340693110649854,
+        0.7794544337996953,
+        0.8604681609007208
+      ]
+    },
+    "parity": {
+      "mean": 0.14030217541460782,
+      "std": 0.1109578226658153,
+      "values": [
+        0.28448140658417725,
+        0.18260602929700875,
+        0.007974002313494544,
+        0.21323422563549077,
+        0.013215213242867674
+      ]
+    },
+    "equality": {
+      "mean": 0.1210122057778801,
+      "std": 0.11201210017551748,
+      "values": [
+        0.31019780241541234,
+        0.12185232766238685,
+        0.007920388921480614,
+        0.15735329427286382,
+        0.007737215617256821
+      ]
+    }
+  }
+}

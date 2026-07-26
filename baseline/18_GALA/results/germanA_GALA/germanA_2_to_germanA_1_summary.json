@@ -1,0 +1,83 @@
+{
+  "source_domain": "germanA_2",
+  "target_domain": "germanA_1",
+  "dataset": "germanA",
+  "encoder": "GCN",
+  "feature_columns_excluded": [
+    "user_id",
+    "GoodCustomer",
+    "Gender"
+  ],
+  "label_column": "GoodCustomer",
+  "sensitive_column": "Gender",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "per_seed": [
+    {
+      "seed": 1,
+      "accuracy": 0.6883116960525513,
+      "ROC_AUC": 0.6053763440860215,
+      "parity": 0.10538464784622192,
+      "equality": 0.05043858289718628
+    },
+    {
+      "seed": 2,
+      "accuracy": 0.37662336230278015,
+      "ROC_AUC": 0.6211433756805808,
+      "parity": 0.009230762720108032,
+      "equality": 0.05277779698371887
+    },
+    {
+      "seed": 3,
+      "accuracy": 0.3896103799343109,
+      "ROC_AUC": 0.57085346215781,
+      "parity": 0.17874396219849586,
+      "equality": 0.14258911460638046
+    },
+    {
+      "seed": 4,
+      "accuracy": 0.4935064911842346,
+      "ROC_AUC": 0.5226923076923077,
+      "parity": 0.0984615683555603,
+      "equality": 0.09774437546730042
+    },
+    {
+      "seed": 5,
+      "accuracy": 0.2467532455921173,
+      "ROC_AUC": 0.5053921568627451,
+      "parity": 0.018853696063160896,
+      "equality": 0.028241336345672607
+    }
+  ],
+  "summary": {
+    "accuracy": {
+      "mean": 0.43896103501319883,
+      "variance": 0.02168325317189478,
+      "std": 0.14725234521696007,
+      "formatted": "43.90% +/- 14.73%"
+    },
+    "ROC_AUC": {
+      "mean": 0.565091529295893,
+      "variance": 0.002031916943522893,
+      "std": 0.04507678941010432,
+      "formatted": "56.51% +/- 4.51%"
+    },
+    "parity": {
+      "mean": 0.0821349274367094,
+      "variance": 0.0038919891555191178,
+      "std": 0.06238580892734435,
+      "formatted": "8.21% +/- 6.24%"
+    },
+    "equality": {
+      "mean": 0.07435824126005172,
+      "variance": 0.0016733995802008384,
+      "std": 0.04090720694695298,
+      "formatted": "7.44% +/- 4.09%"
+    }
+  }
+}

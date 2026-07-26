@@ -1,0 +1,117 @@
+{
+  "experiment": "source_only_gcn_multi_seed",
+  "source_domain": "bailA_2",
+  "target_domain": "bailA_1",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "number_of_runs": 5,
+  "standard_deviation_ddof": 0,
+  "per_seed": [
+    {
+      "seed": 1,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_gcn_bailA_2_seed1.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_gcn_bailA_2_to_bailA_1_seed1.json",
+      "metrics": {
+        "accuracy": 0.6864639081059913,
+        "roc_auc": 0.6763033263372489,
+        "parity": 0.005775624118260443,
+        "equality": 0.003989799386143543
+      }
+    },
+    {
+      "seed": 2,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_gcn_bailA_2_seed2.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_gcn_bailA_2_to_bailA_1_seed2.json",
+      "metrics": {
+        "accuracy": 0.7586476961232215,
+        "roc_auc": 0.7626194380815181,
+        "parity": 0.008868101985319676,
+        "equality": 0.0058830140512652895
+      }
+    },
+    {
+      "seed": 3,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_gcn_bailA_2_seed3.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_gcn_bailA_2_to_bailA_1_seed3.json",
+      "metrics": {
+        "accuracy": 0.6989949092807728,
+        "roc_auc": 0.624219287753467,
+        "parity": 0.030929140512652747,
+        "equality": 0.043248247940209206
+      }
+    },
+    {
+      "seed": 4,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_gcn_bailA_2_seed4.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_gcn_bailA_2_to_bailA_1_seed4.json",
+      "metrics": {
+        "accuracy": 0.7342383500848453,
+        "roc_auc": 0.7820394103353984,
+        "parity": 0.034197591445337266,
+        "equality": 0.045726151516043506
+      }
+    },
+    {
+      "seed": 5,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_gcn_bailA_2_seed5.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_gcn_bailA_2_to_bailA_1_seed5.json",
+      "metrics": {
+        "accuracy": 0.6752382195535831,
+        "roc_auc": 0.6214401699998371,
+        "parity": 0.03309036509981122,
+        "equality": 0.03810245034158141
+      }
+    }
+  ],
+  "aggregate": {
+    "accuracy": {
+      "mean": 0.7107166166296828,
+      "std": 0.031096524819180873,
+      "values": [
+        0.6864639081059913,
+        0.7586476961232215,
+        0.6989949092807728,
+        0.7342383500848453,
+        0.6752382195535831
+      ]
+    },
+    "roc_auc": {
+      "mean": 0.6933243265014939,
+      "std": 0.0676826881432127,
+      "values": [
+        0.6763033263372489,
+        0.7626194380815181,
+        0.624219287753467,
+        0.7820394103353984,
+        0.6214401699998371
+      ]
+    },
+    "parity": {
+      "mean": 0.02257216463227627,
+      "std": 0.012534330790249395,
+      "values": [
+        0.005775624118260443,
+        0.008868101985319676,
+        0.030929140512652747,
+        0.034197591445337266,
+        0.03309036509981122
+      ]
+    },
+    "equality": {
+      "mean": 0.027389932647048594,
+      "std": 0.018507160267412285,
+      "values": [
+        0.003989799386143543,
+        0.0058830140512652895,
+        0.043248247940209206,
+        0.045726151516043506,
+        0.03810245034158141
+      ]
+    }
+  }
+}

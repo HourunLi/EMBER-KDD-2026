@@ -1,0 +1,20 @@
+{
+  "experiment": "source_only_nifty_gcn",
+  "source_domain": "syn-2",
+  "target_domain": "syn-1",
+  "dataset_schema": "syn",
+  "label_column": "label",
+  "sensitive_column": "sens",
+  "uses_sensitive_feature": true,
+  "uses_sensitive_counterfactual_augmentation": true,
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_syn-2_seed2.pt",
+  "target_graph_nodes": 5000,
+  "target_labeled_nodes": 5000,
+  "target_nodes": 5000,
+  "metrics": {
+    "accuracy": 0.687,
+    "roc_auc": 0.7912550448924811,
+    "parity": 0.18260602929700875,
+    "equality": 0.12185232766238685
+  }
+}

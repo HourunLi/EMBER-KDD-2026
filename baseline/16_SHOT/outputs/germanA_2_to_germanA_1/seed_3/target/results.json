@@ -1,0 +1,199 @@
+{
+  "excluded_feature_columns": [
+    "user_id",
+    "GoodCustomer",
+    "Gender"
+  ],
+  "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+  "feature_names": [
+    "ForeignWorker",
+    "Single",
+    "Age",
+    "LoanDuration",
+    "PurposeOfLoan=Business",
+    "PurposeOfLoan=Education",
+    "PurposeOfLoan=Electronics",
+    "PurposeOfLoan=Furniture",
+    "PurposeOfLoan=HomeAppliances",
+    "PurposeOfLoan=NewCar",
+    "PurposeOfLoan=Other",
+    "PurposeOfLoan=Repairs",
+    "PurposeOfLoan=Retraining",
+    "PurposeOfLoan=UsedCar",
+    "LoanAmount",
+    "LoanRateAsPercentOfIncome",
+    "YearsAtCurrentHome",
+    "NumberOfOtherLoansAtBank",
+    "NumberOfLiableIndividuals",
+    "HasTelephone",
+    "CheckingAccountBalance_geq_0",
+    "CheckingAccountBalance_geq_200",
+    "SavingsAccountBalance_geq_100",
+    "SavingsAccountBalance_geq_500",
+    "MissedPayments",
+    "NoCurrentLoan",
+    "CriticalAccountOrLoansElsewhere",
+    "OtherLoansAtBank",
+    "OtherLoansAtStore",
+    "HasCoapplicant",
+    "HasGuarantor",
+    "OwnsHouse",
+    "RentsHouse",
+    "Unemployed",
+    "YearsAtCurrentJob_lt_1",
+    "YearsAtCurrentJob_geq_4",
+    "JobClassIsSkilled"
+  ],
+  "label_column": "GoodCustomer",
+  "label_mapping": {
+    "-1": 0,
+    "1": 1
+  },
+  "mean_probabilities": {
+    "source_only": [
+      0.4837447702884674,
+      0.5162551999092102
+    ],
+    "strict_shot": [
+      0.43198445439338684,
+      0.5680155754089355
+    ]
+  },
+  "prediction_counts": {
+    "source_only": [
+      169,
+      215
+    ],
+    "strict_shot": [
+      166,
+      218
+    ]
+  },
+  "reported_metrics": {
+    "source_only": {
+      "accuracy": 0.578125,
+      "equality": 0.1619623601436615,
+      "parity": 0.18359375,
+      "roc_auc": 0.5838029416976785
+    },
+    "strict_shot": {
+      "accuracy": 0.5911458134651184,
+      "equality": 0.08702957630157471,
+      "parity": 0.0546875,
+      "roc_auc": 0.6148148148148148
+    }
+  },
+  "reported_metrics_percent": {
+    "source_only": {
+      "accuracy": "57.81%",
+      "equality": "16.20%",
+      "parity": "18.36%",
+      "roc_auc": "58.38%"
+    },
+    "strict_shot": {
+      "accuracy": "59.11%",
+      "equality": "8.70%",
+      "parity": "5.47%",
+      "roc_auc": "61.48%"
+    }
+  },
+  "seed": 3,
+  "sensitive_attribute": "Gender",
+  "sensitive_mapping": {
+    "Female": 0,
+    "Male": 1
+  },
+  "source_domain": "germanA_2",
+  "source_only": {
+    "classification": {
+      "accuracy": 0.578125,
+      "balanced_accuracy": 0.5641679957469431,
+      "macro_f1": 0.5357611940298507,
+      "per_class": [
+        {
+          "class": 0,
+          "f1": 0.3955223880597015,
+          "precision": 0.3136094674556213,
+          "recall": 0.5353535353535354,
+          "support": 99
+        },
+        {
+          "class": 1,
+          "f1": 0.6759999999999998,
+          "precision": 0.786046511627907,
+          "recall": 0.5929824561403508,
+          "support": 285
+        }
+      ],
+      "roc_auc": 0.5838029416976785
+    },
+    "fairness": {
+      "demographic_parity_difference": 0.18359375,
+      "equal_opportunity_difference": 0.1619623601436615,
+      "equalized_odds_difference": 0.23258927464485168,
+      "false_positive_rate": {
+        "0": 0.3142857253551483,
+        "1": 0.546875
+      },
+      "group_sizes": {
+        "0": 128,
+        "1": 256
+      },
+      "positive_prediction_rate": {
+        "0": 0.4375,
+        "1": 0.62109375
+      },
+      "true_positive_rate": {
+        "0": 0.4838709533214569,
+        "1": 0.6458333134651184
+      }
+    }
+  },
+  "strict_shot": {
+    "classification": {
+      "accuracy": 0.5911458134651184,
+      "balanced_accuracy": 0.5762360446570973,
+      "macro_f1": 0.5477099666154018,
+      "per_class": [
+        {
+          "class": 0,
+          "f1": 0.4075471698113207,
+          "precision": 0.3253012048192771,
+          "recall": 0.5454545454545454,
+          "support": 99
+        },
+        {
+          "class": 1,
+          "f1": 0.687872763419483,
+          "precision": 0.7935779816513762,
+          "recall": 0.6070175438596491,
+          "support": 285
+        }
+      ],
+      "roc_auc": 0.6148148148148148
+    },
+    "fairness": {
+      "demographic_parity_difference": 0.0546875,
+      "equal_opportunity_difference": 0.08702957630157471,
+      "equalized_odds_difference": 0.08702957630157471,
+      "false_positive_rate": {
+        "0": 0.48571428656578064,
+        "1": 0.4375
+      },
+      "group_sizes": {
+        "0": 128,
+        "1": 256
+      },
+      "positive_prediction_rate": {
+        "0": 0.53125,
+        "1": 0.5859375
+      },
+      "true_positive_rate": {
+        "0": 0.5483871102333069,
+        "1": 0.6354166865348816
+      }
+    }
+  },
+  "target_domain": "germanA_1",
+  "target_labels_and_sensitive_loaded_after_adaptation": true
+}

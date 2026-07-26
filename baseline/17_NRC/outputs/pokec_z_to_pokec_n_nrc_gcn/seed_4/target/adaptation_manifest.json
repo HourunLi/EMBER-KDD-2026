@@ -1,0 +1,16 @@
+{
+  "evaluation_payload": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/pokec_z_to_pokec_n_nrc_gcn/seed_4/target/evaluation_payload.pt",
+  "experiment": "pokec_z_to_pokec_n_strict_original_nrc_gcn",
+  "nrc_prediction_counts": [
+    37844,
+    28725
+  ],
+  "seed": 4,
+  "source_data_paths_accepted_by_target_stage": false,
+  "source_only_prediction_counts": [
+    22892,
+    43677
+  ],
+  "target_checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/pokec_z_to_pokec_n_nrc_gcn/seed_4/target/target_nrc_model.pt",
+  "target_labels_or_sensitive_attributes_used_for_adaptation": false
+}

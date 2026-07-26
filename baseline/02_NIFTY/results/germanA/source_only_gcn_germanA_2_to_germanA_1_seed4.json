@@ -1,0 +1,16 @@
+{
+  "experiment": "source_only_gcn",
+  "source_domain": "germanA_2",
+  "target_domain": "germanA_1",
+  "dataset_schema": "germanA",
+  "label_column": "GoodCustomer",
+  "sensitive_column": "Gender",
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed4.pt",
+  "target_nodes": 384,
+  "metrics": {
+    "accuracy": 0.5625,
+    "roc_auc": 0.5963494595073542,
+    "parity": 0.1484375,
+    "equality": 0.19522849462365593
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "dataset_family": "germanA",
+  "experiment": "germanA_2_to_germanA_1_strict_original_nrc_gcn",
+  "nrc": {
+    "accuracy": 0.671875,
+    "equality": 0.023521482944488525,
+    "parity": 0.046875,
+    "positive_prediction_rate": {
+      "0": 0.6640625,
+      "1": 0.7109375
+    },
+    "roc_auc": 0.6033670033670033,
+    "true_positive_rate": {
+      "0": 0.7291666865348816,
+      "1": 0.7526881694793701
+    }
+  },
+  "seed": 4,
+  "source_only": {
+    "accuracy": 0.6692708134651184,
+    "equality": 0.0619959831237793,
+    "parity": 0.0859375,
+    "positive_prediction_rate": {
+      "0": 0.7109375,
+      "1": 0.796875
+    },
+    "roc_auc": 0.602374623427255,
+    "true_positive_rate": {
+      "0": 0.7552083134651184,
+      "1": 0.8172042965888977
+    }
+  },
+  "target_label_and_sensitive_attribute_loaded_only_in_final_evaluation": true
+}

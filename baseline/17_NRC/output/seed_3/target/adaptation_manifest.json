@@ -1,0 +1,16 @@
+{
+  "evaluation_payload": "./output/seed_3/target/evaluation_payload.pt",
+  "experiment": "germanA_2_to_germanA_1_strict_original_nrc_gcn",
+  "nrc_prediction_counts": [
+    121,
+    263
+  ],
+  "seed": 3,
+  "source_data_paths_accepted_by_target_stage": false,
+  "source_only_prediction_counts": [
+    46,
+    338
+  ],
+  "target_checkpoint": "./output/seed_3/target/target_nrc_model.pt",
+  "target_labels_or_sensitive_attributes_used_for_adaptation": false
+}

@@ -42,10 +42,27 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     return torch.sparse.FloatTensor(indices, values, shape)
 
 
-def feature_norm(features):
-    min_values = features.min(axis=0)[0]
-    max_values = features.max(axis=0)[0]
-    return 2 * (features - min_values).div(max_values - min_values) - 1
+def feature_norm(features, min_values=None, max_values=None):
+    """Min-max normalize features with optional externally supplied statistics.
+
+    Cross-domain evaluation must fit preprocessing on the source domain only.
+    Passing ``min_values`` and ``max_values`` therefore applies source-domain
+    statistics to another domain without inspecting its feature distribution.
+    Constant source features are mapped to zero to avoid division by zero.
+    """
+    if min_values is None:
+        min_values = features.min(axis=0)[0]
+    if max_values is None:
+        max_values = features.max(axis=0)[0]
+
+    feature_range = max_values - min_values
+    constant_features = feature_range == 0
+    safe_range = feature_range.clone()
+    safe_range[constant_features] = 1
+
+    normalized = 2 * (features - min_values).div(safe_range) - 1
+    normalized[:, constant_features] = 0
+    return normalized
 
 
 def build_relationship(x, thresh=0.25):
@@ -221,32 +238,81 @@ def load_bail(dataset, sens_attr="WHITE", predict_attr="RECID", path="dataset/ba
     return adj_norm_sp, edge_index, features, labels, train_mask, val_mask, test_mask, sens
 
 # 自己改的
-def load_bailA(dataset, sens_attr="WHITE", predict_attr="RECID", path="dataset/bailA/", label_number=1000):
+def load_bailA(dataset, sens_attr="WHITE", predict_attr="RECID", path="dataset/bailA/",
+               label_number=1000, split_mode="random", split_seed=20):
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset)))
     header = list(idx_features_labels.columns)
     header.remove(predict_attr)
+    if 'user_id' in header:
+        # Domain CSVs retain the original row identifier for bookkeeping. It
+        # is not a predictive attribute and must not be exposed to the model.
+        header.remove('user_id')
     labels = idx_features_labels[predict_attr].values
     labels = torch.LongTensor(labels)
     sens_labels = idx_features_labels[sens_attr].values.astype(int)
     sens_labels = torch.LongTensor(sens_labels)
     features = idx_features_labels[header]
     features = torch.FloatTensor(np.array(features, dtype=np.float32))
-    adj = load_npz(f'{path}/{dataset}_edges.npz')
+    edge_npz_path = os.path.join(path, "{}_edges.npz".format(dataset))
+    edge_txt_path = os.path.join(path, "{}_edges.txt".format(dataset))
+    if os.path.exists(edge_npz_path):
+        adj = load_npz(edge_npz_path)
+    elif os.path.exists(edge_txt_path):
+        edges = np.genfromtxt(edge_txt_path, dtype=np.int64)
+        if edges.ndim == 1:
+            edges = edges.reshape(1, -1)
+        if edges.shape[1] != 2:
+            raise ValueError(
+                "Expected two integer columns in '{}', got shape {}."
+                .format(edge_txt_path, edges.shape))
+        if edges.min() < 0 or edges.max() >= features.shape[0]:
+            raise ValueError(
+                "Edge indices in '{}' are outside the node range [0, {})."
+                .format(edge_txt_path, features.shape[0]))
+
+        adj = sp.coo_matrix(
+            (np.ones(edges.shape[0], dtype=np.float32),
+             (edges[:, 0], edges[:, 1])),
+            shape=(features.shape[0], features.shape[0]), dtype=np.float32)
+        adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+    else:
+        raise FileNotFoundError(
+            "Neither '{}' nor '{}' exists.".format(edge_npz_path, edge_txt_path))
 
     adj_norm = sys_normalized_adjacency(adj)
     adj_norm_sp = sparse_mx_to_torch_sparse_tensor(adj_norm)
     edge_index, _ = from_scipy_sparse_matrix(adj)
 
-    label_idx_0 = np.where(labels == 0)[0]
-    label_idx_1 = np.where(labels == 1)[0]
-    random.shuffle(label_idx_0)
-    random.shuffle(label_idx_1)
-    idx_train = np.append(label_idx_0[:int(0.5 * len(label_idx_0))],
-                          label_idx_1[: int(0.5 * len(label_idx_1))])
-    idx_val = np.append(label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))], 
-                        label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
-    idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):],
-                         label_idx_1[int(0.75 * len(label_idx_1)):])
+    if split_mode == "random":
+        label_idx_0 = np.where(labels == 0)[0]
+        label_idx_1 = np.where(labels == 1)[0]
+        split_rng = np.random.RandomState(split_seed)
+        split_rng.shuffle(label_idx_0)
+        split_rng.shuffle(label_idx_1)
+        idx_train = np.append(label_idx_0[:int(0.5 * len(label_idx_0))],
+                              label_idx_1[:int(0.5 * len(label_idx_1))])
+        idx_val = np.append(
+            label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))],
+            label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
+        idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):],
+                             label_idx_1[int(0.75 * len(label_idx_1)):])
+    elif split_mode == "full_test":
+        # Target-domain labels must not participate in training or model
+        # selection. The whole target graph is exposed only to final testing.
+        idx_train = np.array([], dtype=np.int64)
+        idx_val = np.array([], dtype=np.int64)
+        idx_test = np.arange(features.shape[0], dtype=np.int64)
+    elif split_mode == "full_train":
+        # Source-only domain generalization: every labeled source node is used
+        # by the supervised classifier objective. No source hold-out is kept.
+        idx_train = np.arange(features.shape[0], dtype=np.int64)
+        idx_val = np.array([], dtype=np.int64)
+        idx_test = np.array([], dtype=np.int64)
+    else:
+        raise ValueError(
+            "Unsupported bailA split_mode '{}'. Use 'random', 'full_train', "
+            "or 'full_test'."
+            .format(split_mode))
 
     sens = idx_features_labels[sens_attr].values.astype(int)
     sens = torch.LongTensor(sens)
@@ -637,7 +703,259 @@ def load_syn_1(dataset,sens_attr="",predict_attr="", path="dataset/syn-1/", labe
 
     return adj, edge_index, features, labels, train_mask, val_mask, test_mask, sens_labels
 
-def get_dataset(dataname, top_k):
+POKEC_DOMAIN_EXCLUSIVE_FEATURES = {
+    'zberatelstvo',
+    'hackovanie',
+    'vtacik',
+    'plave',
+    'niekto',
+    'slobodny',
+    'alternativne',
+    'alternativa',
+    'horolezectvo',
+    'bezkovanie',
+    'surfing',
+    'literaturu o umeni a architekture',
+    'madarsky',
+}
+
+
+def build_local_edge_graph(edge_path, num_nodes, delimiter=None,
+                           add_self_loops=True):
+    raw_edges = np.genfromtxt(edge_path, delimiter=delimiter)
+    if raw_edges.ndim == 1:
+        raw_edges = raw_edges.reshape(1, -1)
+    if raw_edges.shape[1] != 2:
+        raise ValueError(
+            "Expected two edge columns in '{}', got shape {}."
+            .format(edge_path, raw_edges.shape))
+
+    edges = raw_edges.astype(np.int64)
+    if not np.allclose(raw_edges, edges):
+        raise ValueError("Non-integer node identifiers found in '{}'.".format(
+            edge_path))
+    if edges.min() < 0 or edges.max() >= num_nodes:
+        raise ValueError(
+            "Edge indices in '{}' are outside the node range [0, {})."
+            .format(edge_path, num_nodes))
+    return build_sparse_graph(edges, num_nodes, add_self_loops)
+
+
+def build_id_mapped_graph(edge_path, node_ids, add_self_loops=True):
+    raw_edges = np.genfromtxt(edge_path, dtype=np.int64)
+    if raw_edges.ndim == 1:
+        raw_edges = raw_edges.reshape(1, -1)
+    if raw_edges.shape[1] != 2:
+        raise ValueError(
+            "Expected two edge columns in '{}', got shape {}."
+            .format(edge_path, raw_edges.shape))
+
+    node_id_map = {int(node_id): index
+                   for index, node_id in enumerate(node_ids)}
+    flattened_edges = raw_edges.reshape(-1)
+    mapped_edges = np.fromiter(
+        (node_id_map.get(int(node_id), -1) for node_id in flattened_edges),
+        dtype=np.int64, count=flattened_edges.size).reshape(raw_edges.shape)
+    if np.any(mapped_edges < 0):
+        missing_ids = np.unique(raw_edges[mapped_edges < 0])
+        raise ValueError(
+            "Edges in '{}' reference {} node IDs absent from the CSV, "
+            "for example {}.".format(
+                edge_path, missing_ids.size, missing_ids[:5].tolist()))
+    return build_sparse_graph(mapped_edges, len(node_ids), add_self_loops)
+
+
+def build_sparse_graph(edges, num_nodes, add_self_loops):
+    adj = sp.coo_matrix(
+        (np.ones(edges.shape[0], dtype=np.float32),
+         (edges[:, 0], edges[:, 1])),
+        shape=(num_nodes, num_nodes), dtype=np.float32)
+    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+    if add_self_loops:
+        adj = adj + sp.eye(num_nodes, dtype=np.float32)
+
+    adj_norm = sys_normalized_adjacency(adj)
+    adj_norm_sp = sparse_mx_to_torch_sparse_tensor(adj_norm)
+    edge_index, _ = from_scipy_sparse_matrix(adj)
+    return adj_norm_sp, edge_index
+
+
+def load_germanA_domain(dataset, path="dataset/germanA/"):
+    csv_path = os.path.join(path, "{}.csv".format(dataset))
+    edge_path = os.path.join(path, "{}_edges.txt".format(dataset))
+    frame = pd.read_csv(csv_path)
+
+    feature_names = list(frame.columns)
+    for excluded_column in (
+            'user_id', 'GoodCustomer', 'OtherLoansAtStore', 'PurposeOfLoan'):
+        if excluded_column in feature_names:
+            feature_names.remove(excluded_column)
+
+    frame.loc[frame['Gender'] == 'Female', 'Gender'] = 1
+    frame.loc[frame['Gender'] == 'Male', 'Gender'] = 0
+    features = torch.FloatTensor(
+        frame[feature_names].to_numpy(dtype=np.float32))
+
+    labels = frame['GoodCustomer'].to_numpy(dtype=np.int64)
+    labels[labels == -1] = 0
+    labels = torch.LongTensor(labels)
+    sens = torch.LongTensor(frame['Gender'].to_numpy(dtype=np.int64))
+
+    adj_norm_sp, edge_index = build_local_edge_graph(
+        edge_path, features.shape[0], delimiter=None, add_self_loops=True)
+    return adj_norm_sp, edge_index, features, labels, sens, feature_names, 'Gender'
+
+
+def load_pokec_domain(dataset):
+    path = os.path.join("dataset", dataset)
+    csv_path = os.path.join(path, "{}.csv".format(dataset))
+    edge_path = os.path.join(path, "{}_edges.txt".format(dataset))
+    frame = pd.read_csv(csv_path)
+
+    excluded_columns = {
+        'user_id',
+        'I_am_working_in_field',
+    } | POKEC_DOMAIN_EXCLUSIVE_FEATURES
+    feature_names = sorted([
+        column for column in frame.columns
+        if column not in excluded_columns
+    ])
+    if len(feature_names) != 265:
+        raise ValueError(
+            "Expected 265 aligned Pokec features for '{}', found {}."
+            .format(dataset, len(feature_names)))
+
+    features = torch.FloatTensor(
+        frame[feature_names].to_numpy(dtype=np.float32))
+    labels = torch.LongTensor(
+        frame['I_am_working_in_field'].to_numpy(dtype=np.int64))
+    sens_values = frame['region'].to_numpy(dtype=np.int64)
+    sens_values[sens_values > 0] = 1
+    sens = torch.LongTensor(sens_values)
+
+    node_ids = frame['user_id'].to_numpy(dtype=np.int64)
+    adj_norm_sp, edge_index = build_id_mapped_graph(
+        edge_path, node_ids, add_self_loops=True)
+    return adj_norm_sp, edge_index, features, labels, sens, feature_names, 'region'
+
+
+def load_syn_domain(dataset, path="dataset/syn/"):
+    feature_path = os.path.join(path, "{}_feat.csv".format(dataset))
+    label_path = os.path.join(path, "{}_label.txt".format(dataset))
+    sens_path = os.path.join(path, "{}_sens.txt".format(dataset))
+    edge_path = os.path.join(path, "{}_edges.txt".format(dataset))
+
+    raw_features = pd.read_csv(feature_path, header=None).to_numpy(
+        dtype=np.float32)
+    labels = torch.LongTensor(
+        pd.read_csv(label_path, header=None).to_numpy(
+            dtype=np.int64).reshape(-1))
+    sens = torch.LongTensor(
+        pd.read_csv(sens_path, header=None).to_numpy(
+            dtype=np.int64).reshape(-1))
+    features = torch.FloatTensor(np.concatenate([
+        raw_features,
+        sens.numpy().reshape(-1, 1).astype(np.float32),
+    ], axis=1))
+    feature_names = [
+        'feature_{}'.format(index) for index in range(raw_features.shape[1])
+    ] + ['sensitive_attribute']
+
+    adj_norm_sp, edge_index = build_local_edge_graph(
+        edge_path, features.shape[0], delimiter=',', add_self_loops=True)
+    return (
+        adj_norm_sp, edge_index, features, labels, sens, feature_names,
+        'sensitive_attribute')
+
+
+def get_domain_dataset(dataset_family, domain_name, split_mode, top_k):
+    if dataset_family == 'bailA':
+        loaded = load_bailA(
+            domain_name, split_mode=split_mode)
+        adj_norm_sp, edge_index, features, labels, _, _, _, sens = loaded
+        feature_names = list(pd.read_csv(
+            os.path.join("dataset/bailA", "{}.csv".format(domain_name)),
+            nrows=0).columns)
+        feature_names.remove('RECID')
+        if 'user_id' in feature_names:
+            feature_names.remove('user_id')
+        sensitive_name = 'WHITE'
+        normalize_features = True
+    elif dataset_family == 'germanA':
+        (adj_norm_sp, edge_index, features, labels, sens, feature_names,
+         sensitive_name) = load_germanA_domain(domain_name)
+        normalize_features = False
+    elif dataset_family == 'pokec':
+        (adj_norm_sp, edge_index, features, labels, sens, feature_names,
+         sensitive_name) = load_pokec_domain(domain_name)
+        normalize_features = True
+    elif dataset_family == 'syn':
+        (adj_norm_sp, edge_index, features, labels, sens, feature_names,
+         sensitive_name) = load_syn_domain(domain_name)
+        normalize_features = True
+    else:
+        raise ValueError(
+            "Unsupported cross-domain dataset family '{}'."
+            .format(dataset_family))
+
+    if features.shape[1] != len(feature_names):
+        raise ValueError(
+            "Feature tensor/column mismatch for '{}': {} versus {}."
+            .format(domain_name, features.shape[1], len(feature_names)))
+    sens_idx = feature_names.index(sensitive_name)
+
+    labels = labels.clone()
+    labels[labels > 1] = 1
+    sens = sens.clone()
+    sens[sens > 1] = 1
+    valid_label_mask = torch.logical_and(labels >= 0, labels <= 1)
+    valid_sensitive_mask = torch.logical_and(sens >= 0, sens <= 1)
+
+    empty_mask = torch.zeros(features.shape[0], dtype=torch.bool)
+    if split_mode == 'full_train':
+        train_mask = valid_label_mask.clone()
+        val_mask = empty_mask.clone()
+        test_mask = empty_mask.clone()
+    elif split_mode == 'full_test':
+        train_mask = empty_mask.clone()
+        val_mask = empty_mask.clone()
+        test_mask = torch.logical_and(
+            valid_label_mask, valid_sensitive_mask)
+    else:
+        raise ValueError(
+            "Cross-domain split_mode must be 'full_train' or 'full_test'.")
+
+    x_max = torch.max(features, dim=0)[0]
+    x_min = torch.min(features, dim=0)[0]
+    if normalize_features:
+        features = feature_norm(features, x_min, x_max)
+        features[:, sens_idx] = sens.to(features.dtype)
+
+    corr_matrix = sens_correlation(features, sens_idx)
+    corr_idx = np.argsort(-np.abs(corr_matrix))
+    if top_k > 0:
+        corr_idx = corr_idx[:top_k]
+
+    data = Data(
+        x=features,
+        edge_index=edge_index,
+        adj_norm_sp=adj_norm_sp,
+        y=labels.float(),
+        train_mask=train_mask,
+        val_mask=val_mask,
+        test_mask=test_mask,
+        sens=sens,
+        valid_label_mask=valid_label_mask,
+        valid_sensitive_mask=valid_sensitive_mask,
+    )
+    data.domain_name = domain_name
+    data.dataset_family = dataset_family
+    data.feature_names = feature_names
+    return data, sens_idx, corr_matrix, corr_idx, x_min, x_max
+
+
+def get_dataset(dataname, top_k, dataset_name=None, split_mode="random",
+                split_seed=20, normalization_stats=None):
     if(dataname == 'credit'):
         load, label_num = load_credit, 6000
     elif(dataname == 'bail'):
@@ -657,12 +975,30 @@ def get_dataset(dataname, top_k):
         load, label_num = load_syn_1, -1
     
 
-    adj_norm_sp, edge_index, features, labels, train_mask, val_mask, test_mask, sens = load(
-        dataset=dataname, label_number=label_num)
+    dataset_name = dataname if dataset_name is None else dataset_name
+    load_kwargs = dict(dataset=dataset_name, label_number=label_num)
+    if load is load_bailA:
+        load_kwargs.update(split_mode=split_mode, split_seed=split_seed)
+    elif split_mode != "random":
+        raise ValueError(
+            "split_mode='{}' is currently supported only for bailA domains."
+            .format(split_mode))
 
-    if(dataname == 'credit'):
+    adj_norm_sp, edge_index, features, labels, train_mask, val_mask, test_mask, sens = load(
+        **load_kwargs)
+
+    feature_names = None
+    if dataname == 'bailA':
+        feature_names = list(pd.read_csv(
+            os.path.join("dataset/bailA/", "{}.csv".format(dataset_name)),
+            nrows=0).columns)
+        feature_names.remove('RECID')
+        if 'user_id' in feature_names:
+            feature_names.remove('user_id')
+        sens_idx = feature_names.index('WHITE')
+    elif(dataname == 'credit'):
         sens_idx = 1
-    elif(dataname == 'bail' or dataname == 'german' or dataname == 'bailA' or dataname == 'germanA'):
+    elif(dataname == 'bail' or dataname == 'german' or dataname == 'germanA'):
         sens_idx = 0
     elif(dataname == 'pokec_z' or dataname == 'pokec_n'):
         sens_idx = 3
@@ -672,7 +1008,17 @@ def get_dataset(dataname, top_k):
     x_max, x_min = torch.max(features, dim=0)[0], torch.min(features, dim=0)[0]
 
     if(dataname != 'german' and dataname != 'germanA'):
-        norm_features = feature_norm(features)
+        if normalization_stats is None:
+            norm_min, norm_max = x_min, x_max
+        else:
+            norm_min, norm_max = normalization_stats
+            if norm_min.shape[0] != features.shape[1] or norm_max.shape[0] != features.shape[1]:
+                raise ValueError(
+                    "Source and target domains have different feature dimensions: "
+                    "normalization statistics contain {} features, but '{}' contains {}."
+                    .format(norm_min.shape[0], dataset_name, features.shape[1]))
+
+        norm_features = feature_norm(features, norm_min, norm_max)
         norm_features[:, sens_idx] = features[:, sens_idx]
         features = norm_features
 
@@ -683,4 +1029,12 @@ def get_dataset(dataname, top_k):
         corr_idx = corr_idx[:top_k]
 
     labels[labels > 1] = 1
-    return Data(x=features, edge_index=edge_index, adj_norm_sp=adj_norm_sp, y=labels.float(), train_mask=train_mask, val_mask=val_mask, test_mask=test_mask, sens=sens), sens_idx, corr_matrix, corr_idx, x_min, x_max
+    data = Data(x=features, edge_index=edge_index, adj_norm_sp=adj_norm_sp,
+                y=labels.float(), train_mask=train_mask, val_mask=val_mask,
+                test_mask=test_mask, sens=sens)
+    data.domain_name = dataset_name
+
+    if dataname == 'bailA':
+        data.feature_names = feature_names
+
+    return data, sens_idx, corr_matrix, corr_idx, x_min, x_max

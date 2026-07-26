@@ -1,0 +1,64 @@
+7.25
+
+bailA:
+python3 main.py \
+  --DS bailA \
+  --source-domain bailA_2 \
+  --target-domain bailA_1 \
+  --hidden-dim 64 \
+  --num-gc-layers 3 \
+  --lr 0.001 \
+  --conv_type GCN \
+  --source-epochs 100 \
+  --tta_epoch 50 \
+  --seeds 1,2,3,4,5 \
+  --output-dir results/bailA_GALA
+
+germanA:
+python3 main.py \
+  --DS germanA \
+  --source-domain germanA_2 \
+  --target-domain germanA_1 \
+  --hidden-dim 64 \
+  --num-gc-layers 3 \
+  --lr 0.001 \
+  --conv_type GCN \
+  --source-epochs 200 \
+  --tta_epoch 50 \
+  --seeds 1,2,3,4,5 \
+  --output-dir results/germanA_GALA
+
+pokec:
+python3 main.py \
+  --DS pokec \
+  --source-domain pokec_z \
+  --target-domain pokec_n \
+  --hidden-dim 64 \
+  --num-gc-layers 3 \
+  --lr 0.001 \
+  --conv_type GCN \
+  --source-epochs 200 \
+  --tta_epoch 50 \
+  --seeds 1,2,3,4,5 \
+  --output-dir results/pokec_GALA \
+  --device cuda \
+  --gpu-id 0 
+
+syn:
+python3 main.py \
+  --DS syn \
+  --source-domain syn-2 \
+  --target-domain syn-1 \
+  --hidden-dim 64 \
+  --num-gc-layers 3 \
+  --lr 0.001 \
+  --conv_type GCN \
+  --source-epochs 200 \
+  --tta_epoch 50 \
+  --seeds 1,2,3,4,5 \
+  --output-dir results/syn_GALA \
+  --device cuda \
+  --gpu-id 0 
+
+
+

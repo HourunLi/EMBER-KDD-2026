@@ -1,0 +1,556 @@
+==========================================
+==========       config      =============
+==========================================
+method:srconly
+pl:spa
+gpu_id:0
+s:0
+t:1
+output:san
+seed:0
+batch_size:128
+worker:4
+bottleneck_dim:64
+max_epoch:30
+momentum:0.3
+K:5
+smooth:0.1
+tar_par:0.2
+validate:False
+net:mlp
+dset:bailA
+lr:0.01
+ifcorrect:False
+ifsvd:False
+svd_par:1.0
+laplac:laplac1
+ap:euc
+weight_decay:1e-05
+hidden:64
+dropout:0.5
+source_csv:./dataset/bailA/bailA_2.csv
+target_csv:./dataset/bailA/bailA_1.csv
+log_interval:10
+eval_epoch:3.0
+class_num:2
+data_root:
+s_dset_path:./dataset/bailA
+t_dset_path:./dataset/bailA
+test_dset_path:./dataset/bailA
+output_dir:san/spa_0.2/bailA/BB
+name:BB
+log:srconly
+out_file:<_io.TextIOWrapper name='san/spa_0.2/bailA/BB/srconly.txt' mode='w' encoding='UTF-8'>
+
+==========================================
+
+[Source] samples=11215, epochs=30, steps/epoch=88, total_iters=2640
+[Source] Iter 10/2640: cls=0.84247
+[Source] Iter 20/2640: cls=0.63714
+[Source] Iter 30/2640: cls=0.65364
+[Source] Iter 40/2640: cls=0.61817
+[Source] Iter 50/2640: cls=0.61478
+[Source] Iter 60/2640: cls=0.63945
+[Source] Iter 70/2640: cls=0.66994
+[Source] Iter 80/2640: cls=0.65871
+[Source] Epoch 1/30: loss=0.66149, acc=74.73%, entropy=0.6524
+[Source] Iter 90/2640: cls=0.60313
+[Source] Iter 100/2640: cls=0.61658
+[Source] Iter 110/2640: cls=0.58440
+[Source] Iter 120/2640: cls=0.62386
+[Source] Iter 130/2640: cls=0.64801
+[Source] Iter 140/2640: cls=0.61775
+[Source] Iter 150/2640: cls=0.63768
+[Source] Iter 160/2640: cls=0.63366
+[Source] Iter 170/2640: cls=0.61065
+[Source] Epoch 2/30: loss=0.60997, acc=77.69%, entropy=0.6305
+[Source] Iter 180/2640: cls=0.57702
+[Source] Iter 190/2640: cls=0.64517
+[Source] Iter 200/2640: cls=0.62676
+[Source] Iter 210/2640: cls=0.55889
+[Source] Iter 220/2640: cls=0.57416
+[Source] Iter 230/2640: cls=0.55445
+[Source] Iter 240/2640: cls=0.55764
+[Source] Iter 250/2640: cls=0.56129
+[Source] Iter 260/2640: cls=0.57376
+[Source] Epoch 3/30: loss=0.59139, acc=80.07%, entropy=0.6151
+[Source] Iter 270/2640: cls=0.55808
+[Source] Iter 280/2640: cls=0.61401
+[Source] Iter 290/2640: cls=0.57674
+[Source] Iter 300/2640: cls=0.52766
+[Source] Iter 310/2640: cls=0.57375
+[Source] Iter 320/2640: cls=0.56056
+[Source] Iter 330/2640: cls=0.57572
+[Source] Iter 340/2640: cls=0.57794
+[Source] Iter 350/2640: cls=0.60296
+[Source] Epoch 4/30: loss=0.58123, acc=80.64%, entropy=0.6028
+[Source] Iter 360/2640: cls=0.54004
+[Source] Iter 370/2640: cls=0.52603
+[Source] Iter 380/2640: cls=0.52888
+[Source] Iter 390/2640: cls=0.57847
+[Source] Iter 400/2640: cls=0.55619
+[Source] Iter 410/2640: cls=0.57476
+[Source] Iter 420/2640: cls=0.52519
+[Source] Iter 430/2640: cls=0.55247
+[Source] Iter 440/2640: cls=0.51949
+[Source] Epoch 5/30: loss=0.56800, acc=81.78%, entropy=0.5978
+[Source] Iter 450/2640: cls=0.57139
+[Source] Iter 460/2640: cls=0.55272
+[Source] Iter 470/2640: cls=0.51591
+[Source] Iter 480/2640: cls=0.51929
+[Source] Iter 490/2640: cls=0.59341
+[Source] Iter 500/2640: cls=0.60620
+[Source] Iter 510/2640: cls=0.54521
+[Source] Iter 520/2640: cls=0.55871
+[Source] Epoch 6/30: loss=0.55933, acc=82.68%, entropy=0.5818
+[Source] Iter 530/2640: cls=0.58282
+[Source] Iter 540/2640: cls=0.58662
+[Source] Iter 550/2640: cls=0.49918
+[Source] Iter 560/2640: cls=0.51149
+[Source] Iter 570/2640: cls=0.54876
+[Source] Iter 580/2640: cls=0.50270
+[Source] Iter 590/2640: cls=0.51217
+[Source] Iter 600/2640: cls=0.54794
+[Source] Iter 610/2640: cls=0.52187
+[Source] Epoch 7/30: loss=0.55807, acc=84.02%, entropy=0.5849
+[Source] Iter 620/2640: cls=0.59262
+[Source] Iter 630/2640: cls=0.53474
+[Source] Iter 640/2640: cls=0.53952
+[Source] Iter 650/2640: cls=0.53643
+[Source] Iter 660/2640: cls=0.58833
+[Source] Iter 670/2640: cls=0.61690
+[Source] Iter 680/2640: cls=0.54119
+[Source] Iter 690/2640: cls=0.58470
+[Source] Iter 700/2640: cls=0.58370
+[Source] Epoch 8/30: loss=0.54649, acc=84.18%, entropy=0.5720
+[Source] Iter 710/2640: cls=0.58249
+[Source] Iter 720/2640: cls=0.52152
+[Source] Iter 730/2640: cls=0.51240
+[Source] Iter 740/2640: cls=0.53252
+[Source] Iter 750/2640: cls=0.50970
+[Source] Iter 760/2640: cls=0.56434
+[Source] Iter 770/2640: cls=0.61581
+[Source] Iter 780/2640: cls=0.52886
+[Source] Iter 790/2640: cls=0.60811
+[Source] Epoch 9/30: loss=0.54341, acc=84.11%, entropy=0.5617
+[Source] Iter 800/2640: cls=0.54421
+[Source] Iter 810/2640: cls=0.49066
+[Source] Iter 820/2640: cls=0.59962
+[Source] Iter 830/2640: cls=0.53286
+[Source] Iter 840/2640: cls=0.52438
+[Source] Iter 850/2640: cls=0.52900
+[Source] Iter 860/2640: cls=0.57236
+[Source] Iter 870/2640: cls=0.48588
+[Source] Iter 880/2640: cls=0.49165
+[Source] Epoch 10/30: loss=0.53987, acc=85.43%, entropy=0.5668
+[Source] Iter 890/2640: cls=0.49514
+[Source] Iter 900/2640: cls=0.58363
+[Source] Iter 910/2640: cls=0.59559
+[Source] Iter 920/2640: cls=0.53695
+[Source] Iter 930/2640: cls=0.53224
+[Source] Iter 940/2640: cls=0.52340
+[Source] Iter 950/2640: cls=0.60501
+[Source] Iter 960/2640: cls=0.52607
+[Source] Epoch 11/30: loss=0.53757, acc=84.59%, entropy=0.5554
+[Source] Iter 970/2640: cls=0.52680
+[Source] Iter 980/2640: cls=0.48632
+[Source] Iter 990/2640: cls=0.55664
+[Source] Iter 1000/2640: cls=0.51999
+[Source] Iter 1010/2640: cls=0.46949
+[Source] Iter 1020/2640: cls=0.51247
+[Source] Iter 1030/2640: cls=0.53740
+[Source] Iter 1040/2640: cls=0.58787
+[Source] Iter 1050/2640: cls=0.48225
+[Source] Epoch 12/30: loss=0.53119, acc=84.99%, entropy=0.5505
+[Source] Iter 1060/2640: cls=0.52370
+[Source] Iter 1070/2640: cls=0.50672
+[Source] Iter 1080/2640: cls=0.56170
+[Source] Iter 1090/2640: cls=0.47733
+[Source] Iter 1100/2640: cls=0.49307
+[Source] Iter 1110/2640: cls=0.58364
+[Source] Iter 1120/2640: cls=0.45917
+[Source] Iter 1130/2640: cls=0.48424
+[Source] Iter 1140/2640: cls=0.55183
+[Source] Epoch 13/30: loss=0.52962, acc=85.18%, entropy=0.5474
+[Source] Iter 1150/2640: cls=0.53642
+[Source] Iter 1160/2640: cls=0.53291
+[Source] Iter 1170/2640: cls=0.48784
+[Source] Iter 1180/2640: cls=0.47545
+[Source] Iter 1190/2640: cls=0.55943
+[Source] Iter 1200/2640: cls=0.52482
+[Source] Iter 1210/2640: cls=0.53320
+[Source] Iter 1220/2640: cls=0.60239
+[Source] Iter 1230/2640: cls=0.56376
+[Source] Epoch 14/30: loss=0.52245, acc=86.39%, entropy=0.5468
+[Source] Iter 1240/2640: cls=0.54098
+[Source] Iter 1250/2640: cls=0.47136
+[Source] Iter 1260/2640: cls=0.50340
+[Source] Iter 1270/2640: cls=0.52112
+[Source] Iter 1280/2640: cls=0.45052
+[Source] Iter 1290/2640: cls=0.59098
+[Source] Iter 1300/2640: cls=0.57344
+[Source] Iter 1310/2640: cls=0.56359
+[Source] Iter 1320/2640: cls=0.55111
+[Source] Epoch 15/30: loss=0.51772, acc=86.30%, entropy=0.5377
+[Source] Iter 1330/2640: cls=0.53324
+[Source] Iter 1340/2640: cls=0.51779
+[Source] Iter 1350/2640: cls=0.54942
+[Source] Iter 1360/2640: cls=0.49512
+[Source] Iter 1370/2640: cls=0.51999
+[Source] Iter 1380/2640: cls=0.55074
+[Source] Iter 1390/2640: cls=0.54623
+[Source] Iter 1400/2640: cls=0.54708
+[Source] Epoch 16/30: loss=0.51511, acc=86.87%, entropy=0.5379
+[Source] Iter 1410/2640: cls=0.46382
+[Source] Iter 1420/2640: cls=0.52453
+[Source] Iter 1430/2640: cls=0.50049
+[Source] Iter 1440/2640: cls=0.56966
+[Source] Iter 1450/2640: cls=0.60648
+[Source] Iter 1460/2640: cls=0.52836
+[Source] Iter 1470/2640: cls=0.50292
+[Source] Iter 1480/2640: cls=0.46885
+[Source] Iter 1490/2640: cls=0.46642
+[Source] Epoch 17/30: loss=0.50899, acc=86.65%, entropy=0.5276
+[Source] Iter 1500/2640: cls=0.46586
+[Source] Iter 1510/2640: cls=0.47832
+[Source] Iter 1520/2640: cls=0.46178
+[Source] Iter 1530/2640: cls=0.49441
+[Source] Iter 1540/2640: cls=0.52923
+[Source] Iter 1550/2640: cls=0.50907
+[Source] Iter 1560/2640: cls=0.54054
+[Source] Iter 1570/2640: cls=0.54189
+[Source] Iter 1580/2640: cls=0.49292
+[Source] Epoch 18/30: loss=0.50823, acc=87.27%, entropy=0.5281
+[Source] Iter 1590/2640: cls=0.52641
+[Source] Iter 1600/2640: cls=0.48750
+[Source] Iter 1610/2640: cls=0.53768
+[Source] Iter 1620/2640: cls=0.50533
+[Source] Iter 1630/2640: cls=0.45572
+[Source] Iter 1640/2640: cls=0.53358
+[Source] Iter 1650/2640: cls=0.50129
+[Source] Iter 1660/2640: cls=0.52494
+[Source] Iter 1670/2640: cls=0.50127
+[Source] Epoch 19/30: loss=0.50971, acc=87.02%, entropy=0.5247
+[Source] Iter 1680/2640: cls=0.44778
+[Source] Iter 1690/2640: cls=0.43976
+[Source] Iter 1700/2640: cls=0.51606
+[Source] Iter 1710/2640: cls=0.51072
+[Source] Iter 1720/2640: cls=0.46831
+[Source] Iter 1730/2640: cls=0.57152
+[Source] Iter 1740/2640: cls=0.54195
+[Source] Iter 1750/2640: cls=0.45834
+[Source] Iter 1760/2640: cls=0.52536
+[Source] Epoch 20/30: loss=0.50391, acc=87.55%, entropy=0.5217
+[Source] Iter 1770/2640: cls=0.51371
+[Source] Iter 1780/2640: cls=0.49358
+[Source] Iter 1790/2640: cls=0.45653
+[Source] Iter 1800/2640: cls=0.49369
+[Source] Iter 1810/2640: cls=0.50830
+[Source] Iter 1820/2640: cls=0.48641
+[Source] Iter 1830/2640: cls=0.48061
+[Source] Iter 1840/2640: cls=0.50522
+[Source] Epoch 21/30: loss=0.50232, acc=87.74%, entropy=0.5190
+[Source] Iter 1850/2640: cls=0.51082
+[Source] Iter 1860/2640: cls=0.48342
+[Source] Iter 1870/2640: cls=0.51515
+[Source] Iter 1880/2640: cls=0.45378
+[Source] Iter 1890/2640: cls=0.50165
+[Source] Iter 1900/2640: cls=0.58503
+[Source] Iter 1910/2640: cls=0.54385
+[Source] Iter 1920/2640: cls=0.49386
+[Source] Iter 1930/2640: cls=0.52499
+[Source] Epoch 22/30: loss=0.50408, acc=87.79%, entropy=0.5194
+[Source] Iter 1940/2640: cls=0.56231
+[Source] Iter 1950/2640: cls=0.54001
+[Source] Iter 1960/2640: cls=0.49985
+[Source] Iter 1970/2640: cls=0.52483
+[Source] Iter 1980/2640: cls=0.46645
+[Source] Iter 1990/2640: cls=0.63021
+[Source] Iter 2000/2640: cls=0.48679
+[Source] Iter 2010/2640: cls=0.49590
+[Source] Iter 2020/2640: cls=0.55923
+[Source] Epoch 23/30: loss=0.50026, acc=87.78%, entropy=0.5165
+[Source] Iter 2030/2640: cls=0.53295
+[Source] Iter 2040/2640: cls=0.48697
+[Source] Iter 2050/2640: cls=0.53012
+[Source] Iter 2060/2640: cls=0.59769
+[Source] Iter 2070/2640: cls=0.51750
+[Source] Iter 2080/2640: cls=0.47531
+[Source] Iter 2090/2640: cls=0.50624
+[Source] Iter 2100/2640: cls=0.43674
+[Source] Iter 2110/2640: cls=0.48530
+[Source] Epoch 24/30: loss=0.49202, acc=88.36%, entropy=0.5164
+[Source] Iter 2120/2640: cls=0.48592
+[Source] Iter 2130/2640: cls=0.46155
+[Source] Iter 2140/2640: cls=0.48531
+[Source] Iter 2150/2640: cls=0.48572
+[Source] Iter 2160/2640: cls=0.45950
+[Source] Iter 2170/2640: cls=0.46004
+[Source] Iter 2180/2640: cls=0.48193
+[Source] Iter 2190/2640: cls=0.47228
+[Source] Iter 2200/2640: cls=0.45329
+[Source] Epoch 25/30: loss=0.49160, acc=88.09%, entropy=0.5075
+[Source] Iter 2210/2640: cls=0.58355
+[Source] Iter 2220/2640: cls=0.46360
+[Source] Iter 2230/2640: cls=0.51167
+[Source] Iter 2240/2640: cls=0.48502
+[Source] Iter 2250/2640: cls=0.52853
+[Source] Iter 2260/2640: cls=0.51231
+[Source] Iter 2270/2640: cls=0.53371
+[Source] Iter 2280/2640: cls=0.47552
+[Source] Epoch 26/30: loss=0.49596, acc=88.67%, entropy=0.5120
+[Source] Iter 2290/2640: cls=0.43556
+[Source] Iter 2300/2640: cls=0.51772
+[Source] Iter 2310/2640: cls=0.50111
+[Source] Iter 2320/2640: cls=0.44185
+[Source] Iter 2330/2640: cls=0.49148
+[Source] Iter 2340/2640: cls=0.46328
+[Source] Iter 2350/2640: cls=0.49861
+[Source] Iter 2360/2640: cls=0.57636
+[Source] Iter 2370/2640: cls=0.49214
+[Source] Epoch 27/30: loss=0.49237, acc=88.67%, entropy=0.5099
+[Source] Iter 2380/2640: cls=0.46239
+[Source] Iter 2390/2640: cls=0.51864
+[Source] Iter 2400/2640: cls=0.52023
+[Source] Iter 2410/2640: cls=0.53173
+[Source] Iter 2420/2640: cls=0.52321
+[Source] Iter 2430/2640: cls=0.53404
+[Source] Iter 2440/2640: cls=0.49378
+[Source] Iter 2450/2640: cls=0.51750
+[Source] Iter 2460/2640: cls=0.46771
+[Source] Epoch 28/30: loss=0.48912, acc=88.82%, entropy=0.5066
+[Source] Iter 2470/2640: cls=0.41597
+[Source] Iter 2480/2640: cls=0.47169
+[Source] Iter 2490/2640: cls=0.52844
+[Source] Iter 2500/2640: cls=0.52871
+[Source] Iter 2510/2640: cls=0.61283
+[Source] Iter 2520/2640: cls=0.51044
+[Source] Iter 2530/2640: cls=0.44870
+[Source] Iter 2540/2640: cls=0.54308
+[Source] Iter 2550/2640: cls=0.44375
+[Source] Epoch 29/30: loss=0.48929, acc=88.62%, entropy=0.5031
+[Source] Iter 2560/2640: cls=0.49498
+[Source] Iter 2570/2640: cls=0.49403
+[Source] Iter 2580/2640: cls=0.48322
+[Source] Iter 2590/2640: cls=0.52707
+[Source] Iter 2600/2640: cls=0.51012
+[Source] Iter 2610/2640: cls=0.48304
+[Source] Iter 2620/2640: cls=0.42395
+[Source] Iter 2630/2640: cls=0.49794
+[Source] Iter 2640/2640: cls=0.49133
+[Source] Epoch 30/30: loss=0.48552, acc=88.72%, entropy=0.4975
+[Source] checkpoint saved to: san/spa_0.2/bailA/BB/source_model.pt
+[Target-SFDA] samples=7661, epochs=30, steps/epoch=60, total_iters=1800, K=5
+[Target-SFDA] Iter 10/1800: pseudo=0.14948, weighted=0.02990, confidence=0.7982
+[Target-SFDA] Iter 20/1800: pseudo=0.12964, weighted=0.02593, confidence=0.8164
+[Target-SFDA] Iter 30/1800: pseudo=0.10610, weighted=0.02122, confidence=0.8425
+[Target-SFDA] Iter 40/1800: pseudo=0.10169, weighted=0.02034, confidence=0.8436
+[Target-SFDA] Iter 50/1800: pseudo=0.12425, weighted=0.02485, confidence=0.8264
+[Target-SFDA] Iter 60/1800: pseudo=0.11518, weighted=0.02304, confidence=0.8467
+[Target-SFDA] Epoch 1/30: pseudo=0.12887, confidence=0.8276, entropy=0.2014, predicted_count=[6751, 910]
+[Target-SFDA] Iter 70/1800: pseudo=0.14473, weighted=0.02895, confidence=0.8449
+[Target-SFDA] Iter 80/1800: pseudo=0.09696, weighted=0.01939, confidence=0.8560
+[Target-SFDA] Iter 90/1800: pseudo=0.07901, weighted=0.01580, confidence=0.8637
+[Target-SFDA] Iter 100/1800: pseudo=0.07292, weighted=0.01458, confidence=0.8714
+[Target-SFDA] Iter 110/1800: pseudo=0.08498, weighted=0.01700, confidence=0.8742
+[Target-SFDA] Iter 120/1800: pseudo=0.05818, weighted=0.01164, confidence=0.8937
+[Target-SFDA] Epoch 2/30: pseudo=0.08313, confidence=0.8682, entropy=0.1543, predicted_count=[6846, 815]
+[Target-SFDA] Iter 130/1800: pseudo=0.06810, weighted=0.01362, confidence=0.8929
+[Target-SFDA] Iter 140/1800: pseudo=0.07952, weighted=0.01590, confidence=0.8804
+[Target-SFDA] Iter 150/1800: pseudo=0.06791, weighted=0.01358, confidence=0.9084
+[Target-SFDA] Iter 160/1800: pseudo=0.04311, weighted=0.00862, confidence=0.9146
+[Target-SFDA] Iter 170/1800: pseudo=0.05358, weighted=0.01072, confidence=0.9029
+[Target-SFDA] Iter 180/1800: pseudo=0.07039, weighted=0.01408, confidence=0.8950
+[Target-SFDA] Epoch 3/30: pseudo=0.06665, confidence=0.8976, entropy=0.1300, predicted_count=[6905, 756]
+[Target-SFDA] Iter 190/1800: pseudo=0.05415, weighted=0.01083, confidence=0.9053
+[Target-SFDA] Iter 200/1800: pseudo=0.04024, weighted=0.00805, confidence=0.9190
+[Target-SFDA] Iter 210/1800: pseudo=0.04289, weighted=0.00858, confidence=0.9181
+[Target-SFDA] Iter 220/1800: pseudo=0.08399, weighted=0.01680, confidence=0.8975
+[Target-SFDA] Iter 230/1800: pseudo=0.06125, weighted=0.01225, confidence=0.9210
+[Target-SFDA] Iter 240/1800: pseudo=0.04810, weighted=0.00962, confidence=0.9175
+[Target-SFDA] Epoch 4/30: pseudo=0.05509, confidence=0.9160, entropy=0.1155, predicted_count=[6955, 706]
+[Target-SFDA] Iter 250/1800: pseudo=0.05819, weighted=0.01164, confidence=0.9154
+[Target-SFDA] Iter 260/1800: pseudo=0.04115, weighted=0.00823, confidence=0.9392
+[Target-SFDA] Iter 270/1800: pseudo=0.04005, weighted=0.00801, confidence=0.9354
+[Target-SFDA] Iter 280/1800: pseudo=0.05423, weighted=0.01085, confidence=0.9358
+[Target-SFDA] Iter 290/1800: pseudo=0.06357, weighted=0.01271, confidence=0.9337
+[Target-SFDA] Iter 300/1800: pseudo=0.03883, weighted=0.00777, confidence=0.9389
+[Target-SFDA] Epoch 5/30: pseudo=0.05141, confidence=0.9305, entropy=0.1044, predicted_count=[7010, 651]
+[Target-SFDA] Iter 310/1800: pseudo=0.03952, weighted=0.00790, confidence=0.9437
+[Target-SFDA] Iter 320/1800: pseudo=0.05703, weighted=0.01141, confidence=0.9397
+[Target-SFDA] Iter 330/1800: pseudo=0.04572, weighted=0.00914, confidence=0.9295
+[Target-SFDA] Iter 340/1800: pseudo=0.03839, weighted=0.00768, confidence=0.9485
+[Target-SFDA] Iter 350/1800: pseudo=0.04843, weighted=0.00969, confidence=0.9390
+[Target-SFDA] Iter 360/1800: pseudo=0.05452, weighted=0.01090, confidence=0.9329
+[Target-SFDA] Epoch 6/30: pseudo=0.04512, confidence=0.9423, entropy=0.0974, predicted_count=[7031, 630]
+[Target-SFDA] Iter 370/1800: pseudo=0.03020, weighted=0.00604, confidence=0.9515
+[Target-SFDA] Iter 380/1800: pseudo=0.05433, weighted=0.01087, confidence=0.9472
+[Target-SFDA] Iter 390/1800: pseudo=0.05974, weighted=0.01195, confidence=0.9431
+[Target-SFDA] Iter 400/1800: pseudo=0.04264, weighted=0.00853, confidence=0.9580
+[Target-SFDA] Iter 410/1800: pseudo=0.04594, weighted=0.00919, confidence=0.9430
+[Target-SFDA] Iter 420/1800: pseudo=0.04105, weighted=0.00821, confidence=0.9469
+[Target-SFDA] Epoch 7/30: pseudo=0.04139, confidence=0.9518, entropy=0.0910, predicted_count=[7071, 590]
+[Target-SFDA] Iter 430/1800: pseudo=0.04317, weighted=0.00863, confidence=0.9614
+[Target-SFDA] Iter 440/1800: pseudo=0.03423, weighted=0.00685, confidence=0.9572
+[Target-SFDA] Iter 450/1800: pseudo=0.04008, weighted=0.00802, confidence=0.9570
+[Target-SFDA] Iter 460/1800: pseudo=0.04213, weighted=0.00843, confidence=0.9522
+[Target-SFDA] Iter 470/1800: pseudo=0.02934, weighted=0.00587, confidence=0.9654
+[Target-SFDA] Iter 480/1800: pseudo=0.03879, weighted=0.00776, confidence=0.9478
+[Target-SFDA] Epoch 8/30: pseudo=0.03846, confidence=0.9581, entropy=0.0865, predicted_count=[7096, 565]
+[Target-SFDA] Iter 490/1800: pseudo=0.03121, weighted=0.00624, confidence=0.9610
+[Target-SFDA] Iter 500/1800: pseudo=0.02975, weighted=0.00595, confidence=0.9682
+[Target-SFDA] Iter 510/1800: pseudo=0.03243, weighted=0.00649, confidence=0.9645
+[Target-SFDA] Iter 520/1800: pseudo=0.03111, weighted=0.00622, confidence=0.9601
+[Target-SFDA] Iter 530/1800: pseudo=0.04187, weighted=0.00837, confidence=0.9585
+[Target-SFDA] Iter 540/1800: pseudo=0.03468, weighted=0.00694, confidence=0.9730
+[Target-SFDA] Epoch 9/30: pseudo=0.03749, confidence=0.9630, entropy=0.0827, predicted_count=[7113, 548]
+[Target-SFDA] Iter 550/1800: pseudo=0.04426, weighted=0.00885, confidence=0.9624
+[Target-SFDA] Iter 560/1800: pseudo=0.04137, weighted=0.00827, confidence=0.9646
+[Target-SFDA] Iter 570/1800: pseudo=0.02324, weighted=0.00465, confidence=0.9756
+[Target-SFDA] Iter 580/1800: pseudo=0.05033, weighted=0.01007, confidence=0.9625
+[Target-SFDA] Iter 590/1800: pseudo=0.02955, weighted=0.00591, confidence=0.9705
+[Target-SFDA] Iter 600/1800: pseudo=0.03658, weighted=0.00732, confidence=0.9625
+[Target-SFDA] Epoch 10/30: pseudo=0.03561, confidence=0.9670, entropy=0.0799, predicted_count=[7130, 531]
+[Target-SFDA] Iter 610/1800: pseudo=0.03114, weighted=0.00623, confidence=0.9689
+[Target-SFDA] Iter 620/1800: pseudo=0.03451, weighted=0.00690, confidence=0.9646
+[Target-SFDA] Iter 630/1800: pseudo=0.03606, weighted=0.00721, confidence=0.9733
+[Target-SFDA] Iter 640/1800: pseudo=0.02100, weighted=0.00420, confidence=0.9809
+[Target-SFDA] Iter 650/1800: pseudo=0.03861, weighted=0.00772, confidence=0.9684
+[Target-SFDA] Iter 660/1800: pseudo=0.03067, weighted=0.00613, confidence=0.9722
+[Target-SFDA] Epoch 11/30: pseudo=0.03434, confidence=0.9699, entropy=0.0772, predicted_count=[7147, 514]
+[Target-SFDA] Iter 670/1800: pseudo=0.04098, weighted=0.00820, confidence=0.9669
+[Target-SFDA] Iter 680/1800: pseudo=0.04033, weighted=0.00807, confidence=0.9757
+[Target-SFDA] Iter 690/1800: pseudo=0.04250, weighted=0.00850, confidence=0.9757
+[Target-SFDA] Iter 700/1800: pseudo=0.03112, weighted=0.00622, confidence=0.9740
+[Target-SFDA] Iter 710/1800: pseudo=0.03195, weighted=0.00639, confidence=0.9766
+[Target-SFDA] Iter 720/1800: pseudo=0.04468, weighted=0.00894, confidence=0.9694
+[Target-SFDA] Epoch 12/30: pseudo=0.03082, confidence=0.9740, entropy=0.0757, predicted_count=[7152, 509]
+[Target-SFDA] Iter 730/1800: pseudo=0.01667, weighted=0.00333, confidence=0.9878
+[Target-SFDA] Iter 740/1800: pseudo=0.01936, weighted=0.00387, confidence=0.9838
+[Target-SFDA] Iter 750/1800: pseudo=0.03608, weighted=0.00722, confidence=0.9694
+[Target-SFDA] Iter 760/1800: pseudo=0.03642, weighted=0.00728, confidence=0.9749
+[Target-SFDA] Iter 770/1800: pseudo=0.01802, weighted=0.00360, confidence=0.9770
+[Target-SFDA] Iter 780/1800: pseudo=0.04279, weighted=0.00856, confidence=0.9724
+[Target-SFDA] Epoch 13/30: pseudo=0.03109, confidence=0.9742, entropy=0.0742, predicted_count=[7157, 504]
+[Target-SFDA] Iter 790/1800: pseudo=0.04165, weighted=0.00833, confidence=0.9756
+[Target-SFDA] Iter 800/1800: pseudo=0.02016, weighted=0.00403, confidence=0.9837
+[Target-SFDA] Iter 810/1800: pseudo=0.02879, weighted=0.00576, confidence=0.9769
+[Target-SFDA] Iter 820/1800: pseudo=0.01874, weighted=0.00375, confidence=0.9769
+[Target-SFDA] Iter 830/1800: pseudo=0.02522, weighted=0.00504, confidence=0.9692
+[Target-SFDA] Iter 840/1800: pseudo=0.01294, weighted=0.00259, confidence=0.9865
+[Target-SFDA] Epoch 14/30: pseudo=0.02987, confidence=0.9766, entropy=0.0728, predicted_count=[7163, 498]
+[Target-SFDA] Iter 850/1800: pseudo=0.03069, weighted=0.00614, confidence=0.9812
+[Target-SFDA] Iter 860/1800: pseudo=0.03266, weighted=0.00653, confidence=0.9761
+[Target-SFDA] Iter 870/1800: pseudo=0.02390, weighted=0.00478, confidence=0.9834
+[Target-SFDA] Iter 880/1800: pseudo=0.04674, weighted=0.00935, confidence=0.9725
+[Target-SFDA] Iter 890/1800: pseudo=0.03498, weighted=0.00700, confidence=0.9758
+[Target-SFDA] Iter 900/1800: pseudo=0.02492, weighted=0.00498, confidence=0.9863
+[Target-SFDA] Epoch 15/30: pseudo=0.02891, confidence=0.9770, entropy=0.0713, predicted_count=[7173, 488]
+[Target-SFDA] Iter 910/1800: pseudo=0.01617, weighted=0.00323, confidence=0.9882
+[Target-SFDA] Iter 920/1800: pseudo=0.02529, weighted=0.00506, confidence=0.9814
+[Target-SFDA] Iter 930/1800: pseudo=0.03398, weighted=0.00680, confidence=0.9750
+[Target-SFDA] Iter 940/1800: pseudo=0.02790, weighted=0.00558, confidence=0.9758
+[Target-SFDA] Iter 950/1800: pseudo=0.02804, weighted=0.00561, confidence=0.9765
+[Target-SFDA] Iter 960/1800: pseudo=0.04735, weighted=0.00947, confidence=0.9694
+[Target-SFDA] Epoch 16/30: pseudo=0.02802, confidence=0.9794, entropy=0.0697, predicted_count=[7187, 474]
+[Target-SFDA] Iter 970/1800: pseudo=0.02191, weighted=0.00438, confidence=0.9848
+[Target-SFDA] Iter 980/1800: pseudo=0.02729, weighted=0.00546, confidence=0.9816
+[Target-SFDA] Iter 990/1800: pseudo=0.03035, weighted=0.00607, confidence=0.9806
+[Target-SFDA] Iter 1000/1800: pseudo=0.01710, weighted=0.00342, confidence=0.9880
+[Target-SFDA] Iter 1010/1800: pseudo=0.02139, weighted=0.00428, confidence=0.9872
+[Target-SFDA] Iter 1020/1800: pseudo=0.03038, weighted=0.00608, confidence=0.9576
+[Target-SFDA] Epoch 17/30: pseudo=0.02764, confidence=0.9793, entropy=0.0687, predicted_count=[7195, 466]
+[Target-SFDA] Iter 1030/1800: pseudo=0.00930, weighted=0.00186, confidence=0.9906
+[Target-SFDA] Iter 1040/1800: pseudo=0.03177, weighted=0.00635, confidence=0.9760
+[Target-SFDA] Iter 1050/1800: pseudo=0.02421, weighted=0.00484, confidence=0.9810
+[Target-SFDA] Iter 1060/1800: pseudo=0.01970, weighted=0.00394, confidence=0.9810
+[Target-SFDA] Iter 1070/1800: pseudo=0.03099, weighted=0.00620, confidence=0.9772
+[Target-SFDA] Iter 1080/1800: pseudo=0.02912, weighted=0.00582, confidence=0.9765
+[Target-SFDA] Epoch 18/30: pseudo=0.03044, confidence=0.9775, entropy=0.0679, predicted_count=[7200, 461]
+[Target-SFDA] Iter 1090/1800: pseudo=0.02362, weighted=0.00472, confidence=0.9780
+[Target-SFDA] Iter 1100/1800: pseudo=0.02766, weighted=0.00553, confidence=0.9763
+[Target-SFDA] Iter 1110/1800: pseudo=0.02859, weighted=0.00572, confidence=0.9710
+[Target-SFDA] Iter 1120/1800: pseudo=0.04762, weighted=0.00952, confidence=0.9700
+[Target-SFDA] Iter 1130/1800: pseudo=0.02158, weighted=0.00432, confidence=0.9852
+[Target-SFDA] Iter 1140/1800: pseudo=0.01816, weighted=0.00363, confidence=0.9856
+[Target-SFDA] Epoch 19/30: pseudo=0.02710, confidence=0.9803, entropy=0.0672, predicted_count=[7200, 461]
+[Target-SFDA] Iter 1150/1800: pseudo=0.02497, weighted=0.00499, confidence=0.9814
+[Target-SFDA] Iter 1160/1800: pseudo=0.02670, weighted=0.00534, confidence=0.9733
+[Target-SFDA] Iter 1170/1800: pseudo=0.02802, weighted=0.00560, confidence=0.9763
+[Target-SFDA] Iter 1180/1800: pseudo=0.03005, weighted=0.00601, confidence=0.9842
+[Target-SFDA] Iter 1190/1800: pseudo=0.01806, weighted=0.00361, confidence=0.9841
+[Target-SFDA] Iter 1200/1800: pseudo=0.04053, weighted=0.00811, confidence=0.9797
+[Target-SFDA] Epoch 20/30: pseudo=0.02755, confidence=0.9802, entropy=0.0668, predicted_count=[7200, 461]
+[Target-SFDA] Iter 1210/1800: pseudo=0.02270, weighted=0.00454, confidence=0.9769
+[Target-SFDA] Iter 1220/1800: pseudo=0.01896, weighted=0.00379, confidence=0.9766
+[Target-SFDA] Iter 1230/1800: pseudo=0.02064, weighted=0.00413, confidence=0.9902
+[Target-SFDA] Iter 1240/1800: pseudo=0.02728, weighted=0.00546, confidence=0.9818
+[Target-SFDA] Iter 1250/1800: pseudo=0.04019, weighted=0.00804, confidence=0.9702
+[Target-SFDA] Iter 1260/1800: pseudo=0.01833, weighted=0.00367, confidence=0.9880
+[Target-SFDA] Epoch 21/30: pseudo=0.02696, confidence=0.9797, entropy=0.0658, predicted_count=[7209, 452]
+[Target-SFDA] Iter 1270/1800: pseudo=0.02474, weighted=0.00495, confidence=0.9826
+[Target-SFDA] Iter 1280/1800: pseudo=0.01736, weighted=0.00347, confidence=0.9875
+[Target-SFDA] Iter 1290/1800: pseudo=0.03298, weighted=0.00660, confidence=0.9808
+[Target-SFDA] Iter 1300/1800: pseudo=0.03194, weighted=0.00639, confidence=0.9811
+[Target-SFDA] Iter 1310/1800: pseudo=0.03470, weighted=0.00694, confidence=0.9792
+[Target-SFDA] Iter 1320/1800: pseudo=0.02036, weighted=0.00407, confidence=0.9865
+[Target-SFDA] Epoch 22/30: pseudo=0.02677, confidence=0.9810, entropy=0.0650, predicted_count=[7214, 447]
+[Target-SFDA] Iter 1330/1800: pseudo=0.02851, weighted=0.00570, confidence=0.9797
+[Target-SFDA] Iter 1340/1800: pseudo=0.01097, weighted=0.00219, confidence=0.9894
+[Target-SFDA] Iter 1350/1800: pseudo=0.01776, weighted=0.00355, confidence=0.9826
+[Target-SFDA] Iter 1360/1800: pseudo=0.02726, weighted=0.00545, confidence=0.9877
+[Target-SFDA] Iter 1370/1800: pseudo=0.03239, weighted=0.00648, confidence=0.9803
+[Target-SFDA] Iter 1380/1800: pseudo=0.01489, weighted=0.00298, confidence=0.9871
+[Target-SFDA] Epoch 23/30: pseudo=0.02511, confidence=0.9821, entropy=0.0642, predicted_count=[7220, 441]
+[Target-SFDA] Iter 1390/1800: pseudo=0.01987, weighted=0.00397, confidence=0.9865
+[Target-SFDA] Iter 1400/1800: pseudo=0.02773, weighted=0.00555, confidence=0.9825
+[Target-SFDA] Iter 1410/1800: pseudo=0.02623, weighted=0.00525, confidence=0.9844
+[Target-SFDA] Iter 1420/1800: pseudo=0.02647, weighted=0.00529, confidence=0.9831
+[Target-SFDA] Iter 1430/1800: pseudo=0.01722, weighted=0.00344, confidence=0.9842
+[Target-SFDA] Iter 1440/1800: pseudo=0.01647, weighted=0.00329, confidence=0.9851
+[Target-SFDA] Epoch 24/30: pseudo=0.02664, confidence=0.9808, entropy=0.0638, predicted_count=[7221, 440]
+[Target-SFDA] Iter 1450/1800: pseudo=0.02929, weighted=0.00586, confidence=0.9798
+[Target-SFDA] Iter 1460/1800: pseudo=0.02611, weighted=0.00522, confidence=0.9853
+[Target-SFDA] Iter 1470/1800: pseudo=0.02352, weighted=0.00470, confidence=0.9847
+[Target-SFDA] Iter 1480/1800: pseudo=0.02597, weighted=0.00519, confidence=0.9803
+[Target-SFDA] Iter 1490/1800: pseudo=0.02250, weighted=0.00450, confidence=0.9766
+[Target-SFDA] Iter 1500/1800: pseudo=0.01973, weighted=0.00395, confidence=0.9830
+[Target-SFDA] Epoch 25/30: pseudo=0.02522, confidence=0.9814, entropy=0.0634, predicted_count=[7224, 437]
+[Target-SFDA] Iter 1510/1800: pseudo=0.01236, weighted=0.00247, confidence=0.9930
+[Target-SFDA] Iter 1520/1800: pseudo=0.01516, weighted=0.00303, confidence=0.9940
+[Target-SFDA] Iter 1530/1800: pseudo=0.02417, weighted=0.00483, confidence=0.9837
+[Target-SFDA] Iter 1540/1800: pseudo=0.02271, weighted=0.00454, confidence=0.9888
+[Target-SFDA] Iter 1550/1800: pseudo=0.01659, weighted=0.00332, confidence=0.9849
+[Target-SFDA] Iter 1560/1800: pseudo=0.02209, weighted=0.00442, confidence=0.9844
+[Target-SFDA] Epoch 26/30: pseudo=0.02524, confidence=0.9824, entropy=0.0628, predicted_count=[7231, 430]
+[Target-SFDA] Iter 1570/1800: pseudo=0.02563, weighted=0.00513, confidence=0.9853
+[Target-SFDA] Iter 1580/1800: pseudo=0.01732, weighted=0.00346, confidence=0.9846
+[Target-SFDA] Iter 1590/1800: pseudo=0.03667, weighted=0.00733, confidence=0.9764
+[Target-SFDA] Iter 1600/1800: pseudo=0.02163, weighted=0.00433, confidence=0.9843
+[Target-SFDA] Iter 1610/1800: pseudo=0.02979, weighted=0.00596, confidence=0.9873
+[Target-SFDA] Iter 1620/1800: pseudo=0.02305, weighted=0.00461, confidence=0.9817
+[Target-SFDA] Epoch 27/30: pseudo=0.02552, confidence=0.9821, entropy=0.0621, predicted_count=[7237, 424]
+[Target-SFDA] Iter 1630/1800: pseudo=0.02692, weighted=0.00538, confidence=0.9858
+[Target-SFDA] Iter 1640/1800: pseudo=0.02136, weighted=0.00427, confidence=0.9834
+[Target-SFDA] Iter 1650/1800: pseudo=0.01689, weighted=0.00338, confidence=0.9898
+[Target-SFDA] Iter 1660/1800: pseudo=0.02734, weighted=0.00547, confidence=0.9822
+[Target-SFDA] Iter 1670/1800: pseudo=0.04327, weighted=0.00865, confidence=0.9678
+[Target-SFDA] Iter 1680/1800: pseudo=0.01530, weighted=0.00306, confidence=0.9872
+[Target-SFDA] Epoch 28/30: pseudo=0.02571, confidence=0.9825, entropy=0.0615, predicted_count=[7244, 417]
+[Target-SFDA] Iter 1690/1800: pseudo=0.02133, weighted=0.00427, confidence=0.9775
+[Target-SFDA] Iter 1700/1800: pseudo=0.02784, weighted=0.00557, confidence=0.9794
+[Target-SFDA] Iter 1710/1800: pseudo=0.01974, weighted=0.00395, confidence=0.9851
+[Target-SFDA] Iter 1720/1800: pseudo=0.01805, weighted=0.00361, confidence=0.9833
+[Target-SFDA] Iter 1730/1800: pseudo=0.01906, weighted=0.00381, confidence=0.9824
+[Target-SFDA] Iter 1740/1800: pseudo=0.01966, weighted=0.00393, confidence=0.9870
+[Target-SFDA] Epoch 29/30: pseudo=0.02415, confidence=0.9822, entropy=0.0607, predicted_count=[7254, 407]
+[Target-SFDA] Iter 1750/1800: pseudo=0.04063, weighted=0.00813, confidence=0.9745
+[Target-SFDA] Iter 1760/1800: pseudo=0.02576, weighted=0.00515, confidence=0.9872
+[Target-SFDA] Iter 1770/1800: pseudo=0.02373, weighted=0.00475, confidence=0.9837
+[Target-SFDA] Iter 1780/1800: pseudo=0.02682, weighted=0.00536, confidence=0.9825
+[Target-SFDA] Iter 1790/1800: pseudo=0.01598, weighted=0.00320, confidence=0.9895
+[Target-SFDA] Iter 1800/1800: pseudo=0.03166, weighted=0.00633, confidence=0.9767
+[Target-SFDA] Epoch 30/30: pseudo=0.02346, confidence=0.9830, entropy=0.0601, predicted_count=[7262, 399]
+[Target-SFDA] checkpoint saved to: san/spa_0.2/bailA/BB/sfda_adapted_model.pt
+[Target-Test] Accuracy=72.60%, ROC_AUC=0.8095, Parity=0.0082, Equality=0.0117, Entropy=0.0601
+[Target-Groups] PositiveRate(WHITE=0)=0.0562, PositiveRate(WHITE=1)=0.0480, TPR(WHITE=0)=0.1583, TPR(WHITE=1)=0.1467

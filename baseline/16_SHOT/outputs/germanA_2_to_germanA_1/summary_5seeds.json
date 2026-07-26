@@ -1,0 +1,293 @@
+{
+  "aggregate": {
+    "source_only": {
+      "accuracy": {
+        "display": "61.77% +/- 10.08%",
+        "mean": 0.6177083194255829,
+        "mean_percent": "61.77%",
+        "std": 0.10081522073703225,
+        "std_percent": "10.08%",
+        "values": [
+          0.6302083134651184,
+          0.4713541567325592,
+          0.578125,
+          0.6692708134651184,
+          0.7395833134651184
+        ]
+      },
+      "equality": {
+        "display": "8.52% +/- 6.74%",
+        "mean": 0.08518145084381104,
+        "mean_percent": "8.52%",
+        "std": 0.06743774134179249,
+        "std_percent": "6.74%",
+        "values": [
+          0.132224440574646,
+          0.014616936445236206,
+          0.1619623601436615,
+          0.10147851705551147,
+          0.015625
+        ]
+      },
+      "parity": {
+        "display": "8.75% +/- 8.22%",
+        "mean": 0.0875,
+        "mean_percent": "8.75%",
+        "std": 0.0822448855030284,
+        "std_percent": "8.22%",
+        "values": [
+          0.1484375,
+          0.0,
+          0.18359375,
+          0.09765625,
+          0.0078125
+        ]
+      },
+      "roc_auc": {
+        "display": "58.50% +/- 1.47%",
+        "mean": 0.5849937976253766,
+        "mean_percent": "58.50%",
+        "std": 0.014679970389234314,
+        "std_percent": "1.47%",
+        "values": [
+          0.5866028708133971,
+          0.5750487329434698,
+          0.5838029416976785,
+          0.5708665603402445,
+          0.6086478823320929
+        ]
+      }
+    },
+    "strict_shot": {
+      "accuracy": {
+        "display": "59.48% +/- 3.60%",
+        "mean": 0.5947916626930236,
+        "mean_percent": "59.48%",
+        "std": 0.03597147163479008,
+        "std_percent": "3.60%",
+        "values": [
+          0.5598958134651184,
+          0.5598958134651184,
+          0.5911458134651184,
+          0.6354166865348816,
+          0.6276041865348816
+        ]
+      },
+      "equality": {
+        "display": "9.82% +/- 3.30%",
+        "mean": 0.09815189242362976,
+        "mean_percent": "9.82%",
+        "std": 0.03296081323133216,
+        "std_percent": "3.30%",
+        "values": [
+          0.1255040466785431,
+          0.08114922046661377,
+          0.08702957630157471,
+          0.05863577127456665,
+          0.13844084739685059
+        ]
+      },
+      "parity": {
+        "display": "6.25% +/- 5.28%",
+        "mean": 0.0625,
+        "mean_percent": "6.25%",
+        "std": 0.05277053158635272,
+        "std_percent": "5.28%",
+        "values": [
+          0.0859375,
+          0.01171875,
+          0.0546875,
+          0.01953125,
+          0.140625
+        ]
+      },
+      "roc_auc": {
+        "display": "60.51% +/- 1.70%",
+        "mean": 0.6051391104022683,
+        "mean_percent": "60.51%",
+        "std": 0.0170012775617164,
+        "std_percent": "1.70%",
+        "values": [
+          0.6062732589048379,
+          0.5770689349636718,
+          0.6148148148148148,
+          0.6216551479709375,
+          0.6058833953570796
+        ]
+      }
+    }
+  },
+  "experiment": "germanA_2_to_germanA_1_strict_shot_gcn_5seeds",
+  "label_column": "GoodCustomer",
+  "label_mapping": {
+    "-1": 0,
+    "1": 1
+  },
+  "metric_definitions": {
+    "accuracy": "target node classification accuracy; higher is better",
+    "equality": "absolute equal opportunity difference (TPR gap) across Gender groups; lower is better",
+    "parity": "absolute demographic parity difference across Gender groups; lower is better",
+    "roc_auc": "binary ROC-AUC using P(GoodCustomer=1); higher is better"
+  },
+  "number_of_runs": 5,
+  "runs": [
+    {
+      "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "label_column": "GoodCustomer",
+      "label_mapping": {
+        "-1": 0,
+        "1": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_1/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6302083134651184,
+          "equality": 0.132224440574646,
+          "parity": 0.1484375,
+          "roc_auc": 0.5866028708133971
+        },
+        "strict_shot": {
+          "accuracy": 0.5598958134651184,
+          "equality": 0.1255040466785431,
+          "parity": 0.0859375,
+          "roc_auc": 0.6062732589048379
+        }
+      },
+      "seed": 1,
+      "sensitive_attribute": "Gender",
+      "sensitive_mapping": {
+        "Female": 0,
+        "Male": 1
+      }
+    },
+    {
+      "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "label_column": "GoodCustomer",
+      "label_mapping": {
+        "-1": 0,
+        "1": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_2/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.4713541567325592,
+          "equality": 0.014616936445236206,
+          "parity": 0.0,
+          "roc_auc": 0.5750487329434698
+        },
+        "strict_shot": {
+          "accuracy": 0.5598958134651184,
+          "equality": 0.08114922046661377,
+          "parity": 0.01171875,
+          "roc_auc": 0.5770689349636718
+        }
+      },
+      "seed": 2,
+      "sensitive_attribute": "Gender",
+      "sensitive_mapping": {
+        "Female": 0,
+        "Male": 1
+      }
+    },
+    {
+      "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "label_column": "GoodCustomer",
+      "label_mapping": {
+        "-1": 0,
+        "1": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_3/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.578125,
+          "equality": 0.1619623601436615,
+          "parity": 0.18359375,
+          "roc_auc": 0.5838029416976785
+        },
+        "strict_shot": {
+          "accuracy": 0.5911458134651184,
+          "equality": 0.08702957630157471,
+          "parity": 0.0546875,
+          "roc_auc": 0.6148148148148148
+        }
+      },
+      "seed": 3,
+      "sensitive_attribute": "Gender",
+      "sensitive_mapping": {
+        "Female": 0,
+        "Male": 1
+      }
+    },
+    {
+      "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "label_column": "GoodCustomer",
+      "label_mapping": {
+        "-1": 0,
+        "1": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_4/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6692708134651184,
+          "equality": 0.10147851705551147,
+          "parity": 0.09765625,
+          "roc_auc": 0.5708665603402445
+        },
+        "strict_shot": {
+          "accuracy": 0.6354166865348816,
+          "equality": 0.05863577127456665,
+          "parity": 0.01953125,
+          "roc_auc": 0.6216551479709375
+        }
+      },
+      "seed": 4,
+      "sensitive_attribute": "Gender",
+      "sensitive_mapping": {
+        "Female": 0,
+        "Male": 1
+      }
+    },
+    {
+      "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "label_column": "GoodCustomer",
+      "label_mapping": {
+        "-1": 0,
+        "1": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_5/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.7395833134651184,
+          "equality": 0.015625,
+          "parity": 0.0078125,
+          "roc_auc": 0.6086478823320929
+        },
+        "strict_shot": {
+          "accuracy": 0.6276041865348816,
+          "equality": 0.13844084739685059,
+          "parity": 0.140625,
+          "roc_auc": 0.6058833953570796
+        }
+      },
+      "seed": 5,
+      "sensitive_attribute": "Gender",
+      "sensitive_mapping": {
+        "Female": 0,
+        "Male": 1
+      }
+    }
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "sensitive_attribute": "Gender",
+  "sensitive_mapping": {
+    "Female": 0,
+    "Male": 1
+  },
+  "standard_deviation": "sample standard deviation (n-1)"
+}

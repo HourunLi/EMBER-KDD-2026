@@ -1,0 +1,105 @@
+{
+  "source_domain": "pokec_z",
+  "target_domain": "pokec_n",
+  "dataset": "pokec",
+  "encoder": "GCN",
+  "device": "cuda:0",
+  "feature_columns_excluded": [
+    "user_id",
+    "I_am_working_in_field",
+    "region"
+  ],
+  "label_column": "I_am_working_in_field",
+  "sensitive_column": "region",
+  "label_mode": "pokec_working_field",
+  "common_feature_count": 264,
+  "source_valid_label_count": 10262,
+  "target_valid_label_count": 8797,
+  "source_only_features_dropped": [
+    "zberatelstvo",
+    "hackovanie",
+    "vtacik",
+    "plave",
+    "niekto",
+    "slobodny",
+    "alternativne",
+    "alternativa",
+    "horolezectvo",
+    "bezkovanie",
+    "surfing",
+    "literaturu o umeni a architekture"
+  ],
+  "target_only_features_dropped": [
+    "madarsky"
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "per_seed": [
+    {
+      "seed": 1,
+      "accuracy": 0.629391074180603,
+      "ROC_AUC": 0.7116495912327805,
+      "parity": 0.0658002495765686,
+      "equality": 0.05521422624588013
+    },
+    {
+      "seed": 2,
+      "accuracy": 0.6812816262245178,
+      "ROC_AUC": 0.7312411601434112,
+      "parity": 0.0055799782276153564,
+      "equality": 0.020733654499053955
+    },
+    {
+      "seed": 3,
+      "accuracy": 0.6263219714164734,
+      "ROC_AUC": 0.7199500127729793,
+      "parity": 0.05588048696517944,
+      "equality": 0.017270028591156006
+    },
+    {
+      "seed": 4,
+      "accuracy": 0.48407280445098877,
+      "ROC_AUC": 0.7478273459015946,
+      "parity": 0.004866063594818115,
+      "equality": 0.0010946393013000488
+    },
+    {
+      "seed": 5,
+      "accuracy": 0.5448863506317139,
+      "ROC_AUC": 0.7343505795937996,
+      "parity": 0.0015375614166259766,
+      "equality": 0.0021944046020507812
+    }
+  ],
+  "summary": {
+    "accuracy": {
+      "mean": 0.5931907653808594,
+      "variance": 0.004881636963299627,
+      "std": 0.06986871233463249,
+      "formatted": "59.32% +/- 6.99%"
+    },
+    "ROC_AUC": {
+      "mean": 0.729003737928913,
+      "variance": 0.00015421186756291462,
+      "std": 0.012418207099372865,
+      "formatted": "72.90% +/- 1.24%"
+    },
+    "parity": {
+      "mean": 0.026732867956161498,
+      "variance": 0.0007872498698071695,
+      "std": 0.02805797337312817,
+      "formatted": "2.67% +/- 2.81%"
+    },
+    "equality": {
+      "mean": 0.019301390647888182,
+      "variance": 0.0003840088676804498,
+      "std": 0.01959614420442067,
+      "formatted": "1.93% +/- 1.96%"
+    }
+  }
+}

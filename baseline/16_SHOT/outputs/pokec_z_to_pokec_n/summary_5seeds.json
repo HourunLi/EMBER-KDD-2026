@@ -1,0 +1,329 @@
+{
+  "aggregate": {
+    "source_only": {
+      "accuracy": {
+        "display": "65.48% +/- 1.15%",
+        "mean": 0.6548141360282898,
+        "mean_percent": "65.48%",
+        "std": 0.01147574003255264,
+        "std_percent": "1.15%",
+        "values": [
+          0.6546549797058105,
+          0.6412413120269775,
+          0.6477208137512207,
+          0.6590883135795593,
+          0.6713652610778809
+        ]
+      },
+      "equality": {
+        "display": "2.09% +/- 1.86%",
+        "mean": 0.020937442779541016,
+        "mean_percent": "2.09%",
+        "std": 0.018605203588775057,
+        "std_percent": "1.86%",
+        "values": [
+          0.022115468978881836,
+          0.0509987473487854,
+          0.015410006046295166,
+          0.015776991844177246,
+          0.0003859996795654297
+        ]
+      },
+      "parity": {
+        "display": "2.50% +/- 1.93%",
+        "mean": 0.024963641166687013,
+        "mean_percent": "2.50%",
+        "std": 0.01926999909268444,
+        "std_percent": "1.93%",
+        "values": [
+          0.031620800495147705,
+          0.055790483951568604,
+          0.009386599063873291,
+          0.01602482795715332,
+          0.011995494365692139
+        ]
+      },
+      "roc_auc": {
+        "display": "72.87% +/- 0.97%",
+        "mean": 0.7287303956632669,
+        "mean_percent": "72.87%",
+        "std": 0.009735880926793708,
+        "std_percent": "0.97%",
+        "values": [
+          0.7362138254310846,
+          0.7142207116135669,
+          0.7274895690937951,
+          0.7266629323841428,
+          0.7390649397937455
+        ]
+      }
+    },
+    "strict_shot": {
+      "accuracy": {
+        "display": "54.98% +/- 1.32%",
+        "mean": 0.5497783303260804,
+        "mean_percent": "54.98%",
+        "std": 0.013240730746575854,
+        "std_percent": "1.32%",
+        "values": [
+          0.5522336959838867,
+          0.5455268621444702,
+          0.5629191994667053,
+          0.5292713642120361,
+          0.5589405298233032
+        ]
+      },
+      "equality": {
+        "display": "1.12% +/- 0.96%",
+        "mean": 0.011204028129577636,
+        "mean_percent": "1.12%",
+        "std": 0.00964381205122789,
+        "std_percent": "0.96%",
+        "values": [
+          0.002335965633392334,
+          0.0052484869956970215,
+          0.019587576389312744,
+          0.023558616638183594,
+          0.00528949499130249
+        ]
+      },
+      "parity": {
+        "display": "2.14% +/- 1.06%",
+        "mean": 0.021415483951568604,
+        "mean_percent": "2.14%",
+        "std": 0.010634178210363146,
+        "std_percent": "1.06%",
+        "values": [
+          0.011156439781188965,
+          0.013320863246917725,
+          0.03703296184539795,
+          0.02690201997756958,
+          0.0186651349067688
+        ]
+      },
+      "roc_auc": {
+        "display": "64.48% +/- 2.03%",
+        "mean": 0.6447777041610354,
+        "mean_percent": "64.48%",
+        "std": 0.02030445528491595,
+        "std_percent": "2.03%",
+        "values": [
+          0.6602597602094095,
+          0.6416999364344429,
+          0.6626507613126261,
+          0.6120022529826418,
+          0.6472758098660572
+        ]
+      }
+    }
+  },
+  "experiment": "pokec_z_to_pokec_n_strict_shot_gcn_5seeds",
+  "ignored_label_values": [
+    "-1"
+  ],
+  "label_column": "I_am_working_in_field",
+  "label_mapping": {
+    "0": 0,
+    "1": 1,
+    "2": 1,
+    "3": 1,
+    "4": 1
+  },
+  "metric_definitions": {
+    "accuracy": "target node classification accuracy; higher is better",
+    "equality": "absolute equal opportunity difference (TPR gap) across region groups; lower is better",
+    "parity": "absolute demographic parity difference across region groups; lower is better",
+    "roc_auc": "binary ROC-AUC using P(I_am_working_in_field in ['1', '2', '3', '4']); higher is better"
+  },
+  "number_of_runs": 5,
+  "runs": [
+    {
+      "experiment": "pokec_z_to_pokec_n_strict_shot_gcn",
+      "ignored_label_values": [
+        "-1"
+      ],
+      "label_column": "I_am_working_in_field",
+      "label_mapping": {
+        "0": 0,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/pokec_z_to_pokec_n/seed_1/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6546549797058105,
+          "equality": 0.022115468978881836,
+          "parity": 0.031620800495147705,
+          "roc_auc": 0.7362138254310846
+        },
+        "strict_shot": {
+          "accuracy": 0.5522336959838867,
+          "equality": 0.002335965633392334,
+          "parity": 0.011156439781188965,
+          "roc_auc": 0.6602597602094095
+        }
+      },
+      "seed": 1,
+      "sensitive_attribute": "region",
+      "sensitive_mapping": {
+        "0": 0,
+        "1": 1
+      }
+    },
+    {
+      "experiment": "pokec_z_to_pokec_n_strict_shot_gcn",
+      "ignored_label_values": [
+        "-1"
+      ],
+      "label_column": "I_am_working_in_field",
+      "label_mapping": {
+        "0": 0,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/pokec_z_to_pokec_n/seed_2/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6412413120269775,
+          "equality": 0.0509987473487854,
+          "parity": 0.055790483951568604,
+          "roc_auc": 0.7142207116135669
+        },
+        "strict_shot": {
+          "accuracy": 0.5455268621444702,
+          "equality": 0.0052484869956970215,
+          "parity": 0.013320863246917725,
+          "roc_auc": 0.6416999364344429
+        }
+      },
+      "seed": 2,
+      "sensitive_attribute": "region",
+      "sensitive_mapping": {
+        "0": 0,
+        "1": 1
+      }
+    },
+    {
+      "experiment": "pokec_z_to_pokec_n_strict_shot_gcn",
+      "ignored_label_values": [
+        "-1"
+      ],
+      "label_column": "I_am_working_in_field",
+      "label_mapping": {
+        "0": 0,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/pokec_z_to_pokec_n/seed_3/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6477208137512207,
+          "equality": 0.015410006046295166,
+          "parity": 0.009386599063873291,
+          "roc_auc": 0.7274895690937951
+        },
+        "strict_shot": {
+          "accuracy": 0.5629191994667053,
+          "equality": 0.019587576389312744,
+          "parity": 0.03703296184539795,
+          "roc_auc": 0.6626507613126261
+        }
+      },
+      "seed": 3,
+      "sensitive_attribute": "region",
+      "sensitive_mapping": {
+        "0": 0,
+        "1": 1
+      }
+    },
+    {
+      "experiment": "pokec_z_to_pokec_n_strict_shot_gcn",
+      "ignored_label_values": [
+        "-1"
+      ],
+      "label_column": "I_am_working_in_field",
+      "label_mapping": {
+        "0": 0,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/pokec_z_to_pokec_n/seed_4/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6590883135795593,
+          "equality": 0.015776991844177246,
+          "parity": 0.01602482795715332,
+          "roc_auc": 0.7266629323841428
+        },
+        "strict_shot": {
+          "accuracy": 0.5292713642120361,
+          "equality": 0.023558616638183594,
+          "parity": 0.02690201997756958,
+          "roc_auc": 0.6120022529826418
+        }
+      },
+      "seed": 4,
+      "sensitive_attribute": "region",
+      "sensitive_mapping": {
+        "0": 0,
+        "1": 1
+      }
+    },
+    {
+      "experiment": "pokec_z_to_pokec_n_strict_shot_gcn",
+      "ignored_label_values": [
+        "-1"
+      ],
+      "label_column": "I_am_working_in_field",
+      "label_mapping": {
+        "0": 0,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 1
+      },
+      "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/pokec_z_to_pokec_n/seed_5/target/results.json",
+      "reported_metrics": {
+        "source_only": {
+          "accuracy": 0.6713652610778809,
+          "equality": 0.0003859996795654297,
+          "parity": 0.011995494365692139,
+          "roc_auc": 0.7390649397937455
+        },
+        "strict_shot": {
+          "accuracy": 0.5589405298233032,
+          "equality": 0.00528949499130249,
+          "parity": 0.0186651349067688,
+          "roc_auc": 0.6472758098660572
+        }
+      },
+      "seed": 5,
+      "sensitive_attribute": "region",
+      "sensitive_mapping": {
+        "0": 0,
+        "1": 1
+      }
+    }
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "sensitive_attribute": "region",
+  "sensitive_mapping": {
+    "0": 0,
+    "1": 1
+  },
+  "standard_deviation": "sample standard deviation (n-1)"
+}

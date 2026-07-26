@@ -1,0 +1,117 @@
+{
+  "experiment": "source_only_gcn_multi_seed",
+  "source_domain": "syn-2",
+  "target_domain": "syn-1",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "number_of_runs": 5,
+  "standard_deviation_ddof": 0,
+  "per_seed": [
+    {
+      "seed": 1,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/syn/source_only_gcn_syn-2_seed1.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/syn/source_only_gcn_syn-2_to_syn-1_seed1.json",
+      "metrics": {
+        "accuracy": 0.7834,
+        "roc_auc": 0.8608586764308354,
+        "parity": 0.02366754815032468,
+        "equality": 0.05007871501451766
+      }
+    },
+    {
+      "seed": 2,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/syn/source_only_gcn_syn-2_seed2.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/syn/source_only_gcn_syn-2_to_syn-1_seed2.json",
+      "metrics": {
+        "accuracy": 0.7876,
+        "roc_auc": 0.869353509542263,
+        "parity": 0.008967511853938737,
+        "equality": 0.0338783976791448
+      }
+    },
+    {
+      "seed": 3,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/syn/source_only_gcn_syn-2_seed3.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/syn/source_only_gcn_syn-2_to_syn-1_seed3.json",
+      "metrics": {
+        "accuracy": 0.7782,
+        "roc_auc": 0.860468641042766,
+        "parity": 0.01752148816462551,
+        "equality": 0.03762540564223282
+      }
+    },
+    {
+      "seed": 4,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/syn/source_only_gcn_syn-2_seed4.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/syn/source_only_gcn_syn-2_to_syn-1_seed4.json",
+      "metrics": {
+        "accuracy": 0.785,
+        "roc_auc": 0.8641380465997061,
+        "parity": 0.026226219305708454,
+        "equality": 0.05115485817683152
+      }
+    },
+    {
+      "seed": 5,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/syn/source_only_gcn_syn-2_seed5.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/syn/source_only_gcn_syn-2_to_syn-1_seed5.json",
+      "metrics": {
+        "accuracy": 0.7728,
+        "roc_auc": 0.8551678728635079,
+        "parity": 0.03627110007496126,
+        "equality": 0.048334855652010345
+      }
+    }
+  ],
+  "aggregate": {
+    "accuracy": {
+      "mean": 0.7814,
+      "std": 0.005283937925449143,
+      "values": [
+        0.7834,
+        0.7876,
+        0.7782,
+        0.785,
+        0.7728
+      ]
+    },
+    "roc_auc": {
+      "mean": 0.8619973492958156,
+      "std": 0.004668424823730738,
+      "values": [
+        0.8608586764308354,
+        0.869353509542263,
+        0.860468641042766,
+        0.8641380465997061,
+        0.8551678728635079
+      ]
+    },
+    "parity": {
+      "mean": 0.022530773509911728,
+      "std": 0.009086255078368096,
+      "values": [
+        0.02366754815032468,
+        0.008967511853938737,
+        0.01752148816462551,
+        0.026226219305708454,
+        0.03627110007496126
+      ]
+    },
+    "equality": {
+      "mean": 0.04421444643294743,
+      "std": 0.007068042100704557,
+      "values": [
+        0.05007871501451766,
+        0.0338783976791448,
+        0.03762540564223282,
+        0.05115485817683152,
+        0.048334855652010345
+      ]
+    }
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "excluded_feature_columns": [
+    "user_id",
+    "RECID",
+    "WHITE"
+  ],
+  "experiment": "bailA_2_to_bailA_1_strict_shot_gcn",
+  "feature_names": [
+    "ALCHY",
+    "JUNKY",
+    "SUPER",
+    "MARRIED",
+    "FELON",
+    "WORKREL",
+    "PROPTY",
+    "PERSON",
+    "MALE",
+    "PRIORS",
+    "SCHOOL",
+    "RULE",
+    "AGE",
+    "TSERVD",
+    "FOLLOW",
+    "TIME",
+    "FILE"
+  ],
+  "mean_probabilities": {
+    "source_only": [
+      0.3124205470085144,
+      0.6875793933868408
+    ],
+    "strict_shot": [
+      0.570385754108429,
+      0.42961424589157104
+    ]
+  },
+  "prediction_counts": {
+    "source_only": [
+      2462,
+      5199
+    ],
+    "strict_shot": [
+      4388,
+      3273
+    ]
+  },
+  "reported_metrics": {
+    "source_only": {
+      "accuracy": 0.6161075830459595,
+      "equality": 0.006142556667327881,
+      "parity": 0.09281706809997559,
+      "roc_auc": 0.8471661548115633
+    },
+    "strict_shot": {
+      "accuracy": 0.5774703025817871,
+      "equality": 0.10059595108032227,
+      "parity": 0.10607004165649414,
+      "roc_auc": 0.6102739396481145
+    }
+  },
+  "reported_metrics_percent": {
+    "source_only": {
+      "accuracy": "61.61%",
+      "equality": "0.61%",
+      "parity": "9.28%",
+      "roc_auc": "84.72%"
+    },
+    "strict_shot": {
+      "accuracy": "57.75%",
+      "equality": "10.06%",
+      "parity": "10.61%",
+      "roc_auc": "61.03%"
+    }
+  },
+  "seed": 4,
+  "source_only": {
+    "classification": {
+      "accuracy": 0.6161075830459595,
+      "balanced_accuracy": 0.7076249876189366,
+      "macro_f1": 0.6161062757360725,
+      "per_class": [
+        {
+          "class": 0,
+          "f1": 0.6168078175895765,
+          "precision": 0.9614134849715679,
+          "recall": 0.4540571647803568,
+          "support": 5213
+        },
+        {
+          "class": 1,
+          "f1": 0.6154047338825683,
+          "precision": 0.45258703596845545,
+          "recall": 0.9611928104575164,
+          "support": 2448
+        }
+      ],
+      "roc_auc": 0.8471661548115633
+    },
+    "fairness": {
+      "demographic_parity_difference": 0.09281706809997559,
+      "equal_opportunity_difference": 0.006142556667327881,
+      "equalized_odds_difference": 0.15841564536094666,
+      "false_positive_rate": {
+        "0": 0.46480533480644226,
+        "1": 0.6232209801673889
+      },
+      "group_sizes": {
+        "0": 3825,
+        "1": 3836
+      },
+      "positive_prediction_rate": {
+        "0": 0.6321568489074707,
+        "1": 0.7249739170074463
+      },
+      "true_positive_rate": {
+        "0": 0.9641185402870178,
+        "1": 0.9579759836196899
+      }
+    }
+  },
+  "strict_shot": {
+    "classification": {
+      "accuracy": 0.5774703025817871,
+      "balanced_accuracy": 0.5588750126945081,
+      "macro_f1": 0.5485187234964546,
+      "per_class": [
+        {
+          "class": 0,
+          "f1": 0.6628476200395792,
+          "precision": 0.7251595259799453,
+          "recall": 0.6103970842125456,
+          "support": 5213
+        },
+        {
+          "class": 1,
+          "f1": 0.4341898269533299,
+          "precision": 0.3794683776351971,
+          "recall": 0.5073529411764706,
+          "support": 2448
+        }
+      ],
+      "roc_auc": 0.6102739396481145
+    },
+    "fairness": {
+      "demographic_parity_difference": 0.10607004165649414,
+      "equal_opportunity_difference": 0.10059595108032227,
+      "equalized_odds_difference": 0.11421334743499756,
+      "false_positive_rate": {
+        "0": 0.33110499382019043,
+        "1": 0.445318341255188
+      },
+      "group_sizes": {
+        "0": 3825,
+        "1": 3836
+      },
+      "positive_prediction_rate": {
+        "0": 0.3741176426410675,
+        "1": 0.48018768429756165
+      },
+      "true_positive_rate": {
+        "0": 0.45943838357925415,
+        "1": 0.5600343346595764
+      }
+    }
+  },
+  "target_labels_and_WHITE_loaded_after_adaptation": true
+}

@@ -1,0 +1,120 @@
+{
+  "experiment": "source_only_nifty_gcn_multi_seed",
+  "source_domain": "bailA_2",
+  "target_domain": "bailA_1",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "number_of_runs": 5,
+  "standard_deviation_ddof": 0,
+  "uses_sensitive_feature": true,
+  "uses_sensitive_counterfactual_augmentation": true,
+  "counterfactual_operation": "s <- 1 - s",
+  "per_seed": [
+    {
+      "seed": 1,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_bailA_2_seed1.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_bailA_2_to_bailA_1_seed1.json",
+      "metrics": {
+        "accuracy": 0.6734107818822608,
+        "roc_auc": 0.4592334288085719,
+        "parity": 0.0037141085144520095,
+        "equality": 0.005292973296976474
+      }
+    },
+    {
+      "seed": 2,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_bailA_2_seed2.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_bailA_2_to_bailA_1_seed2.json",
+      "metrics": {
+        "accuracy": 0.6898577209241613,
+        "roc_auc": 0.7108819909126128,
+        "parity": 0.04023662993177807,
+        "equality": 0.056195695512211596
+      }
+    },
+    {
+      "seed": 3,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_bailA_2_seed3.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_bailA_2_to_bailA_1_seed3.json",
+      "metrics": {
+        "accuracy": 0.7103511290954183,
+        "roc_auc": 0.6761127911744018,
+        "parity": 0.02796002099136491,
+        "equality": 0.02613037626136261
+      }
+    },
+    {
+      "seed": 4,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_bailA_2_seed4.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_bailA_2_to_bailA_1_seed4.json",
+      "metrics": {
+        "accuracy": 0.6979506591828742,
+        "roc_auc": 0.6435512996041821,
+        "parity": 0.04047809878209191,
+        "equality": 0.05443761489739177
+      }
+    },
+    {
+      "seed": 5,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_bailA_2_seed5.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_bailA_2_to_bailA_1_seed5.json",
+      "metrics": {
+        "accuracy": 0.6782404385850411,
+        "roc_auc": 0.5421281747240746,
+        "parity": 0.00450591915598356,
+        "equality": 0.006456999274825192
+      }
+    }
+  ],
+  "aggregate": {
+    "accuracy": {
+      "mean": 0.689962145933951,
+      "std": 0.013348287965237791,
+      "values": [
+        0.6734107818822608,
+        0.6898577209241613,
+        0.7103511290954183,
+        0.6979506591828742,
+        0.6782404385850411
+      ]
+    },
+    "roc_auc": {
+      "mean": 0.6063815370447687,
+      "std": 0.09267733729106158,
+      "values": [
+        0.4592334288085719,
+        0.7108819909126128,
+        0.6761127911744018,
+        0.6435512996041821,
+        0.5421281747240746
+      ]
+    },
+    "parity": {
+      "mean": 0.023378955475134088,
+      "std": 0.016373428212033598,
+      "values": [
+        0.0037141085144520095,
+        0.04023662993177807,
+        0.02796002099136491,
+        0.04047809878209191,
+        0.00450591915598356
+      ]
+    },
+    "equality": {
+      "mean": 0.029702731848553526,
+      "std": 0.0221930335150494,
+      "values": [
+        0.005292973296976474,
+        0.056195695512211596,
+        0.02613037626136261,
+        0.05443761489739177,
+        0.006456999274825192
+      ]
+    }
+  }
+}

@@ -189,6 +189,9 @@ class SAGE_encoder(nn.Module):
     def reset_parameters(self):
         for i in range(len(self.neurons_per_layer) - 1):
             self.gcn_stack[i].reset_parameters()
+        for module in self.transition:
+            if hasattr(module, 'reset_parameters'):
+                module.reset_parameters()
 
     def clip_parameters(self, channel_weights):
         for i in range(self.gcn_stack[0].lin_l.weight.data.shape[1]):

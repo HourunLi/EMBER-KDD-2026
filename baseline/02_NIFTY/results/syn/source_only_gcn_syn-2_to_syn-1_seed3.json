@@ -1,0 +1,16 @@
+{
+  "experiment": "source_only_gcn",
+  "source_domain": "syn-2",
+  "target_domain": "syn-1",
+  "dataset_schema": "syn",
+  "label_column": "label",
+  "sensitive_column": "sens",
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/syn/source_only_gcn_syn-2_seed3.pt",
+  "target_nodes": 5000,
+  "metrics": {
+    "accuracy": 0.7782,
+    "roc_auc": 0.860468641042766,
+    "parity": 0.01752148816462551,
+    "equality": 0.03762540564223282
+  }
+}

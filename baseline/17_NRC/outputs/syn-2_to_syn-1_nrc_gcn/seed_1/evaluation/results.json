@@ -1,0 +1,37 @@
+{
+  "dataset_family": "syn",
+  "evaluated_node_count": 5000,
+  "excluded_from_metrics_count": 0,
+  "experiment": "syn-2_to_syn-1_strict_original_nrc_gcn",
+  "nrc": {
+    "accuracy": 0.8288000226020813,
+    "equality": 0.2239621877670288,
+    "parity": 0.29929572343826294,
+    "positive_prediction_rate": {
+      "0": 0.38667750358581543,
+      "1": 0.6859732270240784
+    },
+    "roc_auc": 0.9207763224672387,
+    "true_positive_rate": {
+      "0": 0.7467845678329468,
+      "1": 0.9707467555999756
+    }
+  },
+  "seed": 1,
+  "source_only": {
+    "accuracy": 0.8715999722480774,
+    "equality": 0.13953596353530884,
+    "parity": 0.18704131245613098,
+    "positive_prediction_rate": {
+      "0": 0.42485782504081726,
+      "1": 0.6118991374969482
+    },
+    "roc_auc": 0.9465501073837684,
+    "true_positive_rate": {
+      "0": 0.8135048151016235,
+      "1": 0.9530407786369324
+    }
+  },
+  "target_label_and_sensitive_attribute_loaded_only_in_final_evaluation": true,
+  "target_node_count": 5000
+}

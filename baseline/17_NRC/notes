@@ -1,0 +1,32 @@
+7.24
+
+bailA:
+DEVICE=cuda:0 PYTHON_BIN=python3 bash graph/run_baila_2_to_1_five_seeds.sh
+
+或：（推荐）
+DEVICE=cuda:0 \
+PYTHON_BIN=python3 \
+SOURCE_EPOCHS=500 \
+TARGET_EPOCHS=15 \
+TARGET_BATCH_SIZE=64 \
+OUTPUT_ROOT=./output \
+bash graph/run_baila_2_to_1_five_seeds.sh
+
+germanA:
+DEVICE=cuda:0 \
+PYTHON_BIN=python3 \
+SOURCE_EPOCHS=500 \
+TARGET_EPOCHS=15 \
+TARGET_BATCH_SIZE=64 \
+OUTPUT_ROOT=./output \
+bash graph/run_germana_2_to_1_five_seeds.sh
+
+pokec:
+DEVICE=cuda:7 PYTHON_BIN=python3 bash graph/run_pokec_z_to_n_five_seeds.sh
+
+syn:
+DEVICE=cuda:0 PYTHON_BIN=python3 bash graph/run_syn_2_to_1_five_seeds.sh
+
+
+
+

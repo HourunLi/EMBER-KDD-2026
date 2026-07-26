@@ -1,0 +1,20 @@
+{
+  "experiment": "source_only_nifty_gcn",
+  "source_domain": "bailA_2",
+  "target_domain": "bailA_1",
+  "dataset_schema": "bailA",
+  "label_column": "RECID",
+  "sensitive_column": "WHITE",
+  "uses_sensitive_feature": true,
+  "uses_sensitive_counterfactual_augmentation": true,
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_bailA_2_seed1.pt",
+  "target_graph_nodes": 7661,
+  "target_labeled_nodes": 7661,
+  "target_nodes": 7661,
+  "metrics": {
+    "accuracy": 0.6734107818822608,
+    "roc_auc": 0.4592334288085719,
+    "parity": 0.0037141085144520095,
+    "equality": 0.005292973296976474
+  }
+}

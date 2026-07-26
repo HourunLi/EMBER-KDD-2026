@@ -6,6 +6,12 @@ import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 from sklearn.metrics import confusion_matrix
+# 自己加的
+import ipdb
+from torch_geometric.nn import GCNConv
+import pandas as pd
+import scipy.sparse as sp
+
 
 
 def calc_coeff(iter_num, high=1.0, low=0.0, alpha=10.0, max_iter=10000.0):
@@ -111,6 +117,112 @@ class ResBase101(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         return x
+
+# 自己加的
+class GCN(nn.Module):
+    def __init__(self, nfeat, nhid, nclass, dropout):
+        super(GCN, self).__init__()
+        self.body = GCN_Body(nfeat,nhid,dropout)
+        self.fc = nn.Linear(nhid, nclass)
+
+        for m in self.modules():
+            self.weights_init(m)
+
+    def weights_init(self, m):
+        if isinstance(m, nn.Linear):
+            torch.nn.init.xavier_uniform_(m.weight.data)
+            if m.bias is not None:
+                m.bias.data.fill_(0.0)
+
+    def forward(self, x, edge_index):
+        x = self.body(x, edge_index)
+        x = self.fc(x)
+        return x
+
+class GCN_Body(nn.Module):
+    def __init__(self, nfeat, nhid, dropout):
+        super(GCN_Body, self).__init__()
+        self.gc1 = GCNConv(nfeat, nhid)
+
+    def forward(self, x, edge_index):
+        x = self.gc1(x, edge_index)
+        return x    
+
+class MLPEncoder(nn.Module):
+    """Two-layer tabular encoder for BailA node attributes."""
+    def __init__(self, input_dim, hidden_dim=64, dropout=0.5):
+        super().__init__()
+        self.in_features = hidden_dim
+        self.layers = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout(dropout),
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+        )
+        self.layers.apply(init_weights)
+
+    def forward(self, x):
+        return self.layers(x)
+
+# def load_bailA(dataset, sens_attr="WHITE", predict_attr="RECID", path):
+def load_bailA(dataset, path, sens_attr="WHITE", predict_attr="RECID", label_number=1000):
+    # print('Loading {} dataset from {}'.format(dataset, path))
+    idx_features_labels = pd.read_csv(os.path.join(path,"{}.csv".format(dataset)))
+    header = list(idx_features_labels.columns)
+    header.remove(predict_attr)
+    
+    # build relationship
+    # 这里看一下构造的.txt有没有问题
+    # if os.path.exists(f'{path}/{dataset}_edges.txt'):
+    if os.path.exists(f'{path}/{dataset}_edges.txt'):
+        edges_unordered = np.genfromtxt(f'{path}/{dataset}_edges.txt').astype('int')
+    else:
+        edges_unordered = build_relationship(idx_features_labels[header], thresh=0.6)
+        np.savetxt(f'{path}/{dataset}_edges.txt', edges_unordered)
+
+    features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
+    labels = idx_features_labels[predict_attr].values
+
+    idx = np.arange(features.shape[0])
+    idx_map = {j: i for i, j in enumerate(idx)}
+    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
+                     dtype=int).reshape(edges_unordered.shape)
+    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
+                        shape=(labels.shape[0], labels.shape[0]),
+                        dtype=np.float32)
+
+    # build symmetric adjacency matrix
+    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+
+    # features = normalize(features)
+    adj = adj + sp.eye(adj.shape[0])
+
+    features = torch.FloatTensor(np.array(features.todense()))
+    labels = torch.LongTensor(labels)
+
+    import random
+    random.seed(20)
+    label_idx_0 = np.where(labels==0)[0]
+    label_idx_1 = np.where(labels==1)[0]
+    random.shuffle(label_idx_0)
+    random.shuffle(label_idx_1)
+    idx_train = np.append(label_idx_0[:min(int(0.5 * len(label_idx_0)), label_number//2)], label_idx_1[:min(int(0.5 * len(label_idx_1)), label_number//2)])
+    idx_val = np.append(label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))], label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
+    idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
+
+    sens = idx_features_labels[sens_attr].values.astype(int)
+    sens = torch.FloatTensor(sens)
+    idx_train = torch.LongTensor(idx_train)
+    idx_val = torch.LongTensor(idx_val)
+    idx_test = torch.LongTensor(idx_test)
+    
+    return adj, features, labels, idx_train, idx_val, idx_test, sens
+
+
+
+
+
+
+
+
 
 class ResClassifier(nn.Module):
     def __init__(self, class_num, feature_dim, bottleneck_dim=256):

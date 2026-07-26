@@ -1,0 +1,16 @@
+{
+  "experiment": "source_only_gcn",
+  "source_domain": "bailA_2",
+  "target_domain": "bailA_1",
+  "dataset_schema": "bailA",
+  "label_column": "RECID",
+  "sensitive_column": "WHITE",
+  "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_gcn_bailA_2_seed4.pt",
+  "target_nodes": 7661,
+  "metrics": {
+    "accuracy": 0.7342383500848453,
+    "roc_auc": 0.7820394103353984,
+    "parity": 0.034197591445337266,
+    "equality": 0.045726151516043506
+  }
+}

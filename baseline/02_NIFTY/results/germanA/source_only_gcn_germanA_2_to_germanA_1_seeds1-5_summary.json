@@ -1,0 +1,117 @@
+{
+  "experiment": "source_only_gcn_multi_seed",
+  "source_domain": "germanA_2",
+  "target_domain": "germanA_1",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "number_of_runs": 5,
+  "standard_deviation_ddof": 0,
+  "per_seed": [
+    {
+      "seed": 1,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed1.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed1.json",
+      "metrics": {
+        "accuracy": 0.7057291666666666,
+        "roc_auc": 0.5927698032961191,
+        "parity": 0.05078125,
+        "equality": 0.07342069892473113
+      }
+    },
+    {
+      "seed": 2,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed2.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed2.json",
+      "metrics": {
+        "accuracy": 0.7473958333333334,
+        "roc_auc": 0.649867091972355,
+        "parity": 0.01953125,
+        "equality": 0.003864247311827995
+      }
+    },
+    {
+      "seed": 3,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed3.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed3.json",
+      "metrics": {
+        "accuracy": 0.7239583333333334,
+        "roc_auc": 0.6402622718412193,
+        "parity": 0.05078125,
+        "equality": 0.034946236559139754
+      }
+    },
+    {
+      "seed": 4,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed4.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed4.json",
+      "metrics": {
+        "accuracy": 0.5625,
+        "roc_auc": 0.5963494595073542,
+        "parity": 0.1484375,
+        "equality": 0.19522849462365593
+      }
+    },
+    {
+      "seed": 5,
+      "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed5.pt",
+      "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed5.json",
+      "metrics": {
+        "accuracy": 0.703125,
+        "roc_auc": 0.6305511252879674,
+        "parity": 0.1015625,
+        "equality": 0.10534274193548387
+      }
+    }
+  ],
+  "aggregate": {
+    "accuracy": {
+      "mean": 0.6885416666666667,
+      "std": 0.06498113374707737,
+      "values": [
+        0.7057291666666666,
+        0.7473958333333334,
+        0.7239583333333334,
+        0.5625,
+        0.703125
+      ]
+    },
+    "roc_auc": {
+      "mean": 0.6219599503810029,
+      "std": 0.02321875853072824,
+      "values": [
+        0.5927698032961191,
+        0.649867091972355,
+        0.6402622718412193,
+        0.5963494595073542,
+        0.6305511252879674
+      ]
+    },
+    "parity": {
+      "mean": 0.07421875,
+      "std": 0.045487270712530115,
+      "values": [
+        0.05078125,
+        0.01953125,
+        0.05078125,
+        0.1484375,
+        0.1015625
+      ]
+    },
+    "equality": {
+      "mean": 0.08256048387096773,
+      "std": 0.06596493279613576,
+      "values": [
+        0.07342069892473113,
+        0.003864247311827995,
+        0.034946236559139754,
+        0.19522849462365593,
+        0.10534274193548387
+      ]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "evaluation_payload": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/syn-2_to_syn-1_nrc_gcn/seed_4/target/evaluation_payload.pt",
+  "experiment": "syn-2_to_syn-1_strict_original_nrc_gcn",
+  "nrc_prediction_counts": [
+    2364,
+    2636
+  ],
+  "seed": 4,
+  "source_data_paths_accepted_by_target_stage": false,
+  "source_only_prediction_counts": [
+    2383,
+    2617
+  ],
+  "target_checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/syn-2_to_syn-1_nrc_gcn/seed_4/target/target_nrc_model.pt",
+  "target_labels_or_sensitive_attributes_used_for_adaptation": false
+}

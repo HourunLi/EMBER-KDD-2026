@@ -1,0 +1,14 @@
+7.24
+bailA:
+DEVICE=cuda:0 PYTHON_BIN=python bash graph/run_baila_2_to_1.sh
+
+germanA:
+DEVICE=cuda:0 PYTHON_BIN=python bash graph/run_germanA_2_to_1.sh
+
+pokec_n:
+DEVICE=cuda:2 PYTHON_BIN=python bash graph/run_pokec_z_to_n.sh
+
+syn-1:
+DEVICE=cuda:2 PYTHON_BIN=python bash graph/run_syn_2_to_1.sh
+
+

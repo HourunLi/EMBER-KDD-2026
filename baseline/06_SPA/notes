@@ -41,7 +41,7 @@ AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute 'next'
 用torch110pt38试一下
 指令格式：sh train_uda_officehome.sh spa 0.2 1.0 DANNE 0.3 laplac1 gauss 
 
-一、Bail
+python train_uda.py  --dset bailA --net mlp --method DANNE --pl spa --ifsvd --source_csv "./dataset/bailA/bailA_2.csv" --target_csv "./dataset/bailA/bailA_1.csv" --max_epoch 30 --batch_size 128 --hidden 64 --bottleneck_dim 64  --tar_par 0.2 --momentum 0.3 --svd_par 1.0 --ap gauss --laplac laplac1
 
 
 

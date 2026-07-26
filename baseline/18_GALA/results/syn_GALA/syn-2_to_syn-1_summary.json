@@ -1,0 +1,89 @@
+{
+  "source_domain": "syn-2",
+  "target_domain": "syn-1",
+  "dataset": "syn",
+  "encoder": "GCN",
+  "device": "cuda:0",
+  "feature_columns_excluded": [
+    "separate label file",
+    "separate sensitive file"
+  ],
+  "label_column": "label",
+  "sensitive_column": "sensitive",
+  "label_mode": "binary",
+  "common_feature_count": 48,
+  "source_valid_label_count": 5000,
+  "target_valid_label_count": 5000,
+  "source_only_features_dropped": [],
+  "target_only_features_dropped": [],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "per_seed": [
+    {
+      "seed": 1,
+      "accuracy": 0.8069999814033508,
+      "ROC_AUC": 0.9024121223789126,
+      "parity": 0.3499999940395355,
+      "equality": 0.19362860918045044
+    },
+    {
+      "seed": 2,
+      "accuracy": 0.7979999780654907,
+      "ROC_AUC": 0.887999487704918,
+      "parity": 0.3562913239002228,
+      "equality": 0.32350021600723267
+    },
+    {
+      "seed": 3,
+      "accuracy": 0.7799999713897705,
+      "ROC_AUC": 0.8775750300120048,
+      "parity": 0.35650187730789185,
+      "equality": 0.2692544460296631
+    },
+    {
+      "seed": 4,
+      "accuracy": 0.5849999785423279,
+      "ROC_AUC": 0.6187004589486994,
+      "parity": 0.17355290055274963,
+      "equality": 0.10294902324676514
+    },
+    {
+      "seed": 5,
+      "accuracy": 0.8119999766349792,
+      "ROC_AUC": 0.892523738611071,
+      "parity": 0.36870208382606506,
+      "equality": 0.33457237482070923
+    }
+  ],
+  "summary": {
+    "accuracy": {
+      "mean": 0.7563999772071839,
+      "variance": 0.007463439940032969,
+      "std": 0.08639120290882034,
+      "formatted": "75.64% +/- 8.64%"
+    },
+    "ROC_AUC": {
+      "mean": 0.8358421675311212,
+      "variance": 0.011851379770636413,
+      "std": 0.10886404259734439,
+      "formatted": "83.58% +/- 10.89%"
+    },
+    "parity": {
+      "mean": 0.32100963592529297,
+      "variance": 0.005472599192361827,
+      "std": 0.07397701800128083,
+      "formatted": "32.10% +/- 7.40%"
+    },
+    "equality": {
+      "mean": 0.24478093385696412,
+      "variance": 0.0075182064475635,
+      "std": 0.08670759163743103,
+      "formatted": "24.48% +/- 8.67%"
+    }
+  }
+}
