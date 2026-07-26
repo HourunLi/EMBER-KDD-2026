@@ -19,13 +19,13 @@ visualization/
   results/
     <method>_<dataset>/
       coordinates.csv
-      tsne.png
-      tsne.pdf
+      <method>.png
+      <method>.pdf
       candidates/
         sample_seed_<sample_seed>_tsne_seed_<tsne_seed>/
           coordinates.csv
-          tsne.png
-          tsne.pdf
+          <method>.png
+          <method>.pdf
   README.md
 ```
 
@@ -107,27 +107,27 @@ visualization/results/<method>_<dataset>/
 
 ```text
 coordinates.csv
-tsne.png
-tsne.pdf
+<method>.png
+<method>.pdf
 ```
 
 例如：
 
 ```text
 visualization/results/SFFGNN_pokec/coordinates.csv
-visualization/results/SFFGNN_pokec/tsne.png
-visualization/results/SFFGNN_pokec/tsne.pdf
+visualization/results/SFFGNN_pokec/SFFGNN.png
+visualization/results/SFFGNN_pokec/SFFGNN.pdf
 ```
 
-图形采用面向论文投稿的简洁样式：坐标归一化到 0.0-1.0，并使用参考图中的蓝红双系配色（`#003566`、`#669BBC`、`#E29578`、`#9E2A2B`）；所有类别统一使用小型半透明圆点，不加描边，避免密集区域出现杂乱的“拼贴感”。默认关闭没有解释意义的 t-SNE 刻度和边框，使用 Times 系列字体、轻量标题和坐标轴外单行图例。
+图形采用与 CELL/Pilot 参考图一致的论文样式：使用 `6.4 x 4.35` 英寸画布，坐标归一化到 0.0-1.0，显示 0.0-1.0、间隔 0.2 的刻度以及完整灰色边框。刻度字号为 18 pt，底部方法/数据集标签为 20 pt；散点大小为 20 pt²。放大的四组单行图例紧贴图片框上方，并限制在图片框宽度内。输出使用 `bbox_inches="tight"` 和 0.1 英寸 padding 裁剪白边。
 
-标题格式为：
+底部标签格式为：
 
 ```text
-<method> on <dataset title>
+<method> t-SNE result on <dataset>
 ```
 
-其中 `<dataset title>` 读取 `config.yaml` 中对应数据集的 `title` 字段；输入路径和结果目录仍使用 `name` 字段。
+其中 `<dataset>` 使用 `config.yaml` 中的数据集 `name` 字段，与输入路径和结果目录保持一致。
 
 ## Usage
 

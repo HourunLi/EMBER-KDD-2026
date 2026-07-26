@@ -6,8 +6,8 @@
 #
 # Output convention:
 #   visualization/results/<method>_<dataset>/coordinates.csv
-#   visualization/results/<method>_<dataset>/tsne.png
-#   visualization/results/<method>_<dataset>/tsne.pdf
+#   visualization/results/<method>_<dataset>/<method>.png
+#   visualization/results/<method>_<dataset>/<method>.pdf
 
 project:
   root: "{config_dir}/.."
@@ -72,7 +72,7 @@ labels:
 sampling:
   max_points: 3000
   stratify: true
-  random_state: 42
+  random_state: 22
 
 tsne:
   random_state: 0
@@ -86,37 +86,45 @@ tsne:
 plot:
   formats: [png, pdf]
   dpi: 300
-  figure_width: 5.2
-  figure_height: 4.8
-  point_size: 11
+  # Match the Matplotlib canvas and cropped proportions used by CELL/pilot.
+  figure_width: 6.4
+  figure_height: 4.35
+  point_size: 20
   marker_line_width: 0.0
   marker_edge_color: "none"
-  alpha: 0.70
-  axis_margin: 0.04
+  alpha: 0.80
+  axis_margin: 0.05
   tick_label_size: 18
-  tick_length: 3.5
-  tick_width: 0.8
+  tick_length: 5.0
+  tick_width: 1.0
   tick_pad: 3.5
   axis_label_size: 20
-  axis_label_pad: 3.4
-  spine_color: "#4D4D4D"
-  spine_width: 0.8
+  axis_label_pad: 4.0
+  spine_color: "#808080"
+  spine_width: 1.0
   axes_facecolor: "#FFFFFF"
-  equal_aspect: true
-  show_ticks: false
-  show_spines: false
+  equal_aspect: false
+  show_ticks: true
+  show_spines: true
   tight_layout: false
   savefig_pad_inches: 0.1
   show_legend: true
-  legend_size: 9.5
+  legend_size: 14
   legend_ncol: 4
-  legend_marker_scale: 1.25
+  legend_marker_size: 8.0
+  legend_marker_scale: 1.0
+  legend_expand_to_axes: true
+  legend_bbox_y: 1.0
+  legend_handletextpad: 0.35
+  legend_columnspacing: 0.8
+  legend_handlelength: 1.0
+  adjust_for_legend: false
   font_family: "serif"
   font_serif: ["Times New Roman", "Times", "DejaVu Serif"]
-  title_template: "{method} t-SNE result on {dataset_title}"
-  title_size: 16
-  title_pad: 8
-  xlabel_template: ""
+  title_template: ""
+  title_size: 20
+  title_pad: 0
+  xlabel_template: "{method} t-SNE result on {dataset}"
   group_order: [0, 1, 2, 3]
   # Blue-red pairing sampled from the supplied scientific-colour reference.
   colors: ["#2A6F97", "#E58D5B", "#8EC5E8", "#F6C8A8"]

@@ -251,7 +251,7 @@ def main() -> int:
                         }
                         for fmt in output_formats:
                             fmt = fmt.lstrip(".")
-                            out_path = result_dir / f"tsne.{fmt}"
+                            out_path = result_dir / f"{method}.{fmt}"
                             plot_panels(
                                 out_path,
                                 dataset_title,
