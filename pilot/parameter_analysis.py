@@ -723,7 +723,7 @@ def plot_3d_parameter_surface(
     axis.yaxis.set_rotate_label(False)
     axis.zaxis.set_rotate_label(False)
     axis.set_xlabel("δ", fontsize=37, rotation=0, labelpad=25)
-    axis.set_ylabel("ν₀", fontsize=37, rotation=0, labelpad=25)
+    axis.set_ylabel(r"$\nu_0$", fontsize=37, rotation=0, labelpad=25)
     fig.text(
         0.075,
         0.52,
