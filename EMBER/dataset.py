@@ -38,7 +38,7 @@ def build_relationship(x, thresh=0.25):
 
 
 def load_credit(dataset, id, sens_attr="Age", predict_attr="NoDefaultNextMonth", path="../dataset_bak/credit/"):
-    path = f"../dataset/{dataset}"
+    path = f"/home/disk2/lhr/EMBER-KDD-2026/dataset/{dataset}"
     idx_features_labels = pd.read_csv(os.path.join(path, f"{dataset}{id}.csv"))
     header = list(idx_features_labels.columns)
     header.remove("user_id")

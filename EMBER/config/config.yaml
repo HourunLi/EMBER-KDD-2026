@@ -28,42 +28,43 @@ bailA:
 
 germanA:
   # === Source + Target: transferred encoder/representation ===
-  cls_encoder: "MLP"
+  cls_encoder: "GCN"
   sens_encoder: "MLP"
-  hidden_dim: 128
-  cls_n_layers: 2
-  sens_n_layers: 2  # ignored when sens_encoder is MLP
+  hidden_dim: 256
+  cls_n_layers: 3
+  sens_n_layers: 2 # ignored when sens_encoder is MLP
 
   # === Source stage: base training and regularization ===
-  train_epochs: 500
-  lr: 0.005
+  train_epochs: 1000
+  lr: 0.003
   lr2_reg: 0.001
-  dropout: 0.4
+  dropout: 0.3
 
   # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
-  lambda_sen: 4.0
-  lambda_dec: 2.0
-  lambda_fair: 4.0
-  meta_lr: 0.012
-  lambda_coord: 1.0
+  lambda_sen: 8
+  lambda_dec: 6
+  lambda_fair: 8
+  meta_lr: 0.005
+  lambda_coord: 0.9
   source_mmd_bandwidth: 1.0
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 30
-  tau_c: 0.9
-  proto_temp: 0.8
+  adapt_epochs: 300
+  tau_c: 0.75
+  proto_temp: 0.6
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.0001
-  residual_inner_steps: 3
-  lambda_residual_l2: 0.05
-  group_pseudocount: 100.0
+  adapt_lr: 0.0005
+  residual_inner_steps: 5
+  lambda_residual_l2: 0.2
+  group_pseudocount: 30
 
   # === Target: Bayesian Test-Time Adaptation ===
-  lambda_pi: 0.0
-  prior_confidence_threshold: 0.9
-  prior_pseudocount: 500.0
-  prior_discount: 0.8
+  lambda_pi: 0.4
+  prior_confidence_threshold: 0.75
+  prior_pseudocount: 5
+  prior_discount: 0.85
+
 
 pokec:
   # === Source + Target: independent transferred encoders/representations ===

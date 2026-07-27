@@ -25,7 +25,7 @@ from typing import Dict, List, Sequence, Tuple
 # ---------------------------------------------------------------------------
 EXPERIMENT = "all"  # decouple | metaalign | minority | bca | groupinit | all
 GPU_IDS = [0, 1, 2, 3, 5]
-DATASETS = ["pokec"]
+DATASETS = ["germanA"]
 RUN_SEED_STEP = 1111
 TARGET_SEED_OFFSET = 100000
 RUN_SEEDS = [RUN_SEED_STEP * run_number for run_number in range(1, 6)]
