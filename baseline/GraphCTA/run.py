@@ -39,7 +39,7 @@ PAIRS = {
     "syn": ("-2", "-1"),
 }
 # Edit this list to choose the GPUs used for parallel runs. One run per GPU.
-AVAILABLE_GPUS = [0, 1, 2, 3]
+AVAILABLE_GPUS = [1, 2, 4, 5, 6]
 SEEDS = [1111, 2222, 3333, 4444, 5555]
 SOURCE_EPOCHS = TARGET_EPOCHS = 1000
 PATIENCE = 100
@@ -174,6 +174,33 @@ def train_source(device, seed, epochs, patience):
     return best_epoch + 1
 
 
+def ember_target_class_metrics(y_true, prediction, probability):
+    """Compute ACC/AUC with EMBER's per-target-class aggregation."""
+    target_metrics = []
+    for target_class in np.unique(y_true):
+        target_mask = y_true == target_class
+        target_metrics.append(
+            {
+                "acc": accuracy_score(
+                    y_true[target_mask], prediction[target_mask]
+                )
+                * 100.0,
+                "auc": roc_auc_score(
+                    (y_true == target_class).astype(int),
+                    probability if target_class == 1 else 1.0 - probability,
+                )
+                * 100.0
+                if len(set(y_true)) == 2
+                else float("nan"),
+            }
+        )
+
+    return (
+        float(np.nanmean([metric["acc"] for metric in target_metrics])),
+        float(np.nanmean([metric["auc"] for metric in target_metrics])),
+    )
+
+
 def train_target(device, seed, epochs, target):
     seed_all(seed)
     module = import_stage(
@@ -195,13 +222,16 @@ def train_target(device, seed, epochs, target):
         mask = select.to(logits.device)
         labels = target.y[select].long().to(logits.device)
         loss = F.cross_entropy(logits[mask], labels)
-        pred = logits[mask].argmax(1)
+        probability = F.softmax(logits[mask], dim=1)[:, 1].cpu().numpy()
+        prediction = (probability > 0.5).astype(int)
+        labels_np = labels.cpu().numpy()
+        accuracy, _ = ember_target_class_metrics(labels_np, prediction, probability)
         captured.update(
             embedding=embedding[mask].cpu().numpy(),
-            probability=F.softmax(logits[mask], dim=1)[:, 1].cpu().numpy(),
-            prediction=pred.cpu().numpy(),
+            probability=probability,
+            prediction=prediction,
         )
-        return float((pred == labels).float().mean().item()), loss
+        return accuracy, loss
 
     module.evaluate = capture_evaluate
     module.train_target(module.data, module.perturbed_edge_weight)
@@ -214,13 +244,13 @@ def evaluate(captured, target):
     mask = all_valid_mask(target)
     y = target.y[mask].cpu().numpy()
     sens = target.sens_labels[mask].cpu().numpy()
-    pred = captured["prediction"]
     probability = captured["probability"]
-    sens_ok = (sens == 0) | (sens == 1)
-    dp, eo = fair_metric(pred[sens_ok], y[sens_ok], sens[sens_ok])
+    pred = (probability > 0.5).astype(int)
+    acc, auc = ember_target_class_metrics(y, pred, probability)
+    dp, eo = fair_metric(pred, y, sens)
     metrics = {
-        "ACC": float(accuracy_score(y, pred) * 100),
-        "AUC": float(roc_auc_score(y, probability) * 100),
+        "ACC": acc,
+        "AUC": auc,
         "DP": float(dp * 100),
         "EO": float(eo * 100),
     }
