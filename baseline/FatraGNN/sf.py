@@ -7,7 +7,7 @@ train the original encoder/classifier/sensitive-discriminator components on
 the labelled source graph, save only their parameters, release the source
 graph, then run one direct forward pass on the target graph.  There is no
 target optimizer, entropy minimization, pseudo-label, or target-validation
-model selection.  Target annotations are used only by the final all-valid
+model selection.  Target annotations are used only by the final all-split
 evaluator and visualization exporter.
 """
 
@@ -43,10 +43,7 @@ if str(REPO_ROOT) not in sys.path:
 from EMBER.dataset import get_dataset
 from visualization.export_utils import save_visualization_embeddings
 
-try:
-    from sklearn.metrics import roc_auc_score
-except ImportError:
-    roc_auc_score = None
+from sklearn.metrics import accuracy_score, roc_auc_score
 
 
 METHOD_NAME = "FatraGNN-SF"
@@ -100,8 +97,8 @@ def source_train_mask(data) -> torch.Tensor:
 
 
 def evaluation_mask(data) -> torch.Tensor:
-    split_mask = data.train_mask.bool() | data.val_mask.bool() | data.test_mask.bool()
-    return split_mask & valid_binary_mask(data)
+    """Match EMBER/learn.py's ``all`` split exactly."""
+    return data.train_mask.bool() | data.val_mask.bool() | data.test_mask.bool()
 
 
 def configure_model_args(args, num_features: int) -> SimpleNamespace:
@@ -363,11 +360,11 @@ def stage2_evaluate_target(
 
 
 def safe_gap(left: np.ndarray, right: np.ndarray) -> float:
-    """Match SFFGNN.utils.fair_metric, including its empty-group policy."""
+    """Match EMBER.utils.fair_metric, including its empty-group policy."""
     if left.size == 0 or right.size == 0:
-        return 0.0
+        return float("nan")
     value = abs(float(left.mean()) - float(right.mean()))
-    return value if np.isfinite(value) else 0.0
+    return value if np.isfinite(value) else float("nan")
 
 
 def fairness_metrics(
@@ -381,7 +378,7 @@ def fairness_metrics(
     group1_positive = group1 & (labels == 1)
 
     dp = safe_gap(predictions[group0], predictions[group1])
-    # SFFGNN Eq. (2): average the sensitive-group gap in correct
+    # EMBER Eq. (2): average the sensitive-group gap in correct
     # predictions for y=0 and y=1 (equalized odds, not only TPR parity).
     y0_gap = safe_gap(
         predictions[group0_negative] == 0,
@@ -399,7 +396,7 @@ def fairness_metrics(
 def metrics_from_logits(logits: torch.Tensor, data) -> dict[str, float]:
     mask = evaluation_mask(data)
     if int(mask.sum().item()) == 0:
-        raise ValueError("Target evaluation union has no valid binary labels")
+        raise ValueError("Target evaluation union has no samples")
 
     probabilities = torch.sigmoid(logits[mask]).detach().cpu().numpy()
     predictions = (probabilities > 0.5).astype(np.int64)
@@ -408,11 +405,20 @@ def metrics_from_logits(logits: torch.Tensor, data) -> dict[str, float]:
         data.sens_labels[mask].detach().cpu().numpy().astype(np.int64)
     )
 
-    accuracy = float((predictions == labels).mean() * 100.0)
-    if roc_auc_score is not None and np.unique(labels).size == 2:
-        auc = float(roc_auc_score(labels, probabilities) * 100.0)
-    else:
-        auc = float("nan")
+    target_metrics = {}
+    has_both_classes = len(set(labels)) == 2
+    for yval in np.unique(labels):
+        class_mask = labels == yval
+        target_metrics[int(yval)] = {
+            "acc": accuracy_score(labels[class_mask], predictions[class_mask]) * 100.0,
+            "auc": roc_auc_score(
+                (labels == yval).astype(int),
+                probabilities if yval == 1 else 1 - probabilities,
+            ) * 100.0 if has_both_classes else float("nan"),
+        }
+
+    accuracy = float(np.nanmean([metric["acc"] for metric in target_metrics.values()]))
+    auc = float(np.nanmean([metric["auc"] for metric in target_metrics.values()]))
     dp, eo = fairness_metrics(predictions, labels, sensitive)
     return {"Acc": accuracy, "AUC": auc, "DP": dp, "EO": eo}
 
@@ -432,7 +438,7 @@ def write_run_result(
         "target_id": target_id,
         "seed": args.seed,
         "evaluation_protocol": "source_only_direct_target_inference",
-        "eval_split": "train|val|test with y in {0,1}",
+        "eval_split": "train|val|test",
         "metrics": metrics,
         "hyperparameters": {
             "hidden": args.hidden,
