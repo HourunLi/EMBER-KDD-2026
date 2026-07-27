@@ -1,5 +1,6 @@
 import json
 import os
+from copy import copy
 
 import numpy as np
 
@@ -9,30 +10,90 @@ from runner import train_and_adapt
 from utils import seed_everything
 
 
+RUN_SEED_STEP = 1111
+TARGET_SEED_OFFSET = 100000
+
+
 def _values(array):
     return np.asarray(array).reshape(-1).astype(float).tolist()
 
 
-if __name__ == '__main__':
-    seed_everything(args.seed)
+def _run_seed_pair(base_source_seed, base_target_seed, run_idx):
+    """Return the independently aligned source/target seeds for one run."""
+    source_seed = int(base_source_seed) + run_idx * RUN_SEED_STEP
+    target_seed = int(base_target_seed) + run_idx * RUN_SEED_STEP
+    return source_seed, target_seed
 
-    source_data = get_dataset(args, args.inid)
-    target_data = None if args.source_only else get_dataset(args, args.outid)
+
+def _run_once(run_args):
+    """Load data and execute one source/target seed pair."""
+    # Dataset construction shuffles source and target splits.  Seed each load
+    # independently so that a run has the same source/target data split in
+    # the main experiment and in every ablation subprocess.
+    seed_everything(run_args.seed)
+    source_data = get_dataset(run_args, run_args.inid)
+    target_data = None
+    if not run_args.source_only:
+        seed_everything(run_args.target_seed)
+        target_data = get_dataset(run_args, run_args.outid)
 
     print("********************process source data********************")
-    source_data = process_dataset(args, source_data)
+    source_data = process_dataset(run_args, source_data)
     if target_data is not None:
         print("********************process target data********************")
-        target_data = process_dataset(args, target_data, is_target=True)
+        target_data = process_dataset(run_args, target_data, is_target=True)
+
+    return train_and_adapt(run_args, source_data, target_data)
+
+
+def _combine_run_outputs(run_outputs):
+    """Concatenate one-run metric arrays into the established result shape."""
+    metric_outputs = tuple(
+        np.concatenate([output[index] for output in run_outputs], axis=0)
+        for index in range(12)
+    )
+    diagnostic_names = run_outputs[0][12]
+    diagnostics = {
+        name: np.concatenate(
+            [output[12][name] for output in run_outputs], axis=0
+        )
+        for name in diagnostic_names
+    }
+    return (*metric_outputs, diagnostics)
+
+
+if __name__ == '__main__':
+    base_source_seed = int(args.seed)
+    base_target_seed = (
+        int(args.target_seed)
+        if args.target_seed is not None
+        else base_source_seed + TARGET_SEED_OFFSET
+    )
+    requested_runs = int(args.runs)
+    if requested_runs < 1:
+        raise ValueError("runs must be positive")
+
+    run_outputs = []
+    for run_idx in range(requested_runs):
+        source_seed, target_seed = _run_seed_pair(
+            base_source_seed,
+            base_target_seed,
+            run_idx,
+        )
+        run_args = copy(args)
+        run_args.runs = 1
+        run_args.seed = source_seed
+        run_args.target_seed = target_seed
+        print(
+            f"[Run {run_idx}] source_seed={source_seed} "
+            f"target_seed={target_seed}"
+        )
+        run_outputs.append(_run_once(run_args))
 
     (src_acc, src_auc_roc, src_parity, src_equality,
      tgt_acc, tgt_auc_roc, tgt_parity, tgt_equality,
      ada_acc, ada_auc_roc, ada_parity, ada_equality,
-     src_diagnostics) = train_and_adapt(
-        args,
-        source_data,
-        target_data,
-    )
+     src_diagnostics) = _combine_run_outputs(run_outputs)
 
     source_label = "Source validation" if args.source_only else "Source"
     print(f"=========== {args.inid} ({source_label}) ===========")
@@ -60,8 +121,16 @@ if __name__ == '__main__':
             'dataset': args.dataset,
             'inid': args.inid,
             'outid': args.outid,
-            'seed': args.seed,
-            'target_seed': args.target_seed,
+            'seed': base_source_seed,
+            'target_seed': base_target_seed,
+            'source_seeds': [
+                _run_seed_pair(base_source_seed, base_target_seed, run_idx)[0]
+                for run_idx in range(requested_runs)
+            ],
+            'target_seeds': [
+                _run_seed_pair(base_source_seed, base_target_seed, run_idx)[1]
+                for run_idx in range(requested_runs)
+            ],
             'ablation': args.ablation,
             'stage': 'source' if args.source_only else 'full',
             'metrics': {
