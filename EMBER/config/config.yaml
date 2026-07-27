@@ -1,5 +1,5 @@
 bailA:
-  cls_encoder: "GCN"
+  cls_encoder: "vanilla"
   sens_encoder: "MLP"
   hidden_dim: 128
   cls_n_layers: 2
@@ -15,15 +15,15 @@ bailA:
   lambda_coord: 0.75
   source_mmd_bandwidth: 1.0
   adapt_epochs: 60
-  tau_c: 0.85
-  proto_temp: 0.7
-  adapt_lr: 0.0002
+  tau_c: 0.72
+  proto_temp: 0.4
+  adapt_lr: 0.0001
   residual_inner_steps: 3
-  lambda_residual_l2: 0.02
-  group_pseudocount: 300
-  lambda_pi: 0.1
-  prior_confidence_threshold: 0.85
-  prior_pseudocount: 1000
+  lambda_residual_l2: 0.03
+  group_pseudocount: 500
+  lambda_pi: 0.0
+  prior_confidence_threshold: 0.75
+  prior_pseudocount: 2000
   prior_discount: 0.98
 
 germanA:

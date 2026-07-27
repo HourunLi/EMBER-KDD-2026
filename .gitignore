@@ -1,0 +1,6 @@
+*.txt
+*.log
+*.csv
+*.npz
+*.zip
+*.pt

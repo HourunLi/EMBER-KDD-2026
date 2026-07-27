@@ -24,7 +24,7 @@ from typing import Dict, List, Sequence, Tuple
 # Edit these defaults, then run: python ablation/run.py
 # ---------------------------------------------------------------------------
 EXPERIMENT = "all"  # decouple | metaalign | minority | bca | groupinit | all
-GPU_IDS = [0, 2, 4, 6, 7]
+GPU_IDS = [0, 1, 2, 3, 5]
 DATASETS = ["bailA"]
 RUN_SEEDS = [1111, 2222, 3333, 4444, 5555]
 

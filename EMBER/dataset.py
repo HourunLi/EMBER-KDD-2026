@@ -38,7 +38,7 @@ def build_relationship(x, thresh=0.25):
 
 
 def load_credit(dataset, id, sens_attr="Age", predict_attr="NoDefaultNextMonth", path="../dataset_bak/credit/"):
-    path = f"/home/disk2/lhr/fairDomainAdaption/mine/dataset/{dataset}"
+    path = f"../dataset/{dataset}"
     idx_features_labels = pd.read_csv(os.path.join(path, f"{dataset}{id}.csv"))
     header = list(idx_features_labels.columns)
     header.remove("user_id")
@@ -89,7 +89,7 @@ def load_credit(dataset, id, sens_attr="Age", predict_attr="NoDefaultNextMonth",
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
 def load_bail(dataset, id, sens_attr="WHITE", predict_attr="RECID", path="../dataset/bail/"):
-    path = f"/home1/zhangyutong/dataset/{dataset}"
+    path = f"./dataset/{dataset}"
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(idx_features_labels.columns)
     header.remove(predict_attr)
@@ -137,7 +137,7 @@ def load_bail(dataset, id, sens_attr="WHITE", predict_attr="RECID", path="../dat
 
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
-def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_field", path="/home1/zhangyutong/dataset/pokec/"):
+def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_field", path="/home/disk2/lhr/EMBER-KDD-2026/dataset/pokec/"):
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(pd.read_csv(os.path.join(path, "{}.csv".format("region_job_z"))).columns)
     header2 = list(pd.read_csv(os.path.join(path, "{}.csv".format("region_job_n"))).columns)
@@ -182,7 +182,7 @@ def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_fi
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
 def load_german(dataset, id, sens_attr="Gender", predict_attr="GoodCustomer", path="../dataset/german/"):
-    path = f"/home1/zhangyutong/dataset/{dataset}"
+    path = f"/home/disk2/lhr/EMBER-KDD-2026/dataset/{dataset}"
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(idx_features_labels.columns)
     header.remove(predict_attr)
@@ -243,7 +243,7 @@ def load_german(dataset, id, sens_attr="Gender", predict_attr="GoodCustomer", pa
    
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
-def load_syn(dataset, id, path="/home1/zhangyutong/dataset/syn"):
+def load_syn(dataset, id, path="/home/disk2/lhr/EMBER-KDD-2026/dataset/syn"):
     features = pd.read_csv(os.path.join(path, "{}_feat.csv".format(dataset + id)), header=None)
     features = torch.FloatTensor(features.values.astype(np.float32))
 
