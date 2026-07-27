@@ -1,8 +1,57 @@
 import torch.nn.functional as F
 import torch
-from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from utils import fair_metric, InfoNCE, random_aug, consis_loss
 import numpy as np
+
+
+def _ember_fair_metric(pred, labels, sens):
+    """Compute DP and EO with the same definition used by EMBER."""
+    idx_s0 = sens == 0
+    idx_s1 = sens == 1
+    idx_s0_y0 = np.bitwise_and(idx_s0, labels == 0)
+    idx_s1_y0 = np.bitwise_and(idx_s1, labels == 0)
+    idx_s0_y1 = np.bitwise_and(idx_s0, labels == 1)
+    idx_s1_y1 = np.bitwise_and(idx_s1, labels == 1)
+
+    def conditional_gap(left, right):
+        if left.size == 0 or right.size == 0:
+            return float('nan')
+        value = abs(float(left.mean()) - float(right.mean()))
+        return value if np.isfinite(value) else float('nan')
+
+    dp = conditional_gap(pred[idx_s0], pred[idx_s1])
+    eo_y0 = conditional_gap(pred[idx_s0_y0] == 0, pred[idx_s1_y0] == 0)
+    eo_y1 = conditional_gap(pred[idx_s0_y1] == 1, pred[idx_s1_y1] == 1)
+    return float(dp), float(0.5 * (eo_y0 + eo_y1))
+
+
+def _ember_metrics(logits, labels, sens):
+    """Return Acc, AUC, DP, and EO using EMBER/learn.py's convention."""
+    probs = torch.sigmoid(logits.squeeze()).detach().cpu().numpy()
+    y_true = labels.detach().cpu().numpy()
+    sens = sens.detach().cpu().numpy()
+    pred = (probs > 0.5).astype(int)
+
+    target_metrics = []
+    has_both_classes = len(set(y_true)) == 2
+    for yval in np.unique(y_true):
+        idx = y_true == yval
+        target_metrics.append({
+            'acc': accuracy_score(y_true[idx], pred[idx]) * 100,
+            'auc': roc_auc_score(
+                (y_true == yval).astype(int),
+                probs if yval == 1 else 1 - probs,
+            ) * 100 if has_both_classes else float('nan'),
+        })
+
+    dp, eo = _ember_fair_metric(pred, y_true, sens)
+    return (
+        np.nanmean([metrics['acc'] for metrics in target_metrics]),
+        np.nanmean([metrics['auc'] for metrics in target_metrics]),
+        dp * 100,
+        eo * 100,
+    )
 
 def train(model, data, optimizer, args):
     model.train()
@@ -364,41 +413,22 @@ def evaluate_ged3(x, classifier, discriminator, generator, encoder, data, args):
     all_mask = data.train_mask | data.val_mask | data.test_mask
 
     pred_all = (output[all_mask].squeeze() > 0).type_as(data.y)
-    y_all = data.y[all_mask]
-    tmp_acc = []
-    for group in [0, 1]:
-        group_mask = (y_all == group)
-        tmp_acc.append(pred_all[group_mask].eq(y_all[group_mask]).sum().item() / group_mask.sum().item())
-    accs['all'] = sum(tmp_acc) / len(tmp_acc)
-    
     pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
-    y_val = data.y[data.val_mask]
-    tmp_acc = []
-    for group in [0, 1]:
-        group_mask = (y_val == group)
-        tmp_acc.append(pred_val[group_mask].eq(y_val[group_mask]).sum().item() / group_mask.sum().item())
-    accs['val'] = sum(tmp_acc) / len(tmp_acc)
-
     pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
-    y_test = data.y[data.test_mask]
-    tmp_acc = []
-    for group in [0, 1]:
-        group_mask = (y_test == group)
-        tmp_acc.append(pred_test[group_mask].eq(y_test[group_mask]).sum().item() / group_mask.sum().item())
-    accs['test'] = sum(tmp_acc) / len(tmp_acc)
 
 
     F1s['all'] = f1_score(data.y[all_mask].cpu().numpy(), pred_all.cpu().numpy())
     F1s['val'] = f1_score(data.y[data.val_mask].cpu().numpy(), pred_val.cpu().numpy())
     F1s['test'] = f1_score(data.y[data.test_mask].cpu().numpy(), pred_test.cpu().numpy())
 
-    auc_rocs['all'] = roc_auc_score(data.y[all_mask].cpu().numpy(), output[all_mask].detach().cpu().numpy())
-    auc_rocs['val'] = roc_auc_score(data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    paritys['all'], equalitys['all'] = fair_metric(pred_all.cpu().numpy(), data.y[all_mask].cpu().numpy(), data.sens[all_mask].cpu().numpy())
-    paritys['val'], equalitys['val'] = fair_metric(pred_val.cpu().numpy(), data.y[data.val_mask].cpu().numpy(), data.sens[data.val_mask].cpu().numpy())
-    paritys['test'], equalitys['test'] = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu().numpy(), data.sens[data.test_mask].cpu().numpy())
+    for split_name, mask in {
+        'all': all_mask,
+        'val': data.val_mask,
+        'test': data.test_mask,
+    }.items():
+        accs[split_name], auc_rocs[split_name], paritys[split_name], equalitys[split_name] = _ember_metrics(
+            output[mask], data.y[mask], data.sens[mask]
+        )
 
     return accs, auc_rocs, F1s, paritys, equalitys
 

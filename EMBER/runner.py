@@ -40,6 +40,24 @@ from visualization.export_utils import save_visualization_embeddings
 
 SOURCE_KNOWLEDGE_VERSION = 6
 PACKAGE_ONLY_ABLATIONS = frozenset({"decouple", "groupinit"})
+RUN_SEED_STEP = 1111
+TARGET_SEED_OFFSET = 100000
+
+
+def _source_seed_for_run(args, run_idx):
+    """Return the source-stage seed assigned to a zero-based run index."""
+    return int(getattr(args, "seed", 1111)) + run_idx * RUN_SEED_STEP
+
+
+def _target_seed_for_run(args, run_idx):
+    """Return the independently seeded target-stage seed for one run."""
+    configured_target_seed = getattr(args, "target_seed", None)
+    target_seed_base = (
+        int(configured_target_seed)
+        if configured_target_seed is not None
+        else int(getattr(args, "seed", 1111)) + TARGET_SEED_OFFSET
+    )
+    return target_seed_base + run_idx * RUN_SEED_STEP
 
 
 def _init_fair_gnn(args):
@@ -243,7 +261,10 @@ def _get_checkpoint_name(args, run_idx):
         "architecture=dual-encoder-v1",
         f"knowledge=ember-bank-v{SOURCE_KNOWLEDGE_VERSION}",
         f"run={run_idx}",
-        f"seed={args.seed}",
+        # The effective per-run seed is part of the source model identity.
+        # This prevents checkpoints created before per-run reseeding from
+        # being reused after the seed policy changes.
+        f"source_seed={_source_seed_for_run(args, run_idx)}",
     ]
     signature = "|".join(name_parts)
     digest = hashlib.sha256(signature.encode("utf-8")).hexdigest()[:16]
@@ -253,7 +274,7 @@ def _get_checkpoint_name(args, run_idx):
         args.cls_encoder.lower(),
         args.sens_encoder.lower(),
         run_idx,
-        args.seed,
+        _source_seed_for_run(args, run_idx),
     )
     return f"{readable_prefix}_{digest}"
 
@@ -536,6 +557,11 @@ def train_and_adapt(args, source_data, target_data):
     criterion = nn.BCEWithLogitsLoss()
 
     for run_idx in tqdm(range(args.runs), unit='run'):
+        # Source and target use independent, run-aligned random streams.
+        # Calling this inside the loop is required when ``train_and_adapt``
+        # is used directly with multiple runs.
+        source_seed = _source_seed_for_run(args, run_idx)
+        seed_everything(source_seed)
 
         model, knowledge = (None, None)
         checkpoint_enabled = (
@@ -796,12 +822,7 @@ def train_and_adapt(args, source_data, target_data):
 
         cold_state = build_initial_adaptation_state(args, knowledge)
 
-        configured_target_seed = getattr(args, 'target_seed', None)
-        effective_target_seed = int(
-            configured_target_seed
-            if configured_target_seed is not None
-            else getattr(args, 'seed', 1111) + run_idx * 1111
-        )
+        effective_target_seed = _target_seed_for_run(args, run_idx)
         seed_everything(effective_target_seed)
         adapted_model, state = adapt_target(args, target_data, knowledge)
 

@@ -269,15 +269,15 @@ def run(data, args, data2):
                     accs, auc_rocs, F1s, tmp_parity, tmp_equality = evaluate_ged3(
                         data2[i].x, classifier, discriminator, generator, encoder, data2[i], args)
 
-                    if auc_rocs['all'] + F1s['all'] + accs['all'] - args.alpha * (
-                            tmp_parity['all'] + tmp_equality['all']) > best_val_tradeoff[i]:
-                        test_acc[i] = accs['all'] *100
-                        test_auc_roc[i] = auc_rocs['all']*100
+                    if auc_rocs['all'] / 100 + F1s['all'] + accs['all'] / 100 - args.alpha * (
+                            (tmp_parity['all'] + tmp_equality['all']) / 100) > best_val_tradeoff[i]:
+                        test_acc[i] = accs['all']
+                        test_auc_roc[i] = auc_rocs['all']
                         test_f1[i] = F1s['all']*100
-                        test_parity[i], test_equality[i] = tmp_parity['all']*100, tmp_equality['all']*100
+                        test_parity[i], test_equality[i] = tmp_parity['all'], tmp_equality['all']
 
-                        best_val_tradeoff[i] = auc_rocs['all'] + F1s['all'] + \
-                                            accs['all'] - (tmp_parity['all'] + tmp_equality['all'])
+                        best_val_tradeoff[i] = auc_rocs['all'] / 100 + F1s['all'] + \
+                                            accs['all'] / 100 - (tmp_parity['all'] + tmp_equality['all']) / 100
             elif args.ood == 1:
                 if epoch != (args.epochs - 1):
                     continue
@@ -289,22 +289,22 @@ def run(data, args, data2):
                     accs, auc_rocs, F1s, tmp_parity, tmp_equality = evaluate_ged3(
                         datatmp.x, classifier, discriminator, generator, encoder, datatmp, args)
 
-                    test_acc[i] = accs['all']*100
-                    test_auc_roc[i] = auc_rocs['all']*100
+                    test_acc[i] = accs['all']
+                    test_auc_roc[i] = auc_rocs['all']
                     test_f1[i] = F1s['all']*100
-                    test_parity[i], test_equality[i] = tmp_parity['all']*100, tmp_equality['all']*100
+                    test_parity[i], test_equality[i] = tmp_parity['all'], tmp_equality['all']
             else:
                 accs, auc_rocs, F1s, tmp_parity, tmp_equality = evaluate_ged3(
                     data.x, classifier, discriminator, generator, encoder, data, args)
-                if auc_rocs['all'] + F1s['all'] + accs['all'] - args.alpha * (
-                        tmp_parity['all'] + tmp_equality['all']) > best_val_tradeoff:
-                    test_acc = accs['all']*100
-                    test_auc_roc = auc_rocs['all']*100
+                if auc_rocs['all'] / 100 + F1s['all'] + accs['all'] / 100 - args.alpha * (
+                        (tmp_parity['all'] + tmp_equality['all']) / 100) > best_val_tradeoff:
+                    test_acc = accs['all']
+                    test_auc_roc = auc_rocs['all']
                     test_f1 = F1s['all']*100
-                    test_parity, test_equality = tmp_parity['all']*100, tmp_equality['all']*100
+                    test_parity, test_equality = tmp_parity['all'], tmp_equality['all']
 
-                    best_val_tradeoff = auc_rocs['all'] + F1s['all'] + \
-                                        accs['all'] - (tmp_parity['all'] + tmp_equality['all'])
+                    best_val_tradeoff = auc_rocs['all'] / 100 + F1s['all'] + \
+                                        accs['all'] / 100 - (tmp_parity['all'] + tmp_equality['all']) / 100
 
 
         for i in range(len(args.strlist)):
