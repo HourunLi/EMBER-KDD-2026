@@ -64,8 +64,6 @@ from typing import Dict, List, Mapping, MutableMapping, Sequence, Tuple
 # ---------------------------------------------------------------------------
 PAPER_GROUPS = ("beta_gamma", "nu0_delta", "eta_omega")
 SUPPLEMENTARY_GROUPS = (
-    "delta",
-    "tau_eta",
     "lambda_residual_l2",
     "adapt_epochs",
 )
@@ -75,7 +73,6 @@ DEFAULT_GPU_IDS = (0, 2, 3, 4, 5, 6, 7)
 DEFAULT_RUN_SEEDS = (1111, 2222, 3333, 4444, 5555)
 
 DEFAULT_DELTA_VALUES = (0.5, 0.6, 0.7, 0.8, 0.9)
-DEFAULT_TAU_VALUES = (0.1, 0.25, 0.5, 0.75, 1.0)
 DEFAULT_ETA_VALUES = (0.0, 0.25, 0.5, 0.75, 1.0)
 DEFAULT_BETA_VALUES = (0.0, 1.0, 2.0, 4.0, 8.0, 16.0)
 DEFAULT_GAMMA_VALUES = (0.0, 0.25, 0.5, 0.75, 1.0)
@@ -174,20 +171,6 @@ def normalize_common_overrides(overrides: Sequence[str]) -> List[str]:
 def make_specs(args: argparse.Namespace) -> List[ExperimentSpec]:
     specs: List[ExperimentSpec] = []
     selected = list(dict.fromkeys(args.groups))
-    if "delta" in selected:
-        specs.extend(
-            ExperimentSpec("delta", (("tau_c", value),))
-            for value in args.delta_values
-        )
-    if "tau_eta" in selected:
-        specs.extend(
-            ExperimentSpec(
-                "tau_eta",
-                (("proto_temp", tau), ("lambda_pi", eta)),
-            )
-            for tau in args.tau_values
-            for eta in args.eta_values
-        )
     if "beta_gamma" in selected:
         specs.extend(
             ExperimentSpec(
@@ -805,8 +788,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("GPU ids must be non-negative, or -1 for CPU")
     if -1 in args.gpus and len(args.gpus) != 1:
         raise ValueError("CPU id -1 cannot be combined with GPU ids")
-    if any(not math.isfinite(value) or value <= 0 for value in args.tau_values):
-        raise ValueError("Prototype temperatures must be positive")
     if any(
         not math.isfinite(value) or value < 0 or value > 1
         for value in args.eta_values
@@ -883,9 +864,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--delta-values", nargs="+", type=float, default=list(DEFAULT_DELTA_VALUES)
-    )
-    parser.add_argument(
-        "--tau-values", nargs="+", type=float, default=list(DEFAULT_TAU_VALUES)
     )
     parser.add_argument(
         "--eta-values", nargs="+", type=float, default=list(DEFAULT_ETA_VALUES)

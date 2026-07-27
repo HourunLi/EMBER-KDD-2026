@@ -30,8 +30,6 @@ from matplotlib.transforms import Bbox
 
 PAPER_GROUPS = ("beta_gamma", "nu0_delta", "eta_omega")
 SUPPLEMENTARY_GROUPS = (
-    "delta",
-    "tau_eta",
     "lambda_residual_l2",
     "adapt_epochs",
 )
@@ -952,10 +950,6 @@ def generate_figures(
                         path,
                     )
                     generated.append(path)
-            elif group == "delta":
-                path = output_dir / f"delta_{dataset}.pdf"
-                plot_single_parameter(group_rows, dataset, group, "tau_c", path)
-                generated.append(path)
             elif group == "lambda_residual_l2":
                 path = output_dir / f"lambda_residual_l2_{dataset}.pdf"
                 plot_single_parameter(
@@ -972,28 +966,6 @@ def generate_figures(
                     group_rows, dataset, group, "adapt_epochs", path
                 )
                 generated.append(path)
-            elif group == "tau_eta":
-                dp_path = output_dir / f"tau_eta_{dataset}_dp.pdf"
-                eo_path = output_dir / f"tau_eta_{dataset}_eo.pdf"
-                plot_grouped_fairness_bars(
-                    group_rows,
-                    dataset,
-                    "proto_temp",
-                    "lambda_pi",
-                    "target_after_dp",
-                    "Demographic Parity",
-                    dp_path,
-                )
-                plot_grouped_fairness_bars(
-                    group_rows,
-                    dataset,
-                    "proto_temp",
-                    "lambda_pi",
-                    "target_after_eo",
-                    "Equal Odds",
-                    eo_path,
-                )
-                generated.extend((dp_path, eo_path))
     return [path for path in generated if path.exists()]
 
 
