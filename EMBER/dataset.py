@@ -89,7 +89,7 @@ def load_credit(dataset, id, sens_attr="Age", predict_attr="NoDefaultNextMonth",
     return edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask
 
 def load_bail(dataset, id, sens_attr="WHITE", predict_attr="RECID", path="../dataset/bail/"):
-    path = f"./dataset/{dataset}"
+    path = f"/home/disk2/lhr/EMBER-KDD-2026/dataset/{dataset}"
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
     header = list(idx_features_labels.columns)
     header.remove(predict_attr)
