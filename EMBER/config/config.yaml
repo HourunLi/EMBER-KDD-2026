@@ -65,7 +65,6 @@ germanA:
   prior_pseudocount: 5
   prior_discount: 0.85
 
-
 pokec:
   # === Source + Target: independent transferred encoders/representations ===
   cls_encoder: "GCN"
@@ -90,18 +89,20 @@ pokec:
 
   # === Target stage: shared loop controls / Others ===
   adapt_epochs: 100
-  tau_c: 0.76
-  proto_temp: 0.50
+  tau_c: 0.8
+  proto_temp: 0.55
 
+  # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
   adapt_lr: 0.0002
   residual_inner_steps: 5
-  lambda_residual_l2: 0.04
+  lambda_residual_l2: 0.03
   group_pseudocount: 5000
 
+  # === Target: Bayesian Test-Time Adaptation ===
   lambda_pi: 0.1
   prior_confidence_threshold: 0.9
-  prior_pseudocount: 30000
-  prior_discount: 0.95
+  prior_pseudocount: 20000
+  prior_discount: 0.9
 
 syn:
   # === Source + Target: independent transferred encoders/representations ===
@@ -126,7 +127,7 @@ syn:
   source_mmd_bandwidth: 1.0
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 200
+  adapt_epochs: 100
   tau_c: 0.9
   proto_temp: 0.7
 
@@ -141,6 +142,7 @@ syn:
   prior_confidence_threshold: 0.9
   prior_pseudocount: 500
   prior_discount: 0.9
+
 
 creditA:
   # === Source + Target: transferred encoder/representation ===
