@@ -129,7 +129,7 @@ parser.add_argument('--lr',           type=float, default=0.004)
 parser.add_argument('--lr2_reg',      type=float, default=0.001)
 parser.add_argument('--train_epochs', type=int,   default=800)
 parser.add_argument('--dropout',      type=float, default=0.5)
-parser.add_argument('--runs',         type=int,   default=2)
+parser.add_argument('--runs',         type=int,   default=5)
 
 # network
 parser.add_argument(

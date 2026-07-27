@@ -106,6 +106,33 @@ def all_valid_mask(data) -> torch.Tensor:
     return split_mask & valid_label_mask(data)
 
 
+def ember_target_class_metrics(
+    y_true: np.ndarray,
+    prediction: np.ndarray,
+    probability: np.ndarray,
+) -> tuple[float, float]:
+    """Compute ACC/AUC with EMBER's per-target-class aggregation."""
+    from sklearn.metrics import accuracy_score, roc_auc_score
+
+    target_metrics = []
+    for target_class in np.unique(y_true):
+        target_mask = y_true == target_class
+        target_metrics.append({
+            "acc": accuracy_score(
+                y_true[target_mask], prediction[target_mask]
+            ) * 100.0,
+            "auc": roc_auc_score(
+                (y_true == target_class).astype(int),
+                probability if target_class == 1 else 1.0 - probability,
+            ) * 100.0 if len(set(y_true)) == 2 else float("nan"),
+        })
+
+    return (
+        float(np.nanmean([metric["acc"] for metric in target_metrics])),
+        float(np.nanmean([metric["auc"] for metric in target_metrics])),
+    )
+
+
 def build_modules(num_features: int, args, device: torch.device):
     """Instantiate the unchanged DANCE GCN, classifier and discriminator."""
     dance_args = SimpleNamespace(
@@ -299,8 +326,7 @@ def load_target_model(
 
 
 def evaluate_target(encoder, classifier, target_data) -> dict[str, float]:
-    """Final-only target evaluation using SFFGNN's all-valid convention."""
-    from sklearn.metrics import accuracy_score, roc_auc_score
+    """Final target evaluation with EMBER metric aggregation on valid labels."""
 
     mask = all_valid_mask(target_data)
     if int(mask.sum().item()) == 0:
@@ -320,11 +346,8 @@ def evaluate_target(encoder, classifier, target_data) -> dict[str, float]:
     probability_np = probability.detach().cpu().numpy()[mask_np]
     prediction = (probability_np > 0.5).astype(int)
 
-    accuracy = accuracy_score(y_true, prediction) * 100.0
-    auc = (
-        roc_auc_score(y_true, probability_np) * 100.0
-        if len(np.unique(y_true)) == 2
-        else float("nan")
+    accuracy, auc = ember_target_class_metrics(
+        y_true, prediction, probability_np
     )
     dp, eo = fair_metric(prediction, y_true, sensitive)
     return {
@@ -520,7 +543,8 @@ def aggregate_results(args) -> tuple[Path, list[str]]:
         f"# {METHOD_NAME}: {args.runs}-run summary",
         "",
         "All metrics are percentages on the union of train/validation/test masks; "
-        "Pokec y=-1 nodes are excluded. Population variance/std (ddof=0) are reported.",
+        "ACC/AUC use EMBER's per-target-class aggregation, and Pokec y=-1 nodes "
+        "are excluded. Population variance/std (ddof=0) are reported.",
         "",
         "## Per-run results",
         "",

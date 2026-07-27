@@ -114,8 +114,8 @@ def plot_panels(
 
     colors = plot_cfg.get("colors") or ["#003566", "#9E2A2B", "#669BBC", "#E29578"]
     markers = plot_cfg.get("markers") or ["o", "o", "o", "o"]
-    point_size = float(plot_cfg.get("point_size", 11))
-    alpha = float(plot_cfg.get("alpha", 0.70))
+    point_size = float(plot_cfg.get("point_size", 20))
+    alpha = float(plot_cfg.get("alpha", 0.80))
     group_order = [int(item) for item in plot_cfg.get("group_order", sorted(group_names))]
     color_by_group = {
         group: colors[group_idx % len(colors)] for group_idx, group in enumerate(group_order)
@@ -145,13 +145,14 @@ def plot_panels(
         )
         from matplotlib.lines import Line2D
 
+        legend_marker_size = float(plot_cfg.get("legend_marker_size", 8.0))
         legend_handles = [
             Line2D(
                 [],
                 [],
                 linestyle="none",
                 marker=marker_by_group[group],
-                markersize=5.5,
+                markersize=legend_marker_size,
                 markerfacecolor=color_by_group[group],
                 markeredgecolor="none",
                 label=group_names.get(group, str(group)),
@@ -235,23 +236,49 @@ def plot_panels(
         ax.set_aspect("equal", adjustable="box")
 
     if plot_cfg.get("show_legend", False):
+        expand_legend = bool(plot_cfg.get("legend_expand_to_axes", False))
+        if expand_legend:
+            legend_loc = "lower left"
+            legend_bbox = (
+                0.0,
+                float(plot_cfg.get("legend_bbox_y", 1.005)),
+                1.0,
+                0.0,
+            )
+            legend_mode = "expand"
+        else:
+            legend_loc = plot_cfg.get("legend_loc", "upper center")
+            legend_bbox = (
+                float(plot_cfg.get("legend_bbox_x", 0.5)),
+                float(plot_cfg.get("legend_bbox_y", -0.20)),
+            )
+            legend_mode = None
         ax.legend(
             handles=legend_handles,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.015),
+            loc=legend_loc,
+            bbox_to_anchor=legend_bbox,
             ncol=int(plot_cfg.get("legend_ncol", 4)),
+            mode=legend_mode,
             frameon=False,
-            fontsize=float(plot_cfg.get("legend_size", 9.5)),
-            markerscale=float(plot_cfg.get("legend_marker_scale", 1.25)),
-            handletextpad=0.35,
-            columnspacing=1.1,
+            fontsize=float(plot_cfg.get("legend_size", 14)),
+            markerscale=float(plot_cfg.get("legend_marker_scale", 1.0)),
+            handletextpad=float(plot_cfg.get("legend_handletextpad", 0.45)),
+            columnspacing=float(plot_cfg.get("legend_columnspacing", 1.25)),
+            handlelength=float(plot_cfg.get("legend_handlelength", 1.0)),
             borderaxespad=0.0,
         )
 
     if plot_cfg.get("tight_layout", False):
         fig.tight_layout(pad=float(plot_cfg.get("tight_layout_pad", 0.2)))
-    elif plot_cfg.get("show_legend", False):
-        fig.subplots_adjust(top=0.89, bottom=0.12, left=0.03, right=0.98)
+    elif plot_cfg.get("show_legend", False) and plot_cfg.get(
+        "adjust_for_legend", False
+    ):
+        fig.subplots_adjust(
+            top=float(plot_cfg.get("subplot_top", 0.88)),
+            bottom=float(plot_cfg.get("subplot_bottom", 0.22)),
+            left=float(plot_cfg.get("subplot_left", 0.125)),
+            right=float(plot_cfg.get("subplot_right", 0.90)),
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(

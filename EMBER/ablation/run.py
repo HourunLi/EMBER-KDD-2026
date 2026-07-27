@@ -25,8 +25,10 @@ from typing import Dict, List, Sequence, Tuple
 # ---------------------------------------------------------------------------
 EXPERIMENT = "all"  # decouple | metaalign | minority | bca | groupinit | all
 GPU_IDS = [0, 1, 2, 3, 5]
-DATASETS = ["bailA"]
-RUN_SEEDS = [1111, 2222, 3333, 4444, 5555]
+DATASETS = ["pokec"]
+RUN_SEED_STEP = 1111
+TARGET_SEED_OFFSET = 100000
+RUN_SEEDS = [RUN_SEED_STEP * run_number for run_number in range(1, 6)]
 
 GPU_MAX_MEMORY_MB = 10000
 GPU_MAX_UTILIZATION = 50
@@ -200,7 +202,7 @@ def run_variant(
         "--outid", outid,
         "--device_id", str(gpu_id),
         "--seed", str(seed),
-        "--target_seed", str(seed + 100000),
+        "--target_seed", str(seed + TARGET_SEED_OFFSET),
         "--runs_override", "1",
         "--ablation", spec.name,
         "--log_path", str(log_path),

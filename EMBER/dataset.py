@@ -139,8 +139,8 @@ def load_bail(dataset, id, sens_attr="WHITE", predict_attr="RECID", path="../dat
 
 def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_field", path="/home/disk2/lhr/EMBER-KDD-2026/dataset/pokec/"):
     idx_features_labels = pd.read_csv(os.path.join(path, "{}.csv".format(dataset + id)))
-    header = list(pd.read_csv(os.path.join(path, "{}.csv".format("region_job_z"))).columns)
-    header2 = list(pd.read_csv(os.path.join(path, "{}.csv".format("region_job_n"))).columns)
+    header = list(pd.read_csv(os.path.join(path, "{}.csv".format("pokec_z"))).columns)
+    header2 = list(pd.read_csv(os.path.join(path, "{}.csv".format("pokec_n"))).columns)
     header = [i for i in header if i in header2]
     header.remove("user_id")
     header.remove(sens_attr)
@@ -157,7 +157,7 @@ def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_fi
     # build graph
     idx = np.array(idx_features_labels["user_id"], dtype=int)
     idx_map = {j: i for i, j in enumerate(idx)}
-    edges_unordered = np.genfromtxt(os.path.join(path, f"{dataset}{id}_relationship.txt"), dtype=int)
+    edges_unordered = np.genfromtxt(os.path.join(path, f"{dataset}{id}_edges.txt"), dtype=int)
     edges = np.array(list(map(idx_map.get, edges_unordered.flatten())), dtype=int).reshape(edges_unordered.shape)
     adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])), shape=(labels.shape[0], labels.shape[0]), dtype=np.float32)
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
@@ -341,7 +341,7 @@ def get_dataset(args, inid):
     elif('bail' in args.dataset):
         edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask = load_bail(dataset=args.dataset, id = inid)
     elif('pokec'  in args.dataset):
-        edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask= load_pokec(dataset='region_job', id = inid)
+        edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask= load_pokec(dataset=args.dataset, id = inid)
     elif('german'  in args.dataset):
         edge_index, features, labels, sens_labels, train_mask, val_mask, test_mask= load_german(dataset=args.dataset, id = inid)
     elif('syn'  in args.dataset):

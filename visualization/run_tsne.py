@@ -224,34 +224,18 @@ def main() -> int:
                         current_tsne_cfg["random_state"] = tsne_seed
                         coords = compute_tsne(emb, current_tsne_cfg)
 
-                        if is_seed_sweep:
-                            result_dir = (
-                                base_result_dir
-                                / "candidates"
-                                / f"sample_seed_{sample_seed}_tsne_seed_{tsne_seed}"
-                            )
-                        else:
-                            result_dir = base_result_dir
-
-                        write_coordinates_csv(
-                            result_dir / "coordinates.csv",
-                            method,
-                            dataset,
-                            coords,
-                            labels,
-                            source_indices,
-                            loaded.group_names,
-                        )
-
                         panel = {
                             "method": method,
                             "dataset": dataset,
                             "coords": coords,
                             "labels": labels,
                         }
-                        for fmt in output_formats:
-                            fmt = fmt.lstrip(".")
-                            out_path = result_dir / f"tsne.{fmt}"
+                        if is_seed_sweep:
+                            result_dir = base_result_dir / "candidates"
+                            out_path = result_dir / (
+                                f"{slugify(method)}_sample_seed_{sample_seed}_"
+                                f"tsne_seed_{tsne_seed}.png"
+                            )
                             plot_panels(
                                 out_path,
                                 dataset_title,
@@ -260,9 +244,34 @@ def main() -> int:
                                 plot_cfg,
                             )
                             print(
-                                f"[saved] {out_path} "
+                                f"[saved candidate] {out_path} "
                                 f"(sample_seed={sample_seed}, tsne_seed={tsne_seed})"
                             )
+                        else:
+                            write_coordinates_csv(
+                                base_result_dir / "coordinates.csv",
+                                method,
+                                dataset,
+                                coords,
+                                labels,
+                                source_indices,
+                                loaded.group_names,
+                            )
+                            for fmt in output_formats:
+                                fmt = fmt.lstrip(".")
+                                out_path = base_result_dir / f"{method}.{fmt}"
+                                plot_panels(
+                                    out_path,
+                                    dataset_title,
+                                    [panel],
+                                    loaded.group_names,
+                                    plot_cfg,
+                                )
+                                print(
+                                    f"[saved] {out_path} "
+                                    f"(sample_seed={sample_seed}, "
+                                    f"tsne_seed={tsne_seed})"
+                                )
                         any_plotted = True
             except Exception as exc:
                 if args.strict:

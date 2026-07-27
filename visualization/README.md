@@ -19,13 +19,10 @@ visualization/
   results/
     <method>_<dataset>/
       coordinates.csv
-      tsne.png
-      tsne.pdf
+      <method>.png
+      <method>.pdf
       candidates/
-        sample_seed_<sample_seed>_tsne_seed_<tsne_seed>/
-          coordinates.csv
-          tsne.png
-          tsne.pdf
+        <method>_sample_seed_<sample_seed>_tsne_seed_<tsne_seed>.png
   README.md
 ```
 
@@ -107,27 +104,27 @@ visualization/results/<method>_<dataset>/
 
 ```text
 coordinates.csv
-tsne.png
-tsne.pdf
+<method>.png
+<method>.pdf
 ```
 
 例如：
 
 ```text
 visualization/results/SFFGNN_pokec/coordinates.csv
-visualization/results/SFFGNN_pokec/tsne.png
-visualization/results/SFFGNN_pokec/tsne.pdf
+visualization/results/SFFGNN_pokec/SFFGNN.png
+visualization/results/SFFGNN_pokec/SFFGNN.pdf
 ```
 
-图形采用面向论文投稿的简洁样式：坐标归一化到 0.0-1.0，并使用参考图中的蓝红双系配色（`#003566`、`#669BBC`、`#E29578`、`#9E2A2B`）；所有类别统一使用小型半透明圆点，不加描边，避免密集区域出现杂乱的“拼贴感”。默认关闭没有解释意义的 t-SNE 刻度和边框，使用 Times 系列字体、轻量标题和坐标轴外单行图例。
+图形采用与 CELL/Pilot 参考图一致的论文样式：使用 `6.4 x 4.35` 英寸画布，坐标归一化到 0.0-1.0，显示 0.0-1.0、间隔 0.2 的刻度以及完整灰色边框。刻度字号为 18 pt，底部方法/数据集标签为 20 pt；散点大小为 20 pt²。放大的四组单行图例紧贴图片框上方，并限制在图片框宽度内。输出使用 `bbox_inches="tight"` 和 0.1 英寸 padding 裁剪白边。
 
-标题格式为：
+底部标签格式为：
 
 ```text
-<method> on <dataset title>
+<method> t-SNE result on <dataset>
 ```
 
-其中 `<dataset title>` 读取 `config.yaml` 中对应数据集的 `title` 字段；输入路径和结果目录仍使用 `name` 字段。
+其中 `<dataset>` 使用 `config.yaml` 中的数据集 `name` 字段，与输入路径和结果目录保持一致。
 
 ## Usage
 
@@ -173,13 +170,13 @@ python visualization/run_tsne.py --datasets pokec --methods SFFGNN --max-points 
 python visualization/run_tsne.py --datasets pokec --methods EMBER --sample-seeds 10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29 --tsne-seeds 0 --strict
 ```
 
-传入多个 `--sample-seeds` 或 `--tsne-seeds` 时，候选结果分别写入：
+传入多个 `--sample-seeds` 或 `--tsne-seeds` 时进入批量候选模式。该模式只生成 PNG，不生成 PDF 或 `coordinates.csv`；所有候选图平铺在同一个目录中：
 
 ```text
-visualization/results/EMBER_pokec/candidates/sample_seed_<sample_seed>_tsne_seed_<tsne_seed>/
+visualization/results/EMBER_pokec/candidates/EMBER_sample_seed_<sample_seed>_tsne_seed_<tsne_seed>.png
 ```
 
-`sample_seed` 只控制从 embedding 中抽取哪些节点；`tsne_seed` 只控制 t-SNE 的随机状态。抽样采用分层、无放回方式。只传一个 seed 时不会创建 `candidates` 目录，而是直接生成正式的 `{method}_{dataset}` 结果。例如选定 `sample_seed=17` 后可以运行：
+批量模式会忽略 `--formats` 和配置中的 `plot.formats`。`sample_seed` 只控制从 embedding 中抽取哪些节点；`tsne_seed` 只控制 t-SNE 的随机状态。抽样采用分层、无放回方式。只传一个 seed 时不会进入批量模式，而是生成正式的 `coordinates.csv`、PNG 和 PDF。例如选定 `sample_seed=17` 后可以运行：
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods EMBER --sample-seeds 17 --tsne-seeds 0 --strict
