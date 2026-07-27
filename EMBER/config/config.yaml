@@ -30,40 +30,40 @@ germanA:
   # === Source + Target: transferred encoder/representation ===
   cls_encoder: "GCN"
   sens_encoder: "MLP"
-  hidden_dim: 128
-  cls_n_layers: 2
-  sens_n_layers: 2  # ignored when sens_encoder is MLP
+  hidden_dim: 256
+  cls_n_layers: 3
+  sens_n_layers: 2 # ignored when sens_encoder is MLP
 
   # === Source stage: base training and regularization ===
-  train_epochs: 500
-  lr: 0.005
+  train_epochs: 1000
+  lr: 0.003
   lr2_reg: 0.001
-  dropout: 0.4
+  dropout: 0.3
 
   # === Source stage: disentanglement + Meta-Coordinated Fair Alignment ===
-  lambda_sen: 4.0
-  lambda_dec: 2.0
-  lambda_fair: 4.0
-  meta_lr: 0.012
-  lambda_coord: 1.0
+  lambda_sen: 8
+  lambda_dec: 6
+  lambda_fair: 8
+  meta_lr: 0.005
+  lambda_coord: 0.9
   source_mmd_bandwidth: 1.0
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 40
-  tau_c: 0.65
-  proto_temp: 0.35
+  adapt_epochs: 300
+  tau_c: 0.75
+  proto_temp: 0.6
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.003
-  residual_inner_steps: 20
-  lambda_residual_l2: 0.001
-  group_pseudocount: 1.0
+  adapt_lr: 0.0005
+  residual_inner_steps: 5
+  lambda_residual_l2: 0.2
+  group_pseudocount: 30
 
   # === Target: Bayesian Test-Time Adaptation ===
-  lambda_pi: 1.0
-  prior_confidence_threshold: 0.6
-  prior_pseudocount: 5.0
-  prior_discount: 0.9
+  lambda_pi: 0.4
+  prior_confidence_threshold: 0.75
+  prior_pseudocount: 5
+  prior_discount: 0.85
 
 pokec:
   # === Source + Target: independent transferred encoders/representations ===
@@ -88,21 +88,21 @@ pokec:
   source_mmd_bandwidth: 2.0
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 50
-  tau_c: 0.75
-  proto_temp: 0.5
+  adapt_epochs: 100
+  tau_c: 0.8
+  proto_temp: 0.55
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.002
-  residual_inner_steps: 50
-  lambda_residual_l2: 0.001
-  group_pseudocount: 500
+  adapt_lr: 0.0002
+  residual_inner_steps: 5
+  lambda_residual_l2: 0.03
+  group_pseudocount: 5000
 
   # === Target: Bayesian Test-Time Adaptation ===
-  lambda_pi: 0.8
-  prior_confidence_threshold: 0.75
-  prior_pseudocount: 3000
-  prior_discount: 0.8
+  lambda_pi: 0.1
+  prior_confidence_threshold: 0.9
+  prior_pseudocount: 20000
+  prior_discount: 0.9
 
 syn:
   # === Source + Target: independent transferred encoders/representations ===
@@ -127,21 +127,21 @@ syn:
   source_mmd_bandwidth: 1.0
 
   # === Target stage: shared loop controls / Others ===
-  adapt_epochs: 50
-  tau_c: 0.7
-  proto_temp: 0.5
+  adapt_epochs: 100
+  tau_c: 0.9
+  proto_temp: 0.7
 
   # === Target: Minority-Aware Prototype Evolution for Target Adaptation ===
-  adapt_lr: 0.0005
-  residual_inner_steps: 5
-  lambda_residual_l2: 0.005
-  group_pseudocount: 100
+  adapt_lr: 0.001
+  residual_inner_steps: 10
+  lambda_residual_l2: 0.001
+  group_pseudocount: 50
 
   # === Target: Bayesian Test-Time Adaptation ===
-  lambda_pi: 0.3
-  prior_confidence_threshold: 0.65
-  prior_pseudocount: 100
-  prior_discount: 0.955
+  lambda_pi: 0.1
+  prior_confidence_threshold: 0.9
+  prior_pseudocount: 500
+  prior_discount: 0.9
 
 
 creditA:
