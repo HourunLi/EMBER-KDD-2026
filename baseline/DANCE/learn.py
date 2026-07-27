@@ -1,7 +1,34 @@
 import torch.nn.functional as F
 import torch
-from sklearn.metrics import f1_score, roc_auc_score
+import numpy as np
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from utils import fair_metric, InfoNCE, random_aug, consis_loss
+
+
+def _evaluate_split(output, pred, labels, sens):
+    """Match EMBER's per-target-class ACC/AUC and DP/EO definitions."""
+    prob = output.detach().cpu().numpy().reshape(-1)
+    pred = pred.detach().cpu().numpy().reshape(-1)
+    y_true = labels.detach().cpu().numpy().reshape(-1)
+    sens = sens.detach().cpu().numpy().reshape(-1)
+
+    target_metrics = []
+    for yval in np.unique(y_true):
+        idx = y_true == yval
+        target_metrics.append({
+            'acc': accuracy_score(y_true[idx], pred[idx]),
+            'auc': roc_auc_score(
+                (y_true == yval).astype(int),
+                prob if yval == 1 else 1 - prob,
+            ) if len(set(y_true)) == 2 else float('nan'),
+        })
+
+    # DANCE keeps metrics in [0, 1] internally; runner.py converts them to
+    # percentages when recording the final results.
+    acc = np.nanmean([metric['acc'] for metric in target_metrics])
+    auc = np.nanmean([metric['auc'] for metric in target_metrics])
+    parity, equality = fair_metric(pred, y_true, sens)
+    return acc, auc, parity, equality
 
 
 def evaluate(model, data, args):
@@ -26,39 +53,16 @@ def evaluate(model, data, args):
     pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
     pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
 
-    # accs['val'] = pred_val.eq(
-    #     data.y[data.val_mask]).sum().item() / data.val_mask.sum()
-    # accs['test'] = pred_test.eq(
-    #     data.y[data.test_mask]).sum().item() / data.test_mask.sum()
-    pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
-    y_val = data.y[data.val_mask]
-    tmp_acc = []
-    for group in [0, 1]:
-        group_mask = (y_val == group)
-        tmp_acc.append(pred_val[group_mask].eq(y_val[group_mask]).sum().item() / group_mask.sum().item())
-    accs['val'] = sum(tmp_acc) / len(tmp_acc)
-
-    pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
-    y_test = data.y[data.test_mask]
-    tmp_acc = []
-    for group in [0, 1]:
-        group_mask = (y_test == group)
-        tmp_acc.append(pred_test[group_mask].eq(y_test[group_mask]).sum().item() / group_mask.sum().item())
-    accs['test'] = sum(tmp_acc) / len(tmp_acc)
+    accs['val'], auc_rocs['val'], _, _ = _evaluate_split(
+        output[data.val_mask], pred_val, data.y[data.val_mask], data.sens[data.val_mask])
+    accs['test'], auc_rocs['test'], parity, equality = _evaluate_split(
+        output[data.test_mask], pred_test, data.y[data.test_mask], data.sens[data.test_mask])
 
     F1s['val'] = f1_score(data.y[data.val_mask].cpu(
     ).numpy(), pred_val.cpu().numpy())
 
     F1s['test'] = f1_score(data.y[data.test_mask].cpu(
     ).numpy(), pred_test.cpu().numpy())
-
-    auc_rocs['val'] = roc_auc_score(
-        data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(
-        data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    parity, equality = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu(
-    ).numpy(), data.sens[data.test_mask].cpu().numpy())
 
     return accs, auc_rocs, F1s, parity, equality, loss_val
 
@@ -79,24 +83,16 @@ def evaluate_finetune(encoder, classifier, data, args):
     pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
     pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
 
-    accs['val'] = pred_val.eq(
-        data.y[data.val_mask]).sum().item() / data.val_mask.sum()
-    accs['test'] = pred_test.eq(
-        data.y[data.test_mask]).sum().item() / data.test_mask.sum()
+    accs['val'], auc_rocs['val'], _, _ = _evaluate_split(
+        output[data.val_mask], pred_val, data.y[data.val_mask], data.sens[data.val_mask])
+    accs['test'], auc_rocs['test'], parity, equality = _evaluate_split(
+        output[data.test_mask], pred_test, data.y[data.test_mask], data.sens[data.test_mask])
 
     F1s['val'] = f1_score(data.y[data.val_mask].cpu(
     ).numpy(), pred_val.cpu().numpy())
 
     F1s['test'] = f1_score(data.y[data.test_mask].cpu(
     ).numpy(), pred_test.cpu().numpy())
-
-    auc_rocs['val'] = roc_auc_score(
-        data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(
-        data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    parity, equality = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu(
-    ).numpy(), data.sens[data.test_mask].cpu().numpy())
 
     return accs, auc_rocs, F1s, parity, equality, loss_val
 
@@ -135,27 +131,16 @@ def evaluate_exploration(x, model, data, args):
     pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
     pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
 
-    accs['val'] = pred_val.eq(
-        data.y[data.val_mask]).sum().item() / data.val_mask.sum()
-    accs['test'] = pred_test.eq(
-        data.y[data.test_mask]).sum().item() / data.test_mask.sum()
+    accs['val'], auc_rocs['val'], paritys['val'], equalitys['val'] = _evaluate_split(
+        output[data.val_mask], pred_val, data.y[data.val_mask], data.sens[data.val_mask])
+    accs['test'], auc_rocs['test'], paritys['test'], equalitys['test'] = _evaluate_split(
+        output[data.test_mask], pred_test, data.y[data.test_mask], data.sens[data.test_mask])
 
     F1s['val'] = f1_score(data.y[data.val_mask].cpu(
     ).numpy(), pred_val.cpu().numpy())
 
     F1s['test'] = f1_score(data.y[data.test_mask].cpu(
     ).numpy(), pred_test.cpu().numpy())
-
-    auc_rocs['val'] = roc_auc_score(
-        data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(
-        data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    paritys['val'], equalitys['val'] = fair_metric(pred_val.cpu().numpy(), data.y[data.val_mask].cpu(
-    ).numpy(), data.sens[data.val_mask].cpu().numpy())
-
-    paritys['test'], equalitys['test'] = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu(
-    ).numpy(), data.sens[data.test_mask].cpu().numpy())
 
     return accs, auc_rocs, F1s, paritys, equalitys, loss_val
 
@@ -206,27 +191,16 @@ def evaluate_ged(x, classifier, discriminator, generator, encoder, data, args):
     pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
     pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
 
-    accs['val'] = pred_val.eq(
-        data.y[data.val_mask]).sum().item() / data.val_mask.sum().item()
-    accs['test'] = pred_test.eq(
-        data.y[data.test_mask]).sum().item() / data.test_mask.sum().item()
+    accs['val'], auc_rocs['val'], paritys['val'], equalitys['val'] = _evaluate_split(
+        output[data.val_mask], pred_val, data.y[data.val_mask], data.sens[data.val_mask])
+    accs['test'], auc_rocs['test'], paritys['test'], equalitys['test'] = _evaluate_split(
+        output[data.test_mask], pred_test, data.y[data.test_mask], data.sens[data.test_mask])
 
     F1s['val'] = f1_score(data.y[data.val_mask].cpu(
     ).numpy(), pred_val.cpu().numpy())
 
     F1s['test'] = f1_score(data.y[data.test_mask].cpu(
     ).numpy(), pred_test.cpu().numpy())
-
-    auc_rocs['val'] = roc_auc_score(
-        data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(
-        data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    paritys['val'], equalitys['val'] = fair_metric(pred_val.cpu().numpy(), data.y[data.val_mask].cpu(
-    ).numpy(), data.sens[data.val_mask].cpu().numpy())
-
-    paritys['test'], equalitys['test'] = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu(
-    ).numpy(), data.sens[data.test_mask].cpu().numpy())
 
     return accs, auc_rocs, F1s, paritys, equalitys, loss_val
 
@@ -268,27 +242,16 @@ def evaluate_ged2(x, classifier, discriminator, generator, encoder, data, args):
     pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
     pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
 
-    accs['val'] = pred_val.eq(
-        data.y[data.val_mask]).sum().item() / data.val_mask.sum().item()
-    accs['test'] = pred_test.eq(
-        data.y[data.test_mask]).sum().item() / data.test_mask.sum().item()
+    accs['val'], auc_rocs['val'], paritys['val'], equalitys['val'] = _evaluate_split(
+        output[data.val_mask], pred_val, data.y[data.val_mask], data.sens[data.val_mask])
+    accs['test'], auc_rocs['test'], paritys['test'], equalitys['test'] = _evaluate_split(
+        output[data.test_mask], pred_test, data.y[data.test_mask], data.sens[data.test_mask])
 
     F1s['val'] = f1_score(data.y[data.val_mask].cpu(
     ).numpy(), pred_val.cpu().numpy())
 
     F1s['test'] = f1_score(data.y[data.test_mask].cpu(
     ).numpy(), pred_test.cpu().numpy())
-
-    auc_rocs['val'] = roc_auc_score(
-        data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(
-        data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    paritys['val'], equalitys['val'] = fair_metric(pred_val.cpu().numpy(), data.y[data.val_mask].cpu(
-    ).numpy(), data.sens[data.val_mask].cpu().numpy())
-
-    paritys['test'], equalitys['test'] = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu(
-    ).numpy(), data.sens[data.test_mask].cpu().numpy())
 
     return accs, auc_rocs, F1s, paritys, equalitys
 
@@ -344,17 +307,13 @@ def evaluate_ged3(x, classifier, discriminator, generator, encoder, data, args):
     # pred_test = torch.argmax(output[data.test_mask], dim=1) 
     
     # print(sum(pred_test == 0), sum(data.y[data.test_mask]==0))
-    accs['val'] = pred_val.eq(data.y[data.val_mask]).sum().item() / data.val_mask.sum().item()
-    accs['test'] = pred_test.eq(data.y[data.test_mask]).sum().item() / data.test_mask.sum().item()
+    accs['val'], auc_rocs['val'], paritys['val'], equalitys['val'] = _evaluate_split(
+        output[data.val_mask], pred_val, data.y[data.val_mask], data.sens[data.val_mask])
+    accs['test'], auc_rocs['test'], paritys['test'], equalitys['test'] = _evaluate_split(
+        output[data.test_mask], pred_test, data.y[data.test_mask], data.sens[data.test_mask])
 
     F1s['val'] = f1_score(data.y[data.val_mask].cpu().numpy(), pred_val.cpu().numpy())
     F1s['test'] = f1_score(data.y[data.test_mask].cpu().numpy(), pred_test.cpu().numpy())
-
-    auc_rocs['val'] = roc_auc_score(data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    paritys['val'], equalitys['val'] = fair_metric(pred_val.cpu().numpy(), data.y[data.val_mask].cpu().numpy(), data.sens[data.val_mask].cpu().numpy())
-    paritys['test'], equalitys['test'] = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu().numpy(), data.sens[data.test_mask].cpu().numpy())
 
     # print(accs, auc_rocs, F1s, paritys, equalitys)
     return accs, auc_rocs, F1s, paritys, equalitys
