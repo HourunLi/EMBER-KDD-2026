@@ -25,7 +25,7 @@ from typing import Dict, List, Sequence, Tuple
 # ---------------------------------------------------------------------------
 EXPERIMENT = "all"  # decouple | metaalign | minority | bca | groupinit | all
 GPU_IDS = [0, 1, 2, 3, 5]
-DATASETS = ["bailA"]
+DATASETS = ["syn"]
 RUN_SEEDS = [1111, 2222, 3333, 4444, 5555]
 
 GPU_MAX_MEMORY_MB = 10000
