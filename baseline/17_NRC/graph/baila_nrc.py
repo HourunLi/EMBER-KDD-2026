@@ -48,7 +48,7 @@ from gcn import build_gcn_nrc_models, forward_model
 
 
 CLASS_NUM = 2
-METRIC_NAMES = ("accuracy", "roc_auc", "parity", "equality")
+METRIC_NAMES = ("accuracy", "AUC_ROC", "dp", "eo")
 
 
 def experiment_name(dataset_configuration):
@@ -291,6 +291,8 @@ def rank_based_roc_auc(labels, positive_scores):
 
 
 def classification_metrics(labels, predictions, probabilities):
+    """Training-time overall metrics on the original [0, 1] scale."""
+
     labels = labels.detach().cpu().long().view(-1)
     predictions = predictions.detach().cpu().long().view(-1)
     probabilities = probabilities.detach().cpu().float()
@@ -304,6 +306,71 @@ def classification_metrics(labels, predictions, probabilities):
     return {
         "accuracy": torch.mean((labels == predictions).float()).item(),
         "roc_auc": rank_based_roc_auc(labels, probabilities[:, 1]),
+    }
+
+
+def target_class_macro_metrics(labels, predictions, probabilities):
+    """Match learn(1).py's target-class evaluation on a [0, 100] scale.
+
+    Accuracy is computed within each target class and then macro-averaged.
+    For AUC, each target class is treated as the one-vs-rest positive class;
+    class 0 therefore uses ``1 - P(Y=1)`` as its score.  This is deliberately
+    separate from ``classification_metrics`` so changing the final reporting
+    protocol cannot change source checkpoint selection.
+    """
+
+    labels = labels.detach().cpu().long().view(-1)
+    predictions = predictions.detach().cpu().long().view(-1)
+    probabilities = probabilities.detach().cpu().float()
+    if labels.numel() != predictions.numel():
+        raise ValueError("Labels and predictions have different lengths")
+    if probabilities.dim() != 2 or probabilities.size(1) != CLASS_NUM:
+        raise ValueError("Expected a [num_nodes, 2] probability tensor")
+    if probabilities.size(0) != labels.numel():
+        raise ValueError("Labels and probabilities have different lengths")
+    if not bool(torch.isfinite(probabilities).all().item()):
+        raise ValueError("Evaluation probabilities contain NaN or Inf")
+
+    target_class_accuracy = {}
+    target_class_auc_roc = {}
+    for target_class in sorted(set(labels.tolist())):
+        class_mask = labels == target_class
+        class_count = int(torch.sum(class_mask).item())
+        correct_count = int(
+            torch.sum(predictions[class_mask] == labels[class_mask]).item()
+        )
+        target_class_accuracy[str(target_class)] = (
+            float(correct_count) / float(class_count) * 100.0
+        )
+
+        one_vs_rest_labels = (labels == target_class).long()
+        if target_class == 1:
+            class_scores = probabilities[:, 1]
+        elif target_class == 0:
+            class_scores = 1.0 - probabilities[:, 1]
+        else:
+            raise ValueError(
+                "Target-class evaluation supports only binary classes"
+            )
+        positive_count = int(torch.sum(one_vs_rest_labels == 1).item())
+        negative_count = int(torch.sum(one_vs_rest_labels == 0).item())
+        if positive_count == 0 or negative_count == 0:
+            class_auc_roc = float("nan")
+        else:
+            class_auc_roc = (
+                rank_based_roc_auc(one_vs_rest_labels, class_scores) * 100.0
+            )
+        target_class_auc_roc[str(target_class)] = class_auc_roc
+
+    return {
+        "accuracy": float(
+            np.nanmean(list(target_class_accuracy.values()))
+        ),
+        "AUC_ROC": float(
+            np.nanmean(list(target_class_auc_roc.values()))
+        ),
+        "target_class_accuracy": target_class_accuracy,
+        "target_class_AUC_ROC": target_class_auc_roc,
     }
 
 
@@ -323,20 +390,22 @@ def fairness_metrics(labels, predictions, sensitive):
     for group_index in (0, 1):
         group_mask = sensitive == group_index
         positive_label_mask = group_mask & (labels == 1)
-        if int(torch.sum(group_mask).item()) == 0:
+        group_count = int(torch.sum(group_mask).item())
+        positive_label_count = int(torch.sum(positive_label_mask).item())
+        if group_count == 0:
             raise ValueError("Sensitive group {} is empty".format(group_index))
-        if int(torch.sum(positive_label_mask).item()) == 0:
+        if positive_label_count == 0:
             raise ValueError(
                 "Sensitive group {} has no positive-label samples".format(
                     group_index
                 )
             )
-        positive_rates[str(group_index)] = torch.mean(
-            (predictions[group_mask] == 1).float()
-        ).item()
-        true_positive_rates[str(group_index)] = torch.mean(
-            (predictions[positive_label_mask] == 1).float()
-        ).item()
+        positive_rates[str(group_index)] = float(
+            torch.sum(predictions[group_mask] == 1).item()
+        ) / float(group_count)
+        true_positive_rates[str(group_index)] = float(
+            torch.sum(predictions[positive_label_mask] == 1).item()
+        ) / float(positive_label_count)
 
     return {
         "parity": abs(positive_rates["0"] - positive_rates["1"]),
@@ -349,8 +418,30 @@ def fairness_metrics(labels, predictions, sensitive):
 
 
 def evaluate_binary_predictions(labels, predictions, probabilities, sensitive):
-    metrics = classification_metrics(labels, predictions, probabilities)
-    metrics.update(fairness_metrics(labels, predictions, sensitive))
+    probabilities = probabilities.detach().cpu().float()
+    predictions = predictions.detach().cpu().long().view(-1)
+    threshold_predictions = (probabilities[:, 1] > 0.5).long()
+    if not torch.equal(predictions, threshold_predictions):
+        raise ValueError(
+            "Stored predictions do not match the reference P(Y=1) > 0.5 "
+            "threshold"
+        )
+
+    metrics = target_class_macro_metrics(
+        labels, threshold_predictions, probabilities
+    )
+    fairness = fairness_metrics(labels, threshold_predictions, sensitive)
+    metrics.update(
+        {
+            "dp": fairness["parity"] * 100.0,
+            "eo": fairness["equality"] * 100.0,
+            # Retain the two rate dictionaries as ratio-scale diagnostics.
+            "positive_prediction_rate": fairness[
+                "positive_prediction_rate"
+            ],
+            "true_positive_rate": fairness["true_positive_rate"],
+        }
+    )
     return metrics
 
 
@@ -1301,6 +1392,22 @@ def evaluate_target(args):
         "experiment": current_experiment,
         "dataset_family": dataset_configuration["dataset_family"],
         "seed": int(payload["seed"]),
+        "metric_protocol": {
+            "reference": "learn(1).py evaluate_per_class",
+            "primary_metrics": list(METRIC_NAMES),
+            "primary_metric_scale": "percentage [0, 100]",
+            "accuracy": (
+                "macro mean of the per-target-class accuracies"
+            ),
+            "AUC_ROC": (
+                "macro mean of per-target-class one-vs-rest ROC-AUC"
+            ),
+            "dp": "absolute demographic-parity difference",
+            "eo": "absolute equal-opportunity/TPR difference",
+            "prediction_threshold": "P(Y=1) > 0.5",
+            "target_class_metric_scale": "percentage [0, 100]",
+            "diagnostic_rate_scale": "ratio [0, 1]",
+        },
         "source_only": source_only_metrics,
         "nrc": nrc_metrics,
         "target_node_count": int(labels.numel()),
@@ -1360,9 +1467,17 @@ def summarize_results(args):
         "dataset_family": records[0].get("dataset_family"),
         "seeds": seeds,
         "run_count": len(records),
+        "metric_protocol": records[0].get("metric_protocol"),
         "variance_definition": {
-            "variance": "population variance: sum((x-mean)^2)/n",
-            "plus_minus": "population standard deviation: sqrt(variance)",
+            "metric_scale": "percentage [0, 100]",
+            "variance": (
+                "population variance in squared percentage points: "
+                "sum((x-mean)^2)/n"
+            ),
+            "plus_minus": (
+                "population standard deviation in percentage points: "
+                "sqrt(variance)"
+            ),
         },
         "source_only": {},
         "nrc": {},
@@ -1380,8 +1495,8 @@ def summarize_results(args):
             population_variance = sum(squared_deviations) / float(len(values))
             population_standard_deviation = math.sqrt(population_variance)
             display = "{:.2f}% +/- {:.2f}%".format(
-                mean_value * 100.0,
-                population_standard_deviation * 100.0,
+                mean_value,
+                population_standard_deviation,
             )
             summary[method_name][metric_name] = {
                 "values": values,

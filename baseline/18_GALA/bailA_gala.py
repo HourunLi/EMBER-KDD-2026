@@ -773,20 +773,46 @@ def fairness_metrics(
     probabilities: torch.Tensor,
     sensitive: torch.Tensor,
 ) -> Dict[str, float]:
-    """Return accuracy, ROC-AUC, statistical parity and equality gaps.
+    """Return the reference class-wise accuracy/AUC and fairness gaps.
 
-    ``parity`` is the absolute positive-prediction-rate gap. ``equality`` is
-    the absolute true-positive-rate gap (equality of opportunity). Lower gaps
-    are fairer.  The sensitive attribute is used only here, after inference.
+    ``accuracy`` and ``AUC_ROC`` are macro-averaged over target classes, as in
+    ``learn(1).py``. ``dp`` is the absolute positive-prediction-rate gap and
+    ``eo`` is the absolute true-positive-rate gap (equality of opportunity).
+    Every returned value uses percentage points. Lower ``dp``/``eo`` values
+    are fairer. The sensitive attribute is used only here, after inference.
     """
 
     labels = labels.detach().cpu().long()
     predictions = predictions.detach().cpu().long()
     probabilities = probabilities.detach().cpu()
     sensitive = sensitive.detach().cpu().long()
+
+    class_accuracies: List[float] = []
+    class_auc_rocs: List[float] = []
+    positive_probabilities = probabilities[:, 1]
+    for target_class in torch.unique(labels).tolist():
+        target_class = int(target_class)
+        class_mask = labels.eq(target_class)
+        class_accuracies.append(
+            float((predictions[class_mask] == labels[class_mask]).float().mean().item())
+        )
+        one_vs_rest_labels = labels.eq(target_class).long()
+        class_scores = (
+            positive_probabilities if target_class == 1 else 1.0 - positive_probabilities
+        )
+        class_auc_rocs.append(
+            _roc_auc(one_vs_rest_labels, class_scores)
+        )
+
+    def percentage_nanmean(values: Sequence[float]) -> float:
+        finite = np.asarray(
+            [value for value in values if np.isfinite(value)], dtype=np.float64
+        )
+        return float(finite.mean() * 100.0) if finite.size else float("nan")
+
     metrics: Dict[str, float] = {
-        "accuracy": float((predictions == labels).float().mean().item()),
-        "ROC_AUC": _roc_auc(labels, probabilities[:, 1]),
+        "accuracy": percentage_nanmean(class_accuracies),
+        "AUC_ROC": percentage_nanmean(class_auc_rocs),
     }
 
     groups = [sensitive == value for value in (0, 1)]
@@ -803,8 +829,8 @@ def fairness_metrics(
         else:
             true_positive_rates.append(float(predictions[positives].float().mean().item()))
 
-    metrics["parity"] = float(abs(positive_rates[0] - positive_rates[1]))
-    metrics["equality"] = float(abs(true_positive_rates[0] - true_positive_rates[1]))
+    metrics["dp"] = float(abs(positive_rates[0] - positive_rates[1]) * 100.0)
+    metrics["eo"] = float(abs(true_positive_rates[0] - true_positive_rates[1]) * 100.0)
     return metrics
 
 
@@ -1085,10 +1111,10 @@ def run_one_seed(
         raise ValueError("The target test split contains no valid labels")
     metrics = _evaluate(model, target_eval, target_metric_mask, device)
     print(
-        f"[seed {seed}] accuracy={metrics['accuracy'] * 100:.2f}% "
-        f"ROC_AUC={metrics['ROC_AUC'] * 100:.2f}% "
-        f"parity={metrics['parity'] * 100:.2f}% "
-        f"equality={metrics['equality'] * 100:.2f}%"
+        f"[seed {seed}] accuracy={metrics['accuracy']:.2f}% "
+        f"AUC_ROC={metrics['AUC_ROC']:.2f}% "
+        f"dp={metrics['dp']:.2f}% "
+        f"eo={metrics['eo']:.2f}%"
     )
     target_all_valid_mask = (target_adapt | target_test) & target.label_valid
     _export_target_visualization(
@@ -1245,7 +1271,7 @@ def run(args) -> Dict[str, Dict[str, float]]:
         metrics = run_one_seed(source, target, aligner, args, seed, device, output_dir)
         records.append({"seed": seed, **metrics})
 
-    metric_names = ("accuracy", "ROC_AUC", "parity", "equality")
+    metric_names = ("accuracy", "AUC_ROC", "dp", "eo")
     summary: Dict[str, Dict[str, float]] = {}
     for metric in metric_names:
         mean, variance = _mean_variance([record[metric] for record in records])
@@ -1254,7 +1280,7 @@ def run(args) -> Dict[str, Dict[str, float]]:
             "mean": mean,
             "variance": variance,
             "std": std,
-            "formatted": f"{mean * 100:.2f}% +/- {std * 100:.2f}%",
+            "formatted": f"{mean:.2f}% +/- {std:.2f}%",
         }
 
     print(f"\n===== GALA {dataset_name} summary: {source_domain} -> {target_domain} =====")

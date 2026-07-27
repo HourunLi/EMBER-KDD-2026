@@ -1,118 +1,118 @@
 {
   "aggregate": {
     "source_only": {
-      "accuracy": {
-        "display": "86.76% +/- 0.36%",
-        "mean": 0.8675600051879883,
-        "mean_percent": "86.76%",
-        "std": 0.0036260194663424905,
-        "std_percent": "0.36%",
-        "values": [
-          0.8641999959945679,
-          0.868399977684021,
-          0.8694000244140625,
-          0.8636000156402588,
-          0.8722000122070312
-        ]
-      },
-      "equality": {
-        "display": "12.51% +/- 1.09%",
-        "mean": 0.12509214878082275,
-        "mean_percent": "12.51%",
-        "std": 0.010913772140146598,
-        "std_percent": "1.09%",
-        "values": [
-          0.14389562606811523,
-          0.11981391906738281,
-          0.12390124797821045,
-          0.11596482992172241,
-          0.12188512086868286
-        ]
-      },
-      "parity": {
-        "display": "17.81% +/- 0.89%",
-        "mean": 0.17806072831153869,
-        "mean_percent": "17.81%",
-        "std": 0.0089099762620986,
-        "std_percent": "0.89%",
-        "values": [
-          0.19152140617370605,
-          0.17250415682792664,
-          0.18264633417129517,
-          0.1700184941291809,
-          0.17361325025558472
-        ]
-      },
-      "roc_auc": {
+      "AUC_ROC": {
         "display": "94.26% +/- 0.16%",
-        "mean": 0.9425543652834254,
+        "mean": 94.25543652834254,
         "mean_percent": "94.26%",
-        "std": 0.0016349767480986497,
+        "std": 0.16349767480986363,
         "std_percent": "0.16%",
         "values": [
-          0.9436719759173554,
-          0.942016606192776,
-          0.9433443589951651,
-          0.939921106260076,
-          0.9438177790517547
+          94.36719759173555,
+          94.2016606192776,
+          94.3344358995165,
+          93.9921106260076,
+          94.38177790517547
+        ]
+      },
+      "accuracy": {
+        "display": "86.73% +/- 0.36%",
+        "mean": 86.7272365856715,
+        "mean_percent": "86.73%",
+        "std": 0.3606632145237682,
+        "std_percent": "0.36%",
+        "values": [
+          86.40118492654867,
+          86.80926565315083,
+          86.9172095872843,
+          86.3243061827411,
+          87.18421657863263
+        ]
+      },
+      "dp": {
+        "display": "17.81% +/- 0.89%",
+        "mean": 17.80607283115387,
+        "mean_percent": "17.81%",
+        "std": 0.8909976262098601,
+        "std_percent": "0.89%",
+        "values": [
+          19.152140617370605,
+          17.250415682792664,
+          18.264633417129517,
+          17.00184941291809,
+          17.36132502555847
+        ]
+      },
+      "eo": {
+        "display": "12.51% +/- 1.09%",
+        "mean": 12.509214878082275,
+        "mean_percent": "12.51%",
+        "std": 1.0913772140146598,
+        "std_percent": "1.09%",
+        "values": [
+          14.389562606811523,
+          11.981391906738281,
+          12.390124797821045,
+          11.596482992172241,
+          12.188512086868286
         ]
       }
     },
     "strict_shot": {
-      "accuracy": {
-        "display": "84.64% +/- 0.84%",
-        "mean": 0.8464399933815002,
-        "mean_percent": "84.64%",
-        "std": 0.008426624587572852,
-        "std_percent": "0.84%",
-        "values": [
-          0.8555999994277954,
-          0.8325999975204468,
-          0.8471999764442444,
-          0.8479999899864197,
-          0.848800003528595
-        ]
-      },
-      "equality": {
-        "display": "16.84% +/- 5.80%",
-        "mean": 0.16837859153747559,
-        "mean_percent": "16.84%",
-        "std": 0.05804416047815664,
-        "std_percent": "5.80%",
-        "values": [
-          0.22602534294128418,
-          0.1065858006477356,
-          0.17200469970703125,
-          0.2248600721359253,
-          0.11241704225540161
-        ]
-      },
-      "parity": {
-        "display": "24.42% +/- 2.17%",
-        "mean": 0.24416125416755677,
-        "mean_percent": "24.42%",
-        "std": 0.021724150145743772,
-        "std_percent": "2.17%",
-        "values": [
-          0.22180449962615967,
-          0.2638561725616455,
-          0.2699052691459656,
-          0.22666648030281067,
-          0.2385738492012024
-        ]
-      },
-      "roc_auc": {
+      "AUC_ROC": {
         "display": "93.23% +/- 0.40%",
-        "mean": 0.9323093183887522,
+        "mean": 93.23093183887522,
         "mean_percent": "93.23%",
-        "std": 0.003993024341893115,
+        "std": 0.3993024341893109,
         "std_percent": "0.40%",
         "values": [
-          0.9375701707593175,
-          0.9294784969185284,
-          0.9288383075248982,
-          0.93004618486333,
-          0.9356134318776866
+          93.75701707593174,
+          92.94784969185284,
+          92.88383075248981,
+          93.004618486333,
+          93.56134318776867
+        ]
+      },
+      "accuracy": {
+        "display": "84.58% +/- 0.92%",
+        "mean": 84.57868735886825,
+        "mean_percent": "84.58%",
+        "std": 0.9220486037256843,
+        "std_percent": "0.92%",
+        "values": [
+          85.60183644729456,
+          83.07714554273737,
+          84.63082918450596,
+          84.84505256034946,
+          84.73857305945391
+        ]
+      },
+      "dp": {
+        "display": "24.42% +/- 2.17%",
+        "mean": 24.416125416755676,
+        "mean_percent": "24.42%",
+        "std": 2.1724150145743772,
+        "std_percent": "2.17%",
+        "values": [
+          22.180449962615967,
+          26.38561725616455,
+          26.990526914596558,
+          22.666648030281067,
+          23.85738492012024
+        ]
+      },
+      "eo": {
+        "display": "16.84% +/- 5.80%",
+        "mean": 16.83785915374756,
+        "mean_percent": "16.84%",
+        "std": 5.804416047815664,
+        "std_percent": "5.80%",
+        "values": [
+          22.602534294128418,
+          10.65858006477356,
+          17.200469970703125,
+          22.48600721359253,
+          11.241704225540161
         ]
       }
     }
@@ -125,11 +125,12 @@
     "1": 1
   },
   "metric_definitions": {
-    "accuracy": "target node classification accuracy; higher is better",
-    "equality": "absolute equal opportunity difference (TPR gap) across sensitive groups; lower is better",
-    "parity": "absolute demographic parity difference across sensitive groups; lower is better",
-    "roc_auc": "binary ROC-AUC using P(label in ['1']); higher is better"
+    "AUC_ROC": "macro one-vs-rest target-class ROC-AUC using P(label in ['1']) for the positive class and its complement for the negative class; higher is better",
+    "accuracy": "macro mean of per-target-class accuracies (binary balanced accuracy); higher is better",
+    "dp": "absolute demographic parity difference across sensitive groups; lower is better",
+    "eo": "absolute equal opportunity difference (TPR gap) across sensitive groups; lower is better"
   },
+  "metric_unit": "percentage points",
   "number_of_runs": 5,
   "runs": [
     {
@@ -143,16 +144,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/syn-2_to_syn-1/seed_1/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.8641999959945679,
-          "equality": 0.14389562606811523,
-          "parity": 0.19152140617370605,
-          "roc_auc": 0.9436719759173554
+          "AUC_ROC": 94.36719759173555,
+          "accuracy": 86.40118492654867,
+          "dp": 19.152140617370605,
+          "eo": 14.389562606811523
         },
         "strict_shot": {
-          "accuracy": 0.8555999994277954,
-          "equality": 0.22602534294128418,
-          "parity": 0.22180449962615967,
-          "roc_auc": 0.9375701707593175
+          "AUC_ROC": 93.75701707593174,
+          "accuracy": 85.60183644729456,
+          "dp": 22.180449962615967,
+          "eo": 22.602534294128418
         }
       },
       "seed": 1,
@@ -173,16 +174,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/syn-2_to_syn-1/seed_2/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.868399977684021,
-          "equality": 0.11981391906738281,
-          "parity": 0.17250415682792664,
-          "roc_auc": 0.942016606192776
+          "AUC_ROC": 94.2016606192776,
+          "accuracy": 86.80926565315083,
+          "dp": 17.250415682792664,
+          "eo": 11.981391906738281
         },
         "strict_shot": {
-          "accuracy": 0.8325999975204468,
-          "equality": 0.1065858006477356,
-          "parity": 0.2638561725616455,
-          "roc_auc": 0.9294784969185284
+          "AUC_ROC": 92.94784969185284,
+          "accuracy": 83.07714554273737,
+          "dp": 26.38561725616455,
+          "eo": 10.65858006477356
         }
       },
       "seed": 2,
@@ -203,16 +204,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/syn-2_to_syn-1/seed_3/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.8694000244140625,
-          "equality": 0.12390124797821045,
-          "parity": 0.18264633417129517,
-          "roc_auc": 0.9433443589951651
+          "AUC_ROC": 94.3344358995165,
+          "accuracy": 86.9172095872843,
+          "dp": 18.264633417129517,
+          "eo": 12.390124797821045
         },
         "strict_shot": {
-          "accuracy": 0.8471999764442444,
-          "equality": 0.17200469970703125,
-          "parity": 0.2699052691459656,
-          "roc_auc": 0.9288383075248982
+          "AUC_ROC": 92.88383075248981,
+          "accuracy": 84.63082918450596,
+          "dp": 26.990526914596558,
+          "eo": 17.200469970703125
         }
       },
       "seed": 3,
@@ -233,16 +234,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/syn-2_to_syn-1/seed_4/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.8636000156402588,
-          "equality": 0.11596482992172241,
-          "parity": 0.1700184941291809,
-          "roc_auc": 0.939921106260076
+          "AUC_ROC": 93.9921106260076,
+          "accuracy": 86.3243061827411,
+          "dp": 17.00184941291809,
+          "eo": 11.596482992172241
         },
         "strict_shot": {
-          "accuracy": 0.8479999899864197,
-          "equality": 0.2248600721359253,
-          "parity": 0.22666648030281067,
-          "roc_auc": 0.93004618486333
+          "AUC_ROC": 93.004618486333,
+          "accuracy": 84.84505256034946,
+          "dp": 22.666648030281067,
+          "eo": 22.48600721359253
         }
       },
       "seed": 4,
@@ -263,16 +264,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/syn-2_to_syn-1/seed_5/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.8722000122070312,
-          "equality": 0.12188512086868286,
-          "parity": 0.17361325025558472,
-          "roc_auc": 0.9438177790517547
+          "AUC_ROC": 94.38177790517547,
+          "accuracy": 87.18421657863263,
+          "dp": 17.36132502555847,
+          "eo": 12.188512086868286
         },
         "strict_shot": {
-          "accuracy": 0.848800003528595,
-          "equality": 0.11241704225540161,
-          "parity": 0.2385738492012024,
-          "roc_auc": 0.9356134318776866
+          "AUC_ROC": 93.56134318776867,
+          "accuracy": 84.73857305945391,
+          "dp": 23.85738492012024,
+          "eo": 11.241704225540161
         }
       },
       "seed": 5,

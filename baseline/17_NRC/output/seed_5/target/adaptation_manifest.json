@@ -2,14 +2,14 @@
   "evaluation_payload": "./output/seed_5/target/evaluation_payload.pt",
   "experiment": "germanA_2_to_germanA_1_strict_original_nrc_gcn",
   "nrc_prediction_counts": [
-    120,
-    264
+    121,
+    263
   ],
   "seed": 5,
   "source_data_paths_accepted_by_target_stage": false,
   "source_only_prediction_counts": [
-    2,
-    382
+    0,
+    384
   ],
   "target_checkpoint": "./output/seed_5/target/target_nrc_model.pt",
   "target_labels_or_sensitive_attributes_used_for_adaptation": false

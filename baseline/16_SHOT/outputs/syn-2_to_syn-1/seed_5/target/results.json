@@ -88,32 +88,33 @@
       2941
     ]
   },
+  "reported_metric_unit": "percentage points",
   "reported_metrics": {
     "source_only": {
-      "accuracy": 0.8722000122070312,
-      "equality": 0.12188512086868286,
-      "parity": 0.17361325025558472,
-      "roc_auc": 0.9438177790517547
+      "AUC_ROC": 94.38177790517547,
+      "accuracy": 87.18421657863263,
+      "dp": 17.36132502555847,
+      "eo": 12.188512086868286
     },
     "strict_shot": {
-      "accuracy": 0.848800003528595,
-      "equality": 0.11241704225540161,
-      "parity": 0.2385738492012024,
-      "roc_auc": 0.9356134318776866
+      "AUC_ROC": 93.56134318776867,
+      "accuracy": 84.73857305945391,
+      "dp": 23.85738492012024,
+      "eo": 11.241704225540161
     }
   },
-  "reported_metrics_percent": {
+  "reported_metrics_display": {
     "source_only": {
-      "accuracy": "87.22%",
-      "equality": "12.19%",
-      "parity": "17.36%",
-      "roc_auc": "94.38%"
+      "AUC_ROC": "94.38%",
+      "accuracy": "87.18%",
+      "dp": "17.36%",
+      "eo": "12.19%"
     },
     "strict_shot": {
-      "accuracy": "84.88%",
-      "equality": "11.24%",
-      "parity": "23.86%",
-      "roc_auc": "93.56%"
+      "AUC_ROC": "93.56%",
+      "accuracy": "84.74%",
+      "dp": "23.86%",
+      "eo": "11.24%"
     }
   },
   "seed": 5,
@@ -125,22 +126,27 @@
   "source_domain": "syn-2",
   "source_only": {
     "classification": {
-      "accuracy": 0.8722000122070312,
       "balanced_accuracy": 0.8718421657863262,
       "macro_f1": 0.8720359962141881,
+      "macro_target_roc_auc": 0.9438177790517547,
+      "overall_accuracy": 0.8722000122070312,
       "per_class": [
         {
+          "accuracy": 0.851037851037851,
           "class": 0,
           "f1": 0.867454884878656,
           "precision": 0.8845177664974619,
           "recall": 0.851037851037851,
+          "roc_auc": 0.9438177790517547,
           "support": 2457
         },
         {
+          "accuracy": 0.8926464805348014,
           "class": 1,
           "f1": 0.8766171075497202,
           "precision": 0.8611532625189682,
           "recall": 0.8926464805348014,
+          "roc_auc": 0.9438177790517547,
           "support": 2543
         }
       ],
@@ -170,22 +176,27 @@
   },
   "strict_shot": {
     "classification": {
-      "accuracy": 0.848800003528595,
       "balanced_accuracy": 0.8473857305945391,
       "macro_f1": 0.8473698185687455,
+      "macro_target_roc_auc": 0.9356134318776866,
+      "overall_accuracy": 0.848800003528595,
       "per_class": [
         {
+          "accuracy": 0.7651607651607651,
           "class": 0,
           "f1": 0.8325952170062001,
           "precision": 0.9130645944633318,
           "recall": 0.7651607651607651,
+          "roc_auc": 0.9356134318776866,
           "support": 2457
         },
         {
+          "accuracy": 0.929610696028313,
           "class": 1,
           "f1": 0.862144420131291,
           "precision": 0.8038082284937096,
           "recall": 0.929610696028313,
+          "roc_auc": 0.9356134318776866,
           "support": 2543
         }
       ],
@@ -220,5 +231,24 @@
     "evaluated_labeled": 5000,
     "ignored_unlabeled": 0,
     "total": 5000
+  },
+  "visualization_export": {
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/syn-2_to_syn-1/seed_5/target/feat.npz",
+    "label_encoding": {
+      "0": "predicted_Y=1, sensitive_S=0",
+      "1": "predicted_Y=1, sensitive_S=1",
+      "2": "predicted_Y=0, sensitive_S=0",
+      "3": "predicted_Y=0, sensitive_S=1"
+    },
+    "label_key": "labels",
+    "label_shape": [
+      5000
+    ],
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/syn-2_to_syn-1/seed_5/target/labels.npz",
+    "representation_key": "representations",
+    "representation_shape": [
+      5000,
+      256
+    ]
   }
 }

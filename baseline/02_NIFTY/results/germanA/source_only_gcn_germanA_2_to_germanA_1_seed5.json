@@ -6,11 +6,40 @@
   "label_column": "GoodCustomer",
   "sensitive_column": "Gender",
   "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed5.pt",
+  "target_graph_nodes": 384,
+  "target_labeled_nodes": 384,
   "target_nodes": 384,
+  "evaluation": {
+    "reference": "learn(1).py/evaluate_per_class",
+    "prediction_threshold": "sigmoid(logit) > 0.5",
+    "accuracy": "macro mean of per-target-class accuracy",
+    "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+    "dp": "absolute sensitive-group positive-rate gap",
+    "eo": "absolute sensitive-group TPR gap for true label 1",
+    "stored_scale": "fraction",
+    "printed_scale": "percent"
+  },
   "metrics": {
-    "accuracy": 0.703125,
-    "roc_auc": 0.6305511252879674,
+    "accuracy": 0.5494949494949495,
+    "roc_auc": 0.6304093567251463,
     "parity": 0.1015625,
     "equality": 0.10534274193548387
+  },
+  "visualization": {
+    "method": "GCN_seed5",
+    "dataset": "germanA",
+    "seed": 5,
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed5/germanA/feat.npz",
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed5/germanA/labels.npz",
+    "representations_shape": [
+      384,
+      16
+    ],
+    "label_encoding": {
+      "0": "predicted_Y=1,S=0",
+      "1": "predicted_Y=1,S=1",
+      "2": "predicted_Y=0,S=0",
+      "3": "predicted_Y=0,S=1"
+    }
   }
 }

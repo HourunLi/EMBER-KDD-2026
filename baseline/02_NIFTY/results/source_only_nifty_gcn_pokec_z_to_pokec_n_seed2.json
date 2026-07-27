@@ -11,10 +11,37 @@
   "target_graph_nodes": 66569,
   "target_labeled_nodes": 8797,
   "target_nodes": 8797,
+  "evaluation": {
+    "reference": "learn(1).py/evaluate_per_class",
+    "prediction_threshold": "sigmoid(logit) > 0.5",
+    "accuracy": "macro mean of per-target-class accuracy",
+    "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+    "dp": "absolute sensitive-group positive-rate gap",
+    "eo": "absolute sensitive-group TPR gap for true label 1",
+    "stored_scale": "fraction",
+    "printed_scale": "percent"
+  },
   "metrics": {
-    "accuracy": 0.5904285551892691,
-    "roc_auc": 0.6350642922422608,
-    "parity": 0.030208967793398545,
-    "equality": 0.004935721349302313
+    "accuracy": 0.5928779422344768,
+    "roc_auc": 0.6350797052089103,
+    "parity": 0.02890931681439024,
+    "equality": 0.004228106801450471
+  },
+  "visualization": {
+    "method": "NIFTY-GCN_seed2",
+    "dataset": "pokec",
+    "seed": 2,
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed2/pokec/feat.npz",
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed2/pokec/labels.npz",
+    "representations_shape": [
+      8797,
+      16
+    ],
+    "label_encoding": {
+      "0": "predicted_Y=1,S=0",
+      "1": "predicted_Y=1,S=1",
+      "2": "predicted_Y=0,S=0",
+      "3": "predicted_Y=0,S=1"
+    }
   }
 }

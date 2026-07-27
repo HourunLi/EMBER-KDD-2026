@@ -1,4 +1,14 @@
 {
+  "evaluated_prediction_counts": {
+    "source_only": [
+      5,
+      379
+    ],
+    "strict_shot": [
+      148,
+      236
+    ]
+  },
   "excluded_feature_columns": [
     "user_id",
     "GoodCustomer",
@@ -44,6 +54,8 @@
     "YearsAtCurrentJob_geq_4",
     "JobClassIsSkilled"
   ],
+  "ignore_index": -1,
+  "ignored_label_values": [],
   "label_column": "GoodCustomer",
   "label_mapping": {
     "-1": 0,
@@ -51,12 +63,12 @@
   },
   "mean_probabilities": {
     "source_only": [
-      0.1187485083937645,
-      0.8812515139579773
+      0.12139099836349487,
+      0.8786089420318604
     ],
     "strict_shot": [
-      0.3936742842197418,
-      0.6063256859779358
+      0.396322637796402,
+      0.6036773324012756
     ]
   },
   "prediction_counts": {
@@ -65,36 +77,37 @@
       379
     ],
     "strict_shot": [
-      144,
-      240
+      148,
+      236
     ]
   },
+  "reported_metric_unit": "percentage points",
   "reported_metrics": {
     "source_only": {
-      "accuracy": 0.7395833134651184,
-      "equality": 0.015625,
-      "parity": 0.0078125,
-      "roc_auc": 0.6086478823320929
+      "AUC_ROC": 60.32252348041822,
+      "accuracy": 50.48378522062732,
+      "dp": 0.78125,
+      "eo": 1.5625
     },
     "strict_shot": {
-      "accuracy": 0.6276041865348816,
-      "equality": 0.13844084739685059,
-      "parity": 0.140625,
-      "roc_auc": 0.6058833953570796
+      "AUC_ROC": 60.73365231259969,
+      "accuracy": 58.0595427963849,
+      "dp": 14.453125,
+      "eo": 14.331316947937012
     }
   },
-  "reported_metrics_percent": {
+  "reported_metrics_display": {
     "source_only": {
-      "accuracy": "73.96%",
-      "equality": "1.56%",
-      "parity": "0.78%",
-      "roc_auc": "60.86%"
+      "AUC_ROC": "60.32%",
+      "accuracy": "50.48%",
+      "dp": "0.78%",
+      "eo": "1.56%"
     },
     "strict_shot": {
-      "accuracy": "62.76%",
-      "equality": "13.84%",
-      "parity": "14.06%",
-      "roc_auc": "60.59%"
+      "AUC_ROC": "60.73%",
+      "accuracy": "58.06%",
+      "dp": "14.45%",
+      "eo": "14.33%"
     }
   },
   "seed": 5,
@@ -106,26 +119,31 @@
   "source_domain": "germanA_2",
   "source_only": {
     "classification": {
-      "accuracy": 0.7395833134651184,
       "balanced_accuracy": 0.5048378522062732,
       "macro_f1": 0.4439295644114921,
+      "macro_target_roc_auc": 0.6032252348041822,
+      "overall_accuracy": 0.7395833134651184,
       "per_class": [
         {
+          "accuracy": 0.020202020202020204,
           "class": 0,
           "f1": 0.038461538461538464,
           "precision": 0.4,
           "recall": 0.020202020202020204,
+          "roc_auc": 0.6032252348041822,
           "support": 99
         },
         {
+          "accuracy": 0.9894736842105263,
           "class": 1,
           "f1": 0.8493975903614458,
           "precision": 0.7440633245382586,
           "recall": 0.9894736842105263,
+          "roc_auc": 0.6032252348041822,
           "support": 285
         }
       ],
-      "roc_auc": 0.6086478823320929
+      "roc_auc": 0.6032252348041822
     },
     "fairness": {
       "demographic_parity_difference": 0.0078125,
@@ -151,30 +169,35 @@
   },
   "strict_shot": {
     "classification": {
-      "accuracy": 0.6276041865348816,
-      "balanced_accuracy": 0.5876129718234981,
-      "macro_f1": 0.5695708406819517,
+      "balanced_accuracy": 0.580595427963849,
+      "macro_f1": 0.5613542937515056,
+      "macro_target_roc_auc": 0.6073365231259968,
+      "overall_accuracy": 0.6171875,
       "per_class": [
         {
+          "accuracy": 0.5050505050505051,
           "class": 0,
-          "f1": 0.411522633744856,
-          "precision": 0.3472222222222222,
+          "f1": 0.4048582995951417,
+          "precision": 0.33783783783783783,
           "recall": 0.5050505050505051,
+          "roc_auc": 0.6073365231259968,
           "support": 99
         },
         {
+          "accuracy": 0.656140350877193,
           "class": 1,
-          "f1": 0.7276190476190475,
-          "precision": 0.7958333333333333,
-          "recall": 0.6701754385964912,
+          "f1": 0.7178502879078695,
+          "precision": 0.7923728813559322,
+          "recall": 0.656140350877193,
+          "roc_auc": 0.6073365231259968,
           "support": 285
         }
       ],
-      "roc_auc": 0.6058833953570796
+      "roc_auc": 0.6073365231259968
     },
     "fairness": {
-      "demographic_parity_difference": 0.140625,
-      "equal_opportunity_difference": 0.13844084739685059,
+      "demographic_parity_difference": 0.14453125,
+      "equal_opportunity_difference": 0.14331316947937012,
       "equalized_odds_difference": 0.1625000238418579,
       "false_positive_rate": {
         "0": 0.6000000238418579,
@@ -185,15 +208,40 @@
         "1": 256
       },
       "positive_prediction_rate": {
-        "0": 0.71875,
-        "1": 0.578125
+        "0": 0.7109375,
+        "1": 0.56640625
       },
       "true_positive_rate": {
-        "0": 0.7634408473968506,
-        "1": 0.625
+        "0": 0.7526881694793701,
+        "1": 0.609375
       }
     }
   },
   "target_domain": "germanA_1",
-  "target_labels_and_sensitive_loaded_after_adaptation": true
+  "target_evaluation_storage": "csv_columns",
+  "target_labels_and_sensitive_loaded_after_adaptation": true,
+  "target_node_counts": {
+    "evaluated_labeled": 384,
+    "ignored_unlabeled": 0,
+    "total": 384
+  },
+  "visualization_export": {
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_5/target/feat.npz",
+    "label_encoding": {
+      "0": "predicted_Y=1, sensitive_S=0",
+      "1": "predicted_Y=1, sensitive_S=1",
+      "2": "predicted_Y=0, sensitive_S=0",
+      "3": "predicted_Y=0, sensitive_S=1"
+    },
+    "label_key": "labels",
+    "label_shape": [
+      384
+    ],
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_5/target/labels.npz",
+    "representation_key": "representations",
+    "representation_shape": [
+      384,
+      256
+    ]
+  }
 }

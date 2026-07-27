@@ -1,0 +1,134 @@
+{
+  "dataset_family": "bailA",
+  "experiment": "bailA_2_to_bailA_1_strict_original_nrc_gcn",
+  "metric_protocol": {
+    "AUC_ROC": "macro mean of per-target-class one-vs-rest ROC-AUC",
+    "accuracy": "macro mean of the per-target-class accuracies",
+    "diagnostic_rate_scale": "ratio [0, 1]",
+    "dp": "absolute demographic-parity difference",
+    "eo": "absolute equal-opportunity/TPR difference",
+    "prediction_threshold": "P(Y=1) > 0.5",
+    "primary_metric_scale": "percentage [0, 100]",
+    "primary_metrics": [
+      "accuracy",
+      "AUC_ROC",
+      "dp",
+      "eo"
+    ],
+    "reference": "learn(1).py evaluate_per_class",
+    "target_class_metric_scale": "percentage [0, 100]"
+  },
+  "nrc": {
+    "AUC_ROC": {
+      "display": "58.90% +/- 6.51%",
+      "mean": 58.90232586896259,
+      "values": [
+        55.22845843849401,
+        70.40842189711744,
+        52.95953453156952,
+        61.76943106035816,
+        54.145783417273805
+      ],
+      "variance": 42.409860971763536
+    },
+    "accuracy": {
+      "display": "55.85% +/- 6.67%",
+      "mean": 55.84735371225029,
+      "values": [
+        52.37289741332942,
+        68.5963768620179,
+        50.56993639581288,
+        56.27509124373581,
+        51.42246664635545
+      ],
+      "variance": 44.44463126400393
+    },
+    "dp": {
+      "display": "10.58% +/- 1.10%",
+      "mean": 10.580291289265098,
+      "values": [
+        11.452002698889775,
+        12.059791313118923,
+        10.694807363334624,
+        9.17501891267456,
+        9.519836158307605
+      ],
+      "variance": 1.2122541141312202
+    },
+    "eo": {
+      "display": "9.51% +/- 1.09%",
+      "mean": 9.514293436231448,
+      "values": [
+        9.738883551911549,
+        11.254793244903038,
+        9.877362504448723,
+        8.18056049857775,
+        8.519867381316182
+      ],
+      "variance": 1.1958652360039812
+    }
+  },
+  "run_count": 5,
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "source_only": {
+    "AUC_ROC": {
+      "display": "82.90% +/- 6.00%",
+      "mean": 82.90460453316182,
+      "values": [
+        88.28551578569915,
+        88.76464726820456,
+        73.78715337724066,
+        77.88847075373407,
+        85.79723548093065
+      ],
+      "variance": 35.99022684758485
+    },
+    "accuracy": {
+      "display": "73.44% +/- 6.91%",
+      "mean": 73.43644800141426,
+      "values": [
+        82.66772971417609,
+        75.35777747060203,
+        67.42663279583846,
+        63.77070850400395,
+        77.95939152245079
+      ],
+      "variance": 47.781897184198904
+    },
+    "dp": {
+      "display": "8.07% +/- 3.23%",
+      "mean": 8.073761475393075,
+      "values": [
+        5.056063301232902,
+        6.686628909471332,
+        11.090821730151912,
+        12.699475897414924,
+        4.835817538694309
+      ],
+      "variance": 10.402961291584194
+    },
+    "eo": {
+      "display": "5.23% +/- 3.50%",
+      "mean": 5.2316144103740125,
+      "values": [
+        5.506645651760889,
+        10.194325440256025,
+        2.2554006791489556,
+        0.5631477403178486,
+        7.638552540386345
+      ],
+      "variance": 12.229984666983302
+    }
+  },
+  "variance_definition": {
+    "metric_scale": "percentage [0, 100]",
+    "plus_minus": "population standard deviation in percentage points: sqrt(variance)",
+    "variance": "population variance in squared percentage points: sum((x-mean)^2)/n"
+  }
+}

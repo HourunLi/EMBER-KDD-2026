@@ -1,9 +1,9 @@
 model	metric	mean +/- std
-source_only	accuracy	77.55% +/- 11.97%
-source_only	roc_auc	87.53% +/- 2.90%
-source_only	parity	5.84% +/- 4.15%
-source_only	equality	3.69% +/- 3.35%
-strict_shot	accuracy	53.46% +/- 3.68%
-strict_shot	roc_auc	57.28% +/- 2.64%
-strict_shot	parity	11.26% +/- 0.61%
-strict_shot	equality	10.01% +/- 0.48%
+source_only	accuracy	78.06% +/- 5.48%
+source_only	AUC_ROC	87.53% +/- 2.90%
+source_only	dp	5.84% +/- 4.15%
+source_only	eo	3.69% +/- 3.35%
+strict_shot	accuracy	53.28% +/- 1.71%
+strict_shot	AUC_ROC	57.32% +/- 2.64%
+strict_shot	dp	11.26% +/- 0.61%
+strict_shot	eo	10.01% +/- 0.48%

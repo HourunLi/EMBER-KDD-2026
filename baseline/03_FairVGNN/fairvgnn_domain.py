@@ -17,7 +17,8 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import f1_score, roc_auc_score
+# from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from torch import nn
 from tqdm import tqdm
 
@@ -171,8 +172,16 @@ def metrics_from_logits(logits, data, mask):
     if len(np.unique(labels)) < 2:
         raise ValueError("AUC requires both label classes in the evaluation set")
     parity, equality = fair_metric(predictions, labels, sensitive)
+    # Match learn(1).py: calculate accuracy inside each true target class and
+    # macro-average the class-wise values.  In this binary setting, this is
+    # (TNR + TPR) / 2 rather than accuracy weighted by class frequency.
+    target_class_accuracy = [
+        accuracy_score(labels[labels == target], predictions[labels == target])
+        for target in np.unique(labels)
+    ]
     return {
-        "acc": float((predictions == labels).mean()),
+        # "acc": float((predictions == labels).mean()),
+        "acc": float(np.nanmean(target_class_accuracy)),
         "auc": float(roc_auc_score(labels, scores)),
         "f1": float(f1_score(labels, predictions, zero_division=0)),
         "parity": float(parity),

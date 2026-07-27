@@ -1,7 +1,58 @@
 import torch.nn.functional as F
 import torch
-from sklearn.metrics import f1_score, roc_auc_score
+import numpy as np
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from utils import fair_metric, InfoNCE, random_aug, consis_loss
+
+
+def _evaluate_per_target_class(scores, labels, sensitive_attributes):
+    """Compute the class-macro metrics used by ``learn(1).py``.
+
+    ``scores`` are binary logits.  The reference evaluator first applies a
+    sigmoid, predicts class 1 when the resulting probability is strictly
+    greater than 0.5, and then averages accuracy, ROC-AUC and F1 over the
+    target classes present in the evaluated split.  Metrics stay in [0, 1]
+    here because the callers already convert their final reports to percent.
+    """
+    probabilities = torch.sigmoid(scores.detach().view(-1)).cpu().numpy()
+    y_true = labels.detach().view(-1).cpu().numpy()
+    sens = sensitive_attributes.detach().view(-1).cpu().numpy()
+    predictions = (probabilities > 0.5).astype(int)
+
+    target_accs = []
+    target_aucs = []
+    target_f1s = []
+    has_both_classes = len(np.unique(y_true)) == 2
+
+    for target_class in np.unique(y_true):
+        class_mask = y_true == target_class
+        target_accs.append(
+            accuracy_score(y_true[class_mask], predictions[class_mask]))
+
+        if has_both_classes:
+            class_labels = (y_true == target_class).astype(int)
+            class_scores = (probabilities if target_class == 1
+                            else 1 - probabilities)
+            target_aucs.append(roc_auc_score(class_labels, class_scores))
+        else:
+            target_aucs.append(float('nan'))
+
+        target_f1s.append(f1_score(
+            (y_true == target_class).astype(int),
+            (predictions == target_class).astype(int),
+            zero_division=0))
+
+    metrics = {
+        'acc': float(np.nanmean(target_accs)),
+        'auc_roc': float(np.nanmean(target_aucs)),
+        'f1': float(np.nanmean(target_f1s)),
+    }
+    metrics['parity'], metrics['equality'] = fair_metric(
+        predictions, y_true, sens)
+
+    prediction_tensor = torch.as_tensor(
+        predictions, dtype=labels.dtype, device=labels.device)
+    return metrics, prediction_tensor
 
 
 def train(model, data, optimizer, args):
@@ -335,30 +386,15 @@ def evaluate_ged3(x, classifier, discriminator, generator, encoder, data, args):
 
     accs, auc_rocs, F1s, paritys, equalitys = {}, {}, {}, {}, {}
 
-    pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
-    pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
-
-    accs['val'] = pred_val.eq(
-        data.y[data.val_mask]).sum().item() / data.val_mask.sum().item()
-    accs['test'] = pred_test.eq(
-        data.y[data.test_mask]).sum().item() / data.test_mask.sum().item()
-
-    F1s['val'] = f1_score(data.y[data.val_mask].cpu(
-    ).numpy(), pred_val.cpu().numpy())
-
-    F1s['test'] = f1_score(data.y[data.test_mask].cpu(
-    ).numpy(), pred_test.cpu().numpy())
-
-    auc_rocs['val'] = roc_auc_score(
-        data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(
-        data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    paritys['val'], equalitys['val'] = fair_metric(pred_val.cpu().numpy(), data.y[data.val_mask].cpu(
-    ).numpy(), data.sens[data.val_mask].cpu().numpy())
-
-    paritys['test'], equalitys['test'] = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu(
-    ).numpy(), data.sens[data.test_mask].cpu().numpy())
+    for split_name, split_mask in {
+            'val': data.val_mask, 'test': data.test_mask}.items():
+        metrics, _ = _evaluate_per_target_class(
+            output[split_mask], data.y[split_mask], data.sens[split_mask])
+        accs[split_name] = metrics['acc']
+        auc_rocs[split_name] = metrics['auc_roc']
+        F1s[split_name] = metrics['f1']
+        paritys[split_name] = metrics['parity']
+        equalitys[split_name] = metrics['equality']
 
     return accs, auc_rocs, F1s, paritys, equalitys
 
@@ -399,17 +435,9 @@ def evaluate_ged3_on_mask(classifier, generator, encoder, data, eval_mask, args,
             output = classifier(representation)
 
     labels = data.y[eval_mask]
-    scores = output[eval_mask].view(-1)
-    predictions = (scores > 0).type_as(labels)
     sensitive_attributes = data.sens[eval_mask]
-
-    metrics = {}
-    metrics['acc'] = predictions.eq(labels).float().mean().item()
-    metrics['f1'] = f1_score(labels.cpu().numpy(), predictions.cpu().numpy())
-    metrics['auc_roc'] = roc_auc_score(labels.cpu().numpy(), scores.detach().cpu().numpy())
-    metrics['parity'], metrics['equality'] = fair_metric(
-        predictions.cpu().numpy(), labels.cpu().numpy(),
-        sensitive_attributes.cpu().numpy())
+    metrics, predictions = _evaluate_per_target_class(
+        output[eval_mask], labels, sensitive_attributes)
     if return_artifacts:
         artifacts = {
             'representations': representation[eval_mask].detach(),

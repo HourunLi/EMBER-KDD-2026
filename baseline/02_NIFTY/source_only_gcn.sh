@@ -16,7 +16,7 @@
 #   --log-every 100
 
 # bailA一次跑五个seed
-  python source_only_gcn.py run-seeds \
+python source_only_gcn.py run-seeds \
   --seeds 1 2 3 4 5 \
   --source-domain bailA_2 \
   --target-domain bailA_1 \
@@ -44,7 +44,7 @@ python source_only_gcn.py run-seeds \
   --results-dir ./results/germanA \
   --summary-json ./results/germanA/source_only_gcn_germanA_2_to_germanA_1_seeds1-5_summary.json \
   --hidden 16 \
-  --epochs 1000 \
+  --epochs 500 \
   --lr 1e-3 \
   --weight-decay 1e-5 \
   --std-ddof 0 \
@@ -62,7 +62,7 @@ python source_only_gcn.py run-seeds \
   --results-dir ./results/syn \
   --summary-json ./results/syn/source_only_gcn_syn-2_to_syn-1_seeds1-5_summary.json \
   --hidden 16 \
-  --epochs 200 \
+  --epochs 500 \
   --lr 1e-3 \
   --weight-decay 1e-5 \
   --std-ddof 0 \

@@ -24,7 +24,7 @@ pip install torch_geometric==2.2.0
 7.20
 启动命令：
 bailA:
-python domain_transfer_fairsin.py --source='bailA_2' --target='bailA_1' --encoder='GCN' --runs=5 --epochs=500 --hidden=18 --delta=0.5 --c-lr=0.1 --e-lr=0.1 --c-wd=0.001 --e-wd=0.001
+python domain_transfer_fairsin.py --source='bailA_2' --target='bailA_1' --encoder='GCN' --runs=5 --epochs=200 --hidden=18 --delta=0.5 --c-lr=0.1 --e-lr=0.1 --c-wd=0.001 --e-wd=0.001
 
 germanA:（不用这个
 python domain_transfer_fairsin.py \
@@ -59,14 +59,14 @@ python domain_transfer_fairsin.py \
   --d-lr 0.001 \
   --neutral-weight 1.0 \
   --delta 0.5 \
-  --adv-weight 0.05
+  --adv-weight 0
   
 pokec:
 python domain_transfer_fairsin.py \
   --dataset-family pokec \
   --encoder GCN \
   --runs 1 \
-  --epochs 200 \
+  --epochs 150 \
   --predictor-warmup-epochs 100 \
   --task-steps 1 \
   --discriminator-steps 1 \
@@ -76,7 +76,7 @@ python domain_transfer_fairsin.py \
   --e-lr 0.005 \
   --m-lr 0.001 \
   --d-lr 0.001 \
-  --adv-weight 0.01 \
+  --adv-weight 0 \
   --neutral-weight 1.0
 
 syn:
@@ -94,7 +94,7 @@ python domain_transfer_fairsin.py \
   --e-lr 0.005 \
   --m-lr 0.001 \
   --d-lr 0.001 \
-  --adv-weight 0.01 \
+  --adv-weight 0 \
   --neutral-weight 1.0
 
 

@@ -21,14 +21,23 @@ from torch_geometric.utils import dropout_adj, convert
 from aif360.sklearn.metrics import consistency_score as cs
 from aif360.sklearn.metrics import generalized_entropy_error as gee
 
+from nifty_metrics import evaluate_per_class
 
-def fair_metric(pred, labels, sens):
-    idx_s0 = sens==0
-    idx_s1 = sens==1
-    idx_s0_y1 = np.bitwise_and(idx_s0, labels==1)
-    idx_s1_y1 = np.bitwise_and(idx_s1, labels==1)
-    parity = abs(sum(pred[idx_s0])/sum(idx_s0)-sum(pred[idx_s1])/sum(idx_s1))
-    equality = abs(sum(pred[idx_s0_y1])/sum(idx_s0_y1)-sum(pred[idx_s1_y1])/sum(idx_s1_y1))
+
+def _legacy_fair_metric(pred, labels, sens):
+    """Keep the original report unchanged for non-NIFTY model choices."""
+    idx_s0 = sens == 0
+    idx_s1 = sens == 1
+    idx_s0_y1 = np.bitwise_and(idx_s0, labels == 1)
+    idx_s1_y1 = np.bitwise_and(idx_s1, labels == 1)
+    parity = abs(
+        sum(pred[idx_s0]) / sum(idx_s0)
+        - sum(pred[idx_s1]) / sum(idx_s1)
+    )
+    equality = abs(
+        sum(pred[idx_s0_y1]) / sum(idx_s0_y1)
+        - sum(pred[idx_s1_y1]) / sum(idx_s1_y1)
+    )
     return parity.item(), equality.item()
 
 
@@ -429,20 +438,56 @@ else:
 output_preds = (output.squeeze()>0).type_as(labels)
 counter_output_preds = (counter_output.squeeze()>0).type_as(labels)
 noisy_output_preds = (noisy_output.squeeze()>0).type_as(labels)
-# 报告accuracy
-acc_test = accuracy(output[idx_test], labels[idx_test])
-
-auc_roc_test = roc_auc_score(labels.cpu().numpy()[idx_test.cpu()], output.detach().cpu().numpy()[idx_test.cpu()])
+# Auxiliary test-only metrics from the original NIFTY report.
 counterfactual_fairness = 1 - (output_preds.eq(counter_output_preds)[idx_test].sum().item()/idx_test.shape[0])
 robustness_score = 1 - (output_preds.eq(noisy_output_preds)[idx_test].sum().item()/idx_test.shape[0])
 
-parity, equality = fair_metric(output_preds[idx_test].cpu().numpy(), labels[idx_test].cpu().numpy(), sens[idx_test].numpy())
 f1_s = f1_score(labels[idx_test].cpu().numpy(), output_preds[idx_test].cpu().numpy())
 
-# print report
-print(f"Accuracy: {acc_test.item():.4f}") # 打印accuracy
-print("The AUCROC of estimator: {:.4f}".format(auc_roc_test))
-print(f'Parity: {parity} | Equality: {equality}')
+if args.model == 'ssf':
+    split_indices = {
+        'all': np.unique(
+            np.concatenate(
+                [
+                    idx_train.detach().cpu().numpy(),
+                    idx_val.detach().cpu().numpy(),
+                    idx_test.detach().cpu().numpy(),
+                ]
+            )
+        ),
+        'train': idx_train.detach().cpu().numpy(),
+        'val': idx_val.detach().cpu().numpy(),
+        'test': idx_test.detach().cpu().numpy(),
+    }
+    accs, auc_rocs, paritys, equalitys = evaluate_per_class(
+        labels=labels.detach().cpu().numpy(),
+        logits=output.detach().cpu().numpy(),
+        sensitive=sens.detach().cpu().numpy(),
+        splits=split_indices,
+    )
+
+    print('Evaluation metrics (%)')
+    for split_name in ('all', 'train', 'val', 'test'):
+        print(
+            f"{split_name}: Accuracy: {accs[split_name]:.4f} | "
+            f"AUC_ROC: {auc_rocs[split_name]:.4f} | "
+            f"DP: {paritys[split_name]:.4f} | "
+            f"EO: {equalitys[split_name]:.4f}"
+        )
+else:
+    acc_test = accuracy(output[idx_test], labels[idx_test])
+    auc_roc_test = roc_auc_score(
+        labels.detach().cpu().numpy()[idx_test.cpu()],
+        output.detach().cpu().numpy()[idx_test.cpu()],
+    )
+    parity, equality = _legacy_fair_metric(
+        output_preds[idx_test].cpu().numpy(),
+        labels[idx_test].cpu().numpy(),
+        sens[idx_test].numpy(),
+    )
+    print(f"Accuracy: {acc_test.item():.4f}")
+    print("The AUCROC of estimator: {:.4f}".format(auc_roc_test))
+    print(f'Parity: {parity} | Equality: {equality}')
 print(f'F1-score: {f1_s}')
 print(f'CounterFactual Fairness: {counterfactual_fairness}')
 print(f'Robustness Score: {robustness_score}')

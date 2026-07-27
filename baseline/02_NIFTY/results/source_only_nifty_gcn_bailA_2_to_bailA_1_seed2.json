@@ -11,10 +11,37 @@
   "target_graph_nodes": 7661,
   "target_labeled_nodes": 7661,
   "target_nodes": 7661,
+  "evaluation": {
+    "reference": "learn(1).py/evaluate_per_class",
+    "prediction_threshold": "sigmoid(logit) > 0.5",
+    "accuracy": "macro mean of per-target-class accuracy",
+    "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+    "dp": "absolute sensitive-group positive-rate gap",
+    "eo": "absolute sensitive-group TPR gap for true label 1",
+    "stored_scale": "fraction",
+    "printed_scale": "percent"
+  },
   "metrics": {
-    "accuracy": 0.6898577209241613,
-    "roc_auc": 0.7108819909126128,
-    "parity": 0.04023662993177807,
-    "equality": 0.056195695512211596
+    "accuracy": 0.6325144043486056,
+    "roc_auc": 0.7808805663067069,
+    "parity": 0.01983724876812039,
+    "equality": 0.03412736852527276
+  },
+  "visualization": {
+    "method": "NIFTY-GCN_seed2",
+    "dataset": "bailA",
+    "seed": 2,
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed2/bailA/feat.npz",
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed2/bailA/labels.npz",
+    "representations_shape": [
+      7661,
+      16
+    ],
+    "label_encoding": {
+      "0": "predicted_Y=1,S=0",
+      "1": "predicted_Y=1,S=1",
+      "2": "predicted_Y=0,S=0",
+      "3": "predicted_Y=0,S=1"
+    }
   }
 }

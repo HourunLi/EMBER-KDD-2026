@@ -14,106 +14,200 @@
   "uses_sensitive_feature": true,
   "uses_sensitive_counterfactual_augmentation": true,
   "counterfactual_operation": "s <- 1 - s",
+  "evaluation": {
+    "reference": "learn(1).py/evaluate_per_class",
+    "accuracy": "macro mean of per-target-class accuracy",
+    "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+    "dp": "absolute sensitive-group positive-rate gap",
+    "eo": "absolute sensitive-group TPR gap for true label 1",
+    "stored_scale": "fraction",
+    "printed_scale": "percent"
+  },
   "per_seed": [
     {
       "seed": 1,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed1.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed1.json",
+      "visualization": {
+        "method": "NIFTY-GCN_seed1",
+        "dataset": "germanA",
+        "seed": 1,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed1/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed1/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.7213541666666666,
-        "roc_auc": 0.6163033847244374,
-        "parity": 0.05859375,
-        "equality": 0.045362903225806495
+        "accuracy": 0.5589048378522062,
+        "roc_auc": 0.6244905192273613,
+        "parity": 0.015625,
+        "equality": 0.01327284946236551
       }
     },
     {
       "seed": 2,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed2.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed2.json",
+      "visualization": {
+        "method": "NIFTY-GCN_seed2",
+        "dataset": "germanA",
+        "seed": 2,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed2/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed2/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.7265625,
-        "roc_auc": 0.6075137338295233,
-        "parity": 0.0625,
-        "equality": 0.045362903225806495
+        "accuracy": 0.5580542264752791,
+        "roc_auc": 0.6087187666135034,
+        "parity": 0.08203125,
+        "equality": 0.0678763440860215
       }
     },
     {
       "seed": 3,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed3.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed3.json",
+      "visualization": {
+        "method": "NIFTY-GCN_seed3",
+        "dataset": "germanA",
+        "seed": 3,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed3/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed3/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.7239583333333334,
-        "roc_auc": 0.6149211412369306,
-        "parity": 0.046875,
-        "equality": 0.03981854838709675
+        "accuracy": 0.53471557682084,
+        "roc_auc": 0.603685982633351,
+        "parity": 0.01953125,
+        "equality": 0.016969086021505375
       }
     },
     {
       "seed": 4,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed4.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed4.json",
+      "visualization": {
+        "method": "NIFTY-GCN_seed4",
+        "dataset": "germanA",
+        "seed": 4,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed4/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed4/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.7447916666666666,
-        "roc_auc": 0.5948608895977316,
-        "parity": 0.0234375,
-        "equality": 0.003864247311827995
+        "accuracy": 0.5402445507708666,
+        "roc_auc": 0.6110225057593479,
+        "parity": 0.0546875,
+        "equality": 0.040154569892473124
       }
     },
     {
       "seed": 5,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_nifty_gcn_germanA_2_seed5.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/source_only_nifty_gcn_germanA_2_to_germanA_1_seed5.json",
+      "visualization": {
+        "method": "NIFTY-GCN_seed5",
+        "dataset": "germanA",
+        "seed": 5,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed5/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/NIFTY-GCN_seed5/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.7317708333333334,
-        "roc_auc": 0.6333864965443913,
-        "parity": 0.05859375,
-        "equality": 0.03981854838709675
+        "accuracy": 0.540882509303562,
+        "roc_auc": 0.6046429204323941,
+        "parity": 0.078125,
+        "equality": 0.07106854838709675
       }
     }
   ],
   "aggregate": {
     "accuracy": {
-      "mean": 0.7296875,
-      "std": 0.008300717422140213,
+      "mean": 0.5465603402445508,
+      "std": 0.009969166698419317,
       "values": [
-        0.7213541666666666,
-        0.7265625,
-        0.7239583333333334,
-        0.7447916666666666,
-        0.7317708333333334
+        0.5589048378522062,
+        0.5580542264752791,
+        0.53471557682084,
+        0.5402445507708666,
+        0.540882509303562
       ]
     },
     "roc_auc": {
-      "mean": 0.6133971291866029,
-      "std": 0.012558266284556132,
+      "mean": 0.6105121389331916,
+      "std": 0.007482190987440155,
       "values": [
-        0.6163033847244374,
-        0.6075137338295233,
-        0.6149211412369306,
-        0.5948608895977316,
-        0.6333864965443913
+        0.6244905192273613,
+        0.6087187666135034,
+        0.603685982633351,
+        0.6110225057593479,
+        0.6046429204323941
       ]
     },
     "parity": {
       "mean": 0.05,
-      "std": 0.014277864751950833,
+      "std": 0.028103290232195235,
       "values": [
-        0.05859375,
-        0.0625,
-        0.046875,
-        0.0234375,
-        0.05859375
+        0.015625,
+        0.08203125,
+        0.01953125,
+        0.0546875,
+        0.078125
       ]
     },
     "equality": {
-      "mean": 0.0348454301075269,
-      "std": 0.015687778554359832,
+      "mean": 0.041868279569892454,
+      "std": 0.024370803770598557,
       "values": [
-        0.045362903225806495,
-        0.045362903225806495,
-        0.03981854838709675,
-        0.003864247311827995,
-        0.03981854838709675
+        0.01327284946236551,
+        0.0678763440860215,
+        0.016969086021505375,
+        0.040154569892473124,
+        0.07106854838709675
       ]
     }
   }

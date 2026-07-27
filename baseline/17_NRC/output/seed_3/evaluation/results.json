@@ -1,34 +1,74 @@
 {
   "dataset_family": "germanA",
+  "evaluated_node_count": 384,
+  "excluded_from_metrics_count": 0,
   "experiment": "germanA_2_to_germanA_1_strict_original_nrc_gcn",
+  "metric_protocol": {
+    "AUC_ROC": "macro mean of per-target-class one-vs-rest ROC-AUC",
+    "accuracy": "macro mean of the per-target-class accuracies",
+    "diagnostic_rate_scale": "ratio [0, 1]",
+    "dp": "absolute demographic-parity difference",
+    "eo": "absolute equal-opportunity/TPR difference",
+    "prediction_threshold": "P(Y=1) > 0.5",
+    "primary_metric_scale": "percentage [0, 100]",
+    "primary_metrics": [
+      "accuracy",
+      "AUC_ROC",
+      "dp",
+      "eo"
+    ],
+    "reference": "learn(1).py evaluate_per_class",
+    "target_class_metric_scale": "percentage [0, 100]"
+  },
   "nrc": {
-    "accuracy": 0.6770833134651184,
-    "equality": 0.04502683877944946,
-    "parity": 0.0625,
+    "AUC_ROC": 60.3437887648414,
+    "accuracy": 60.930356193514086,
+    "dp": 7.03125,
+    "eo": 4.502688172043012,
     "positive_prediction_rate": {
       "0": 0.6640625,
-      "1": 0.7265625
+      "1": 0.734375
     },
-    "roc_auc": 0.603491050859472,
+    "target_class_AUC_ROC": {
+      "0": 60.34733297891193,
+      "1": 60.34024455077087
+    },
+    "target_class_accuracy": {
+      "0": 47.474747474747474,
+      "1": 74.3859649122807
+    },
     "true_positive_rate": {
-      "0": 0.7291666865348816,
-      "1": 0.774193525314331
+      "0": 0.7291666666666666,
+      "1": 0.7741935483870968
     }
   },
   "seed": 3,
   "source_only": {
-    "accuracy": 0.7369791865348816,
-    "equality": 0.013272881507873535,
-    "parity": 0.05078125,
+    "AUC_ROC": 60.2977139819245,
+    "accuracy": 58.197767145135565,
+    "dp": 7.421875,
+    "eo": 3.377016129032251,
     "positive_prediction_rate": {
-      "0": 0.86328125,
-      "1": 0.9140625
+      "0": 0.82421875,
+      "1": 0.8984375
     },
-    "roc_auc": 0.6029416976785398,
+    "target_class_AUC_ROC": {
+      "0": 60.2977139819245,
+      "1": 60.2977139819245
+    },
+    "target_class_accuracy": {
+      "0": 27.27272727272727,
+      "1": 89.12280701754386
+    },
     "true_positive_rate": {
-      "0": 0.9114583134651184,
-      "1": 0.9247311949729919
+      "0": 0.8802083333333334,
+      "1": 0.9139784946236559
     }
   },
-  "target_label_and_sensitive_attribute_loaded_only_in_final_evaluation": true
+  "target_label_and_sensitive_attribute_loaded_only_in_final_evaluation": true,
+  "target_node_count": 384,
+  "visualization_feature_dim": 256,
+  "visualization_feature_path": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/output/seed_3/evaluation/feat.npz",
+  "visualization_label_path": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/output/seed_3/evaluation/labels.npz",
+  "visualization_node_count": 384
 }

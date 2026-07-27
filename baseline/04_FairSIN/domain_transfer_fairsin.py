@@ -914,23 +914,64 @@ def _safe_group_fairness(
     return demographic_parity, equal_opportunity
 
 
+def _macro_target_metrics(
+    prediction: np.ndarray,
+    probability: np.ndarray,
+    labels: np.ndarray,
+) -> Tuple[float, float]:
+    """Match the per-target-class ACC/AUC aggregation in ``learn(1).py``.
+
+    Values stay on the unit scale here because they also participate in the
+    source-validation trade-off. Formatting converts them to percentages.
+    """
+
+    if labels.size == 0:
+        return float("nan"), float("nan")
+
+    target_accuracies: List[float] = []
+    target_aucs: List[float] = []
+    target_values = np.unique(labels)
+    has_both_binary_classes = target_values.size == 2
+
+    for target_value in target_values:
+        target_mask = labels == target_value
+        target_accuracies.append(
+            float((prediction[target_mask] == labels[target_mask]).mean())
+        )
+
+        if not has_both_binary_classes:
+            target_aucs.append(float("nan"))
+            continue
+
+        one_vs_rest_labels = (labels == target_value).astype(np.int64)
+        one_vs_rest_probability = (
+            probability if target_value == 1 else 1.0 - probability
+        )
+        target_aucs.append(
+            float(roc_auc_score(one_vs_rest_labels, one_vs_rest_probability))
+        )
+
+    accuracy = float(np.mean(target_accuracies))
+    finite_aucs = np.asarray(target_aucs)[np.isfinite(target_aucs)]
+    auc_roc = float(finite_aucs.mean()) if finite_aucs.size else float("nan")
+    return accuracy, auc_roc
+
+
 def evaluate_logits(
     logits: torch.Tensor,
     labels: torch.Tensor,
     sensitive: torch.Tensor,
     mask: torch.Tensor,
 ) -> TransferMetrics:
-    selected_logits = logits[mask].detach().cpu().numpy()
+    selected_probability = torch.sigmoid(logits[mask]).detach().cpu().numpy()
     selected_labels = labels[mask].detach().cpu().numpy().astype(np.int64)
     selected_sensitive = sensitive[mask].detach().cpu().numpy().astype(np.int64)
-    prediction = (selected_logits > 0.0).astype(np.int64)
+    prediction = (selected_probability > 0.5).astype(np.int64)
 
-    accuracy = float((prediction == selected_labels).mean())
+    accuracy, auc_roc = _macro_target_metrics(
+        prediction, selected_probability, selected_labels
+    )
     f1 = float(f1_score(selected_labels, prediction, zero_division=0))
-    if np.unique(selected_labels).size < 2:
-        auc_roc = float("nan")
-    else:
-        auc_roc = float(roc_auc_score(selected_labels, selected_logits))
     demographic_parity, equal_opportunity = _safe_group_fairness(
         prediction, selected_labels, selected_sensitive
     )
@@ -963,13 +1004,16 @@ def set_requires_grad(module: nn.Module, enabled: bool) -> None:
 
 
 def format_metrics(metrics: TransferMetrics) -> str:
+    percentage_values = (
+        metrics.accuracy * 100.0,
+        metrics.auc_roc * 100.0,
+        metrics.f1 * 100.0,
+        metrics.demographic_parity * 100.0,
+        metrics.equal_opportunity * 100.0,
+    )
     return (
         "ACC={:.4f} AUC={:.4f} F1={:.4f} DP={:.4f} EO={:.4f}".format(
-            metrics.accuracy,
-            metrics.auc_roc,
-            metrics.f1,
-            metrics.demographic_parity,
-            metrics.equal_opportunity,
+            *percentage_values
         )
     )
 

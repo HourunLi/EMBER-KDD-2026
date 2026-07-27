@@ -11,7 +11,9 @@ The two stages are intentionally separate processes:
 
 Node identifiers and dataset-specific sensitive attributes are excluded from
 model features. The sensitive attribute is loaded only by the test stage and
-is used only for the final statistical-parity and equal-opportunity metrics.
+is used only for the final demographic-parity and equal-opportunity metrics.
+Final utility metrics use the per-target-class macro evaluation defined in
+``learn(1).py``.
 """
 
 import argparse
@@ -28,11 +30,11 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, roc_auc_score
 from torch import Tensor
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import add_remaining_self_loops, to_undirected
 
+from nifty_metrics import evaluate_per_class
 from visualization_export import (
     method_name_for_seed,
     save_target_visualization_embeddings,
@@ -750,19 +752,6 @@ def train_source(args: argparse.Namespace) -> None:
     print(f"Saved trained source-only model: {checkpoint_path.resolve()}")
 
 
-def _safe_positive_rate(
-    predictions: np.ndarray,
-    mask: np.ndarray,
-    metric_name: str,
-) -> float:
-    count = int(mask.sum())
-    if count == 0:
-        raise ValueError(
-            f"Cannot calculate {metric_name}: the required target subgroup is empty."
-        )
-    return float(predictions[mask].mean())
-
-
 def calculate_target_metrics(
     labels: np.ndarray,
     logits: np.ndarray,
@@ -770,43 +759,26 @@ def calculate_target_metrics(
     sensitive_column: str,
     label_column: str,
 ) -> Dict[str, float]:
-    predictions = (logits > 0.0).astype(np.int64)
+    """Calculate target metrics using ``learn(1).py`` evaluation semantics.
 
-    group_0 = sensitive == 0
-    group_1 = sensitive == 1
-    positive_group_0 = group_0 & (labels == 1)
-    positive_group_1 = group_1 & (labels == 1)
-
-    parity = abs(
-        _safe_positive_rate(
-            predictions,
-            group_0,
-            f"parity for {sensitive_column}=0",
-        )
-        - _safe_positive_rate(
-            predictions,
-            group_1,
-            f"parity for {sensitive_column}=1",
-        )
-    )
-    equality = abs(
-        _safe_positive_rate(
-            predictions,
-            positive_group_0,
-            f"equality for {sensitive_column}=0 and {label_column}=1",
-        )
-        - _safe_positive_rate(
-            predictions,
-            positive_group_1,
-            f"equality for {sensitive_column}=1 and {label_column}=1",
-        )
+    ``sensitive_column`` and ``label_column`` remain in the signature for
+    compatibility with existing callers and saved experiment workflows.
+    """
+    del sensitive_column, label_column
+    labels_array = np.asarray(labels).reshape(-1)
+    accs, auc_rocs, paritys, equalitys = evaluate_per_class(
+        labels=labels_array,
+        logits=logits,
+        sensitive=sensitive,
+        splits={"target": np.arange(labels_array.size)},
+        percentage=False,
     )
 
     return {
-        "accuracy": float(accuracy_score(labels, predictions)),
-        "roc_auc": float(roc_auc_score(labels, logits)),
-        "parity": float(parity),
-        "equality": float(equality),
+        "accuracy": accs["target"],
+        "roc_auc": auc_rocs["target"],
+        "parity": paritys["target"],
+        "equality": equalitys["target"],
     }
 
 
@@ -934,10 +906,11 @@ def test_target(args: argparse.Namespace) -> None:
     print(f"Target domain: {target.domain}")
     print(f"Target graph nodes: {target.labels.shape[0]}")
     print(f"Target labeled nodes evaluated: {int(evaluation_mask.sum())}")
-    print(f"Accuracy: {metrics['accuracy']:.4f}")
-    print(f"ROC_AUC: {metrics['roc_auc']:.4f}")
-    print(f"Parity: {metrics['parity']:.4f}")
-    print(f"Equality: {metrics['equality']:.4f}")
+    print("Evaluation metrics (%)")
+    print(f"Accuracy: {100.0 * metrics['accuracy']:.4f}")
+    print(f"ROC_AUC: {100.0 * metrics['roc_auc']:.4f}")
+    print(f"DP: {100.0 * metrics['parity']:.4f}")
+    print(f"EO: {100.0 * metrics['equality']:.4f}")
     print(f"Saved visualization representations: {feat_path.resolve()}")
     print(f"Saved visualization labels: {labels_path.resolve()}")
 
@@ -954,6 +927,16 @@ def test_target(args: argparse.Namespace) -> None:
             "target_labeled_nodes": int(evaluation_mask.sum()),
             # Backward-compatible alias: metrics are evaluated on labeled nodes.
             "target_nodes": int(evaluation_mask.sum()),
+            "evaluation": {
+                "reference": "learn(1).py/evaluate_per_class",
+                "prediction_threshold": "sigmoid(logit) > 0.5",
+                "accuracy": "macro mean of per-target-class accuracy",
+                "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+                "dp": "absolute sensitive-group positive-rate gap",
+                "eo": "absolute sensitive-group TPR gap for true label 1",
+                "stored_scale": "fraction",
+                "printed_scale": "percent",
+            },
             "metrics": metrics,
             "visualization": {
                 "method": visualization_method,
@@ -1187,6 +1170,15 @@ def run_multiple_seeds(args: argparse.Namespace) -> None:
         "seeds": [int(seed) for seed in seeds],
         "number_of_runs": len(seeds),
         "standard_deviation_ddof": int(args.std_ddof),
+        "evaluation": {
+            "reference": "learn(1).py/evaluate_per_class",
+            "accuracy": "macro mean of per-target-class accuracy",
+            "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+            "dp": "absolute sensitive-group positive-rate gap",
+            "eo": "absolute sensitive-group TPR gap for true label 1",
+            "stored_scale": "fraction",
+            "printed_scale": "percent",
+        },
         "per_seed": per_seed_results,
         "aggregate": aggregate,
     }
@@ -1206,11 +1198,11 @@ def run_multiple_seeds(args: argparse.Namespace) -> None:
         f"± {100.0 * aggregate['roc_auc']['std']:.2f}"
     )
     print(
-        f"Parity: {100.0 * aggregate['parity']['mean']:.2f} "
+        f"DP: {100.0 * aggregate['parity']['mean']:.2f} "
         f"± {100.0 * aggregate['parity']['std']:.2f}"
     )
     print(
-        f"Equality: {100.0 * aggregate['equality']['mean']:.2f} "
+        f"EO: {100.0 * aggregate['equality']['mean']:.2f} "
         f"± {100.0 * aggregate['equality']['std']:.2f}"
     )
     print(f"Saved multi-seed summary: {summary_path.resolve()}")

@@ -6,11 +6,40 @@
   "label_column": "label",
   "sensitive_column": "sens",
   "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/syn/source_only_gcn_syn-2_seed4.pt",
+  "target_graph_nodes": 5000,
+  "target_labeled_nodes": 5000,
   "target_nodes": 5000,
+  "evaluation": {
+    "reference": "learn(1).py/evaluate_per_class",
+    "prediction_threshold": "sigmoid(logit) > 0.5",
+    "accuracy": "macro mean of per-target-class accuracy",
+    "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+    "dp": "absolute sensitive-group positive-rate gap",
+    "eo": "absolute sensitive-group TPR gap for true label 1",
+    "stored_scale": "fraction",
+    "printed_scale": "percent"
+  },
   "metrics": {
-    "accuracy": 0.785,
-    "roc_auc": 0.8641380465997061,
-    "parity": 0.026226219305708454,
-    "equality": 0.05115485817683152
+    "accuracy": 0.8239036636598571,
+    "roc_auc": 0.9043388996200636,
+    "parity": 0.10413093841201071,
+    "equality": 0.06352771981415328
+  },
+  "visualization": {
+    "method": "GCN_seed4",
+    "dataset": "syn",
+    "seed": 4,
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed4/syn/feat.npz",
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed4/syn/labels.npz",
+    "representations_shape": [
+      5000,
+      16
+    ],
+    "label_encoding": {
+      "0": "predicted_Y=1,S=0",
+      "1": "predicted_Y=1,S=1",
+      "2": "predicted_Y=0,S=0",
+      "3": "predicted_Y=0,S=1"
+    }
   }
 }

@@ -22,7 +22,7 @@ python sfg.py \
   --c_lr=0.01 \
   --e_lr=0.001 \
   --ratio=1 \
-  --epochs=100 \
+  --epochs=150 \
   --with_constraint \
   --rho=2 \
   --loss_alpha=0.5

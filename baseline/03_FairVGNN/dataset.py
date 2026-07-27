@@ -555,8 +555,10 @@ def load_germanA_domain(dataset, role, preprocessing_stats=None,
     features = torch.FloatTensor(
         frame[feature_names].to_numpy(dtype=np.float32))
     labels_array = frame[predict_attr].to_numpy(dtype=np.int64).copy()
-    label_mask = torch.BoolTensor(labels_array >= 0)
+    # German encodes the valid negative class as -1.  Convert it to the
+    # model's binary class 0 before deciding which labels are eligible.
     labels_array[labels_array == -1] = 0
+    label_mask = torch.BoolTensor(labels_array >= 0)
     labels = torch.LongTensor(labels_array)
     sens = torch.LongTensor(frame[sens_attr].to_numpy(dtype=np.int64))
     sens_mask = (sens == 0) | (sens == 1)

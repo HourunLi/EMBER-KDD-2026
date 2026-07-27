@@ -1,0 +1,74 @@
+{
+  "dataset_family": "bailA",
+  "evaluated_node_count": 7661,
+  "excluded_from_metrics_count": 0,
+  "experiment": "bailA_2_to_bailA_1_strict_original_nrc_gcn",
+  "metric_protocol": {
+    "AUC_ROC": "macro mean of per-target-class one-vs-rest ROC-AUC",
+    "accuracy": "macro mean of the per-target-class accuracies",
+    "diagnostic_rate_scale": "ratio [0, 1]",
+    "dp": "absolute demographic-parity difference",
+    "eo": "absolute equal-opportunity/TPR difference",
+    "prediction_threshold": "P(Y=1) > 0.5",
+    "primary_metric_scale": "percentage [0, 100]",
+    "primary_metrics": [
+      "accuracy",
+      "AUC_ROC",
+      "dp",
+      "eo"
+    ],
+    "reference": "learn(1).py evaluate_per_class",
+    "target_class_metric_scale": "percentage [0, 100]"
+  },
+  "nrc": {
+    "AUC_ROC": 55.22845843849401,
+    "accuracy": 52.37289741332942,
+    "dp": 11.452002698889775,
+    "eo": 9.738883551911549,
+    "positive_prediction_rate": {
+      "0": 0.6635294117647059,
+      "1": 0.5490093847758082
+    },
+    "target_class_AUC_ROC": {
+      "0": 55.3968898768664,
+      "1": 55.060027000121615
+    },
+    "target_class_accuracy": {
+      "0": 40.89775561097257,
+      "1": 63.84803921568627
+    },
+    "true_positive_rate": {
+      "0": 0.6848673946957878,
+      "1": 0.5874785591766724
+    }
+  },
+  "seed": 1,
+  "source_only": {
+    "AUC_ROC": 88.28551578569915,
+    "accuracy": 82.66772971417609,
+    "dp": 5.056063301232902,
+    "eo": 5.506645651760889,
+    "positive_prediction_rate": {
+      "0": 0.26823529411764707,
+      "1": 0.21767466110531805
+    },
+    "target_class_AUC_ROC": {
+      "0": 88.28551578569915,
+      "1": 88.28551578569915
+    },
+    "target_class_accuracy": {
+      "0": 96.5854594283522,
+      "1": 68.75
+    },
+    "true_positive_rate": {
+      "0": 0.7137285491419657,
+      "1": 0.6586620926243568
+    }
+  },
+  "target_label_and_sensitive_attribute_loaded_only_in_final_evaluation": true,
+  "target_node_count": 7661,
+  "visualization_feature_dim": 256,
+  "visualization_feature_path": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/bailA_2_to_bailA_1_nrc_gcn/seed_1/evaluation/feat.npz",
+  "visualization_label_path": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/bailA_2_to_bailA_1_nrc_gcn/seed_1/evaluation/labels.npz",
+  "visualization_node_count": 7661
+}

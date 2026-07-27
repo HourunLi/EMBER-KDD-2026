@@ -11,14 +11,40 @@
   ],
   "number_of_runs": 5,
   "standard_deviation_ddof": 0,
+  "evaluation": {
+    "reference": "learn(1).py/evaluate_per_class",
+    "accuracy": "macro mean of per-target-class accuracy",
+    "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+    "dp": "absolute sensitive-group positive-rate gap",
+    "eo": "absolute sensitive-group TPR gap for true label 1",
+    "stored_scale": "fraction",
+    "printed_scale": "percent"
+  },
   "per_seed": [
     {
       "seed": 1,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed1.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed1.json",
+      "visualization": {
+        "method": "GCN_seed1",
+        "dataset": "germanA",
+        "seed": 1,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed1/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed1/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.7057291666666666,
-        "roc_auc": 0.5927698032961191,
+        "accuracy": 0.5545454545454546,
+        "roc_auc": 0.5927343611554138,
         "parity": 0.05078125,
         "equality": 0.07342069892473113
       }
@@ -27,9 +53,26 @@
       "seed": 2,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed2.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed2.json",
+      "visualization": {
+        "method": "GCN_seed2",
+        "dataset": "germanA",
+        "seed": 2,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed2/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed2/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.7473958333333334,
-        "roc_auc": 0.649867091972355,
+        "accuracy": 0.5529505582137161,
+        "roc_auc": 0.6500088605351764,
         "parity": 0.01953125,
         "equality": 0.003864247311827995
       }
@@ -38,9 +81,26 @@
       "seed": 3,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed3.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed3.json",
+      "visualization": {
+        "method": "GCN_seed3",
+        "dataset": "germanA",
+        "seed": 3,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed3/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed3/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.7239583333333334,
-        "roc_auc": 0.6402622718412193,
+        "accuracy": 0.5536416799574695,
+        "roc_auc": 0.6402622718412192,
         "parity": 0.05078125,
         "equality": 0.034946236559139754
       }
@@ -49,9 +109,26 @@
       "seed": 4,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed4.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed4.json",
+      "visualization": {
+        "method": "GCN_seed4",
+        "dataset": "germanA",
+        "seed": 4,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed4/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed4/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.5625,
-        "roc_auc": 0.5963494595073542,
+        "accuracy": 0.573418394471026,
+        "roc_auc": 0.5963140173666489,
         "parity": 0.1484375,
         "equality": 0.19522849462365593
       }
@@ -60,9 +137,26 @@
       "seed": 5,
       "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/germanA/source_only_gcn_germanA_2_seed5.pt",
       "result_json": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/results/germanA/source_only_gcn_germanA_2_to_germanA_1_seed5.json",
+      "visualization": {
+        "method": "GCN_seed5",
+        "dataset": "germanA",
+        "seed": 5,
+        "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed5/germanA/feat.npz",
+        "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed5/germanA/labels.npz",
+        "representations_shape": [
+          384,
+          16
+        ],
+        "label_encoding": {
+          "0": "predicted_Y=1,S=0",
+          "1": "predicted_Y=1,S=1",
+          "2": "predicted_Y=0,S=0",
+          "3": "predicted_Y=0,S=1"
+        }
+      },
       "metrics": {
-        "accuracy": 0.703125,
-        "roc_auc": 0.6305511252879674,
+        "accuracy": 0.5494949494949495,
+        "roc_auc": 0.6304093567251463,
         "parity": 0.1015625,
         "equality": 0.10534274193548387
       }
@@ -70,25 +164,25 @@
   ],
   "aggregate": {
     "accuracy": {
-      "mean": 0.6885416666666667,
-      "std": 0.06498113374707737,
+      "mean": 0.5568102073365232,
+      "std": 0.00847833049003191,
       "values": [
-        0.7057291666666666,
-        0.7473958333333334,
-        0.7239583333333334,
-        0.5625,
-        0.703125
+        0.5545454545454546,
+        0.5529505582137161,
+        0.5536416799574695,
+        0.573418394471026,
+        0.5494949494949495
       ]
     },
     "roc_auc": {
-      "mean": 0.6219599503810029,
-      "std": 0.02321875853072824,
+      "mean": 0.6219457735247209,
+      "std": 0.02325922070956709,
       "values": [
-        0.5927698032961191,
-        0.649867091972355,
-        0.6402622718412193,
-        0.5963494595073542,
-        0.6305511252879674
+        0.5927343611554138,
+        0.6500088605351764,
+        0.6402622718412192,
+        0.5963140173666489,
+        0.6304093567251463
       ]
     },
     "parity": {

@@ -7,4 +7,4 @@ python fairvgnn_domain.py \
   --target_dataset='germanA_1' \
   --encoder='GCN' \
   --epochs=500 \
-  --gpu=0 
+  --gpu=4

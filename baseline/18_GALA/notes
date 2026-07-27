@@ -1,4 +1,5 @@
 7.25
+torch110pt38
 
 bailA:
 python3 main.py \
@@ -23,8 +24,8 @@ python3 main.py \
   --num-gc-layers 3 \
   --lr 0.001 \
   --conv_type GCN \
-  --source-epochs 200 \
-  --tta_epoch 50 \
+  --source-epochs 100 \
+  --tta_epoch 20 \
   --seeds 1,2,3,4,5 \
   --output-dir results/germanA_GALA
 
@@ -38,7 +39,7 @@ python3 main.py \
   --lr 0.001 \
   --conv_type GCN \
   --source-epochs 200 \
-  --tta_epoch 50 \
+  --tta_epoch 20 \
   --seeds 1,2,3,4,5 \
   --output-dir results/pokec_GALA \
   --device cuda \
@@ -54,11 +55,11 @@ python3 main.py \
   --lr 0.001 \
   --conv_type GCN \
   --source-epochs 200 \
-  --tta_epoch 50 \
+  --tta_epoch 20 \
   --seeds 1,2,3,4,5 \
   --output-dir results/syn_GALA \
   --device cuda \
-  --gpu-id 0 
+  --gpu-id 7
 
 
 

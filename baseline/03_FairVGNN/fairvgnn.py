@@ -284,8 +284,8 @@ if __name__ == '__main__':
 
     acc, f1, auc_roc, parity, equality = run(data, args)
     print('======' + args.dataset + args.encoder + '======')
-    print('auc_roc:', np.mean(auc_roc) * 100, np.std(auc_roc) * 100)
-    print('Acc:', np.mean(acc) * 100, np.std(acc) * 100)
-    print('f1:', np.mean(f1) * 100, np.std(f1) * 100)
-    print('parity:', np.mean(parity) * 100, np.std(parity) * 100)
-    print('equality:', np.mean(equality) * 100, np.std(equality) * 100)
+    print('auc_roc:', np.mean(auc_roc), np.std(auc_roc))
+    print('Acc:', np.mean(acc), np.std(acc))
+    print('f1:', np.mean(f1), np.std(f1))
+    print('parity:', np.mean(parity), np.std(parity))
+    print('equality:', np.mean(equality), np.std(equality))

@@ -6,11 +6,40 @@
   "label_column": "RECID",
   "sensitive_column": "WHITE",
   "checkpoint": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/checkpoints/source_only_gcn_bailA_2_seed3.pt",
+  "target_graph_nodes": 7661,
+  "target_labeled_nodes": 7661,
   "target_nodes": 7661,
+  "evaluation": {
+    "reference": "learn(1).py/evaluate_per_class",
+    "prediction_threshold": "sigmoid(logit) > 0.5",
+    "accuracy": "macro mean of per-target-class accuracy",
+    "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+    "dp": "absolute sensitive-group positive-rate gap",
+    "eo": "absolute sensitive-group TPR gap for true label 1",
+    "stored_scale": "fraction",
+    "printed_scale": "percent"
+  },
   "metrics": {
-    "accuracy": 0.6989949092807728,
-    "roc_auc": 0.624219287753467,
-    "parity": 0.030929140512652747,
-    "equality": 0.043248247940209206
+    "accuracy": 0.7418686974118249,
+    "roc_auc": 0.8774880060407051,
+    "parity": 0.04277576724120305,
+    "equality": 0.06410170643532437
+  },
+  "visualization": {
+    "method": "GCN_seed3",
+    "dataset": "bailA",
+    "seed": 3,
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed3/bailA/feat.npz",
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/02_NIFTY/visualization/embeddings/GCN_seed3/bailA/labels.npz",
+    "representations_shape": [
+      7661,
+      16
+    ],
+    "label_encoding": {
+      "0": "predicted_Y=1,S=0",
+      "1": "predicted_Y=1,S=1",
+      "2": "predicted_Y=0,S=0",
+      "3": "predicted_Y=0,S=1"
+    }
   }
 }

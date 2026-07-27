@@ -8,4 +8,4 @@ python fairvgnn_domain.py \
   --encoder='GCN' \
   --prop='spmm' \
   --epochs=500 \
-  --gpu=0
+  --gpu=7

@@ -42,7 +42,7 @@ for SEED in 1 2 3 4 5; do
     --align_target_features_by_name \
     --device "${DEVICE}" \
     --seed "${SEED}" \
-    --epochs 1000 \
+    --epochs 500 \
     --lr 0.01 \
     --hidden_dim 128 \
     --encoder_dim 128 \

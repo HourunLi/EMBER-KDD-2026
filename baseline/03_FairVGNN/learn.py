@@ -1,7 +1,63 @@
+import numpy as np
 import torch.nn.functional as F
 import torch
-from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from utils import fair_metric, InfoNCE, random_aug, consis_loss
+
+
+def evaluate_per_target_class(output, data):
+    """Evaluate logits with the per-target-class protocol from ``learn(1).py``.
+
+    Accuracy and F1 are computed independently for every target class and then
+    macro-averaged.  AUC is likewise computed one-vs-rest for each target class;
+    for class 0 its score is ``1 - P(y=1)``.  DP and EO are computed from the
+    thresholded predictions.  All returned values are percentages.
+    """
+    probabilities = torch.sigmoid(output.view(-1)).detach().cpu().numpy()
+    labels = data.y.detach().cpu().numpy()
+    sensitive = data.sens.detach().cpu().numpy()
+    all_mask = data.train_mask | data.val_mask | data.test_mask
+    splits = {
+        'all': all_mask.detach().cpu().numpy(),
+        'train': data.train_mask.detach().cpu().numpy(),
+        'val': data.val_mask.detach().cpu().numpy(),
+        'test': data.test_mask.detach().cpu().numpy(),
+    }
+
+    accs, auc_rocs, f1s, paritys, equalitys = {}, {}, {}, {}, {}
+    for split_name, mask in splits.items():
+        y_true = labels[mask]
+        sens = sensitive[mask]
+        prob = probabilities[mask]
+        pred = (prob > 0.5).astype(int)
+        has_both_classes = len(np.unique(y_true)) == 2
+
+        target_metrics = []
+        for target in np.unique(y_true):
+            target_idx = y_true == target
+            target_truth = target_idx.astype(int)
+            target_pred = (pred == target).astype(int)
+            target_prob = prob if target == 1 else 1 - prob
+            target_metrics.append({
+                'acc': accuracy_score(
+                    y_true[target_idx], pred[target_idx]) * 100,
+                'auc': roc_auc_score(target_truth, target_prob) * 100
+                       if has_both_classes else float('nan'),
+                'f1': f1_score(
+                    target_truth, target_pred, zero_division=0) * 100,
+            })
+
+        dp, eo = fair_metric(pred, y_true, sens)
+        accs[split_name] = float(np.nanmean(
+            [metrics['acc'] for metrics in target_metrics]))
+        auc_rocs[split_name] = float(np.nanmean(
+            [metrics['auc'] for metrics in target_metrics]))
+        f1s[split_name] = float(np.nanmean(
+            [metrics['f1'] for metrics in target_metrics]))
+        paritys[split_name] = dp * 100
+        equalitys[split_name] = eo * 100
+
+    return accs, auc_rocs, f1s, paritys, equalitys
 
 
 def train(model, data, optimizer, args):
@@ -331,31 +387,4 @@ def evaluate_ged3(x, classifier, discriminator, generator, encoder, data, args):
             # loss_val = F.mse_loss(output.view(-1), 0.5 * torch.ones_like(output.view(-1))) + F.binary_cross_entropy_with_logits(
             #     output[data.val_mask], data.y[data.val_mask].unsqueeze(1))
 
-    accs, auc_rocs, F1s, paritys, equalitys = {}, {}, {}, {}, {}
-
-    pred_val = (output[data.val_mask].squeeze() > 0).type_as(data.y)
-    pred_test = (output[data.test_mask].squeeze() > 0).type_as(data.y)
-
-    accs['val'] = pred_val.eq(
-        data.y[data.val_mask]).sum().item() / data.val_mask.sum().item()
-    accs['test'] = pred_test.eq(
-        data.y[data.test_mask]).sum().item() / data.test_mask.sum().item()
-
-    F1s['val'] = f1_score(data.y[data.val_mask].cpu(
-    ).numpy(), pred_val.cpu().numpy())
-
-    F1s['test'] = f1_score(data.y[data.test_mask].cpu(
-    ).numpy(), pred_test.cpu().numpy())
-
-    auc_rocs['val'] = roc_auc_score(
-        data.y[data.val_mask].cpu().numpy(), output[data.val_mask].detach().cpu().numpy())
-    auc_rocs['test'] = roc_auc_score(
-        data.y[data.test_mask].cpu().numpy(), output[data.test_mask].detach().cpu().numpy())
-
-    paritys['val'], equalitys['val'] = fair_metric(pred_val.cpu().numpy(), data.y[data.val_mask].cpu(
-    ).numpy(), data.sens[data.val_mask].cpu().numpy())
-
-    paritys['test'], equalitys['test'] = fair_metric(pred_test.cpu().numpy(), data.y[data.test_mask].cpu(
-    ).numpy(), data.sens[data.test_mask].cpu().numpy())
-
-    return accs, auc_rocs, F1s, paritys, equalitys
+    return evaluate_per_target_class(output, data)

@@ -11,11 +11,21 @@
   "target_graph_nodes": 66569,
   "target_labeled_nodes": 8797,
   "target_nodes": 8797,
+  "evaluation": {
+    "reference": "learn(1).py/evaluate_per_class",
+    "prediction_threshold": "sigmoid(logit) > 0.5",
+    "accuracy": "macro mean of per-target-class accuracy",
+    "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+    "dp": "absolute sensitive-group positive-rate gap",
+    "eo": "absolute sensitive-group TPR gap for true label 1",
+    "stored_scale": "fraction",
+    "printed_scale": "percent"
+  },
   "metrics": {
-    "accuracy": 0.5853131749460043,
-    "roc_auc": 0.7175581102461575,
-    "parity": 0.014405700577352465,
-    "equality": 0.015002746950884549
+    "accuracy": 0.5850437329998339,
+    "roc_auc": 0.6378697107793012,
+    "parity": 0.03964297257946381,
+    "equality": 0.032122477383437764
   },
   "visualization": {
     "method": "NIFTY-GCN_seed1",

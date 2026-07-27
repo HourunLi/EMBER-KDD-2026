@@ -3,7 +3,8 @@
 This entry point reuses the dataset processing implemented in
 ``source_only_gcn.py`` so GCN and NIFTY-GCN see exactly the same source/target
 features, graphs, label masks, sensitive-attribute exclusions, normalization,
-and evaluation metrics.
+and evaluation population. NIFTY's final metrics use the per-target-class
+macro evaluation defined in ``learn(1).py``.
 
 Unlike the plain-GCN baseline, NIFTY appends the binary sensitive attribute to
 its model input so the second augmented view can apply the paper's
@@ -30,13 +31,13 @@ from torch_geometric.utils import dropout_adj
 from source_only_gcn import (
     PROJECT_ROOT,
     SourceMinMaxScaler,
-    calculate_target_metrics,
     load_domain,
     resolve_data_dir,
     resolve_device,
     schema_for_domain,
     set_seed,
 )
+from nifty_metrics import evaluate_per_class
 from visualization_export import (
     method_name_for_seed,
     save_target_visualization_embeddings,
@@ -528,13 +529,19 @@ def test_target(args: argparse.Namespace) -> None:
         representations = embeddings.detach().cpu().numpy()
 
     evaluation_mask = target.labeled_mask
-    metrics = calculate_target_metrics(
+    accs, auc_rocs, paritys, equalitys = evaluate_per_class(
         labels=target.labels[evaluation_mask],
         logits=logits[evaluation_mask],
         sensitive=target.sensitive[evaluation_mask],
-        sensitive_column=target.sensitive_column,
-        label_column=target.label_column,
+        splits={"target": np.arange(int(evaluation_mask.sum()))},
+        percentage=False,
     )
+    metrics = {
+        "accuracy": accs["target"],
+        "roc_auc": auc_rocs["target"],
+        "parity": paritys["target"],
+        "equality": equalitys["target"],
+    }
     training_config = checkpoint.get("training_config", {})
     if "seed" not in training_config:
         raise ValueError("Checkpoint does not record its training seed.")
@@ -558,10 +565,11 @@ def test_target(args: argparse.Namespace) -> None:
     print("Training counterfactual operation: s <- 1 - s")
     print(f"Target graph nodes: {target.labels.shape[0]}")
     print(f"Target labeled nodes evaluated: {int(evaluation_mask.sum())}")
-    print(f"Accuracy: {metrics['accuracy']:.4f}")
-    print(f"ROC_AUC: {metrics['roc_auc']:.4f}")
-    print(f"Parity: {metrics['parity']:.4f}")
-    print(f"Equality: {metrics['equality']:.4f}")
+    print("Evaluation metrics (%)")
+    print(f"Accuracy: {100.0 * metrics['accuracy']:.4f}")
+    print(f"ROC_AUC: {100.0 * metrics['roc_auc']:.4f}")
+    print(f"DP: {100.0 * metrics['parity']:.4f}")
+    print(f"EO: {100.0 * metrics['equality']:.4f}")
     print(f"Saved visualization representations: {feat_path.resolve()}")
     print(f"Saved visualization labels: {labels_path.resolve()}")
 
@@ -579,6 +587,16 @@ def test_target(args: argparse.Namespace) -> None:
             "target_graph_nodes": int(target.labels.shape[0]),
             "target_labeled_nodes": int(evaluation_mask.sum()),
             "target_nodes": int(evaluation_mask.sum()),
+            "evaluation": {
+                "reference": "learn(1).py/evaluate_per_class",
+                "prediction_threshold": "sigmoid(logit) > 0.5",
+                "accuracy": "macro mean of per-target-class accuracy",
+                "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+                "dp": "absolute sensitive-group positive-rate gap",
+                "eo": "absolute sensitive-group TPR gap for true label 1",
+                "stored_scale": "fraction",
+                "printed_scale": "percent",
+            },
             "metrics": metrics,
             "visualization": {
                 "method": visualization_method,
@@ -799,6 +817,15 @@ def run_multiple_seeds(args: argparse.Namespace) -> None:
         "uses_sensitive_feature": True,
         "uses_sensitive_counterfactual_augmentation": True,
         "counterfactual_operation": "s <- 1 - s",
+        "evaluation": {
+            "reference": "learn(1).py/evaluate_per_class",
+            "accuracy": "macro mean of per-target-class accuracy",
+            "roc_auc": "macro one-vs-rest target-class ROC-AUC",
+            "dp": "absolute sensitive-group positive-rate gap",
+            "eo": "absolute sensitive-group TPR gap for true label 1",
+            "stored_scale": "fraction",
+            "printed_scale": "percent",
+        },
         "per_seed": per_seed_results,
         "aggregate": aggregate,
     }
@@ -818,11 +845,11 @@ def run_multiple_seeds(args: argparse.Namespace) -> None:
         f"± {100.0 * aggregate['roc_auc']['std']:.2f}"
     )
     print(
-        f"Parity: {100.0 * aggregate['parity']['mean']:.2f} "
+        f"DP: {100.0 * aggregate['parity']['mean']:.2f} "
         f"± {100.0 * aggregate['parity']['std']:.2f}"
     )
     print(
-        f"Equality: {100.0 * aggregate['equality']['mean']:.2f} "
+        f"EO: {100.0 * aggregate['equality']['mean']:.2f} "
         f"± {100.0 * aggregate['equality']['std']:.2f}"
     )
     print(f"Saved multi-seed summary: {summary_path.resolve()}")

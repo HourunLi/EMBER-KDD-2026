@@ -37,7 +37,7 @@ for SEED in 1 2 3 4 5; do
     --sensitive_group_one "Male" \
     --device "${DEVICE}" \
     --seed "${SEED}" \
-    --epochs 1000 \
+    --epochs 500 \
     --lr 0.01 \
     --hidden_dim 128 \
     --encoder_dim 128 \

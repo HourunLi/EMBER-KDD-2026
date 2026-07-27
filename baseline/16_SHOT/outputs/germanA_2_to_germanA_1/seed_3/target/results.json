@@ -1,4 +1,14 @@
 {
+  "evaluated_prediction_counts": {
+    "source_only": [
+      174,
+      210
+    ],
+    "strict_shot": [
+      162,
+      222
+    ]
+  },
   "excluded_feature_columns": [
     "user_id",
     "GoodCustomer",
@@ -44,6 +54,8 @@
     "YearsAtCurrentJob_geq_4",
     "JobClassIsSkilled"
   ],
+  "ignore_index": -1,
+  "ignored_label_values": [],
   "label_column": "GoodCustomer",
   "label_mapping": {
     "-1": 0,
@@ -51,50 +63,51 @@
   },
   "mean_probabilities": {
     "source_only": [
-      0.4837447702884674,
-      0.5162551999092102
+      0.4819504916667938,
+      0.5180495381355286
     ],
     "strict_shot": [
-      0.43198445439338684,
-      0.5680155754089355
+      0.4202425479888916,
+      0.5797574520111084
     ]
   },
   "prediction_counts": {
     "source_only": [
-      169,
-      215
+      174,
+      210
     ],
     "strict_shot": [
-      166,
-      218
+      162,
+      222
     ]
   },
+  "reported_metric_unit": "percentage points",
   "reported_metrics": {
     "source_only": {
-      "accuracy": 0.578125,
-      "equality": 0.1619623601436615,
-      "parity": 0.18359375,
-      "roc_auc": 0.5838029416976785
+      "AUC_ROC": 60.2729044834308,
+      "accuracy": 56.90058479532164,
+      "dp": 12.890625,
+      "eo": 8.249330520629883
     },
     "strict_shot": {
-      "accuracy": 0.5911458134651184,
-      "equality": 0.08702957630157471,
-      "parity": 0.0546875,
-      "roc_auc": 0.6148148148148148
+      "AUC_ROC": 61.57363104731526,
+      "accuracy": 57.64486975013291,
+      "dp": 0.0,
+      "eo": 2.2849440574645996
     }
   },
-  "reported_metrics_percent": {
+  "reported_metrics_display": {
     "source_only": {
-      "accuracy": "57.81%",
-      "equality": "16.20%",
-      "parity": "18.36%",
-      "roc_auc": "58.38%"
+      "AUC_ROC": "60.27%",
+      "accuracy": "56.90%",
+      "dp": "12.89%",
+      "eo": "8.25%"
     },
     "strict_shot": {
-      "accuracy": "59.11%",
-      "equality": "8.70%",
-      "parity": "5.47%",
-      "roc_auc": "61.48%"
+      "AUC_ROC": "61.57%",
+      "accuracy": "57.64%",
+      "dp": "0.00%",
+      "eo": "2.28%"
     }
   },
   "seed": 3,
@@ -106,78 +119,88 @@
   "source_domain": "germanA_2",
   "source_only": {
     "classification": {
-      "accuracy": 0.578125,
-      "balanced_accuracy": 0.5641679957469431,
-      "macro_f1": 0.5357611940298507,
+      "balanced_accuracy": 0.5690058479532164,
+      "macro_f1": 0.5368187368187368,
+      "macro_target_roc_auc": 0.602729044834308,
+      "overall_accuracy": 0.5755208134651184,
       "per_class": [
         {
+          "accuracy": 0.5555555555555556,
           "class": 0,
-          "f1": 0.3955223880597015,
-          "precision": 0.3136094674556213,
-          "recall": 0.5353535353535354,
+          "f1": 0.40293040293040294,
+          "precision": 0.3160919540229885,
+          "recall": 0.5555555555555556,
+          "roc_auc": 0.602729044834308,
           "support": 99
         },
         {
+          "accuracy": 0.5824561403508772,
           "class": 1,
-          "f1": 0.6759999999999998,
-          "precision": 0.786046511627907,
-          "recall": 0.5929824561403508,
+          "f1": 0.6707070707070707,
+          "precision": 0.7904761904761904,
+          "recall": 0.5824561403508772,
+          "roc_auc": 0.602729044834308,
           "support": 285
         }
       ],
-      "roc_auc": 0.5838029416976785
+      "roc_auc": 0.602729044834308
     },
     "fairness": {
-      "demographic_parity_difference": 0.18359375,
-      "equal_opportunity_difference": 0.1619623601436615,
-      "equalized_odds_difference": 0.23258927464485168,
+      "demographic_parity_difference": 0.12890625,
+      "equal_opportunity_difference": 0.08249330520629883,
+      "equalized_odds_difference": 0.2455357015132904,
       "false_positive_rate": {
-        "0": 0.3142857253551483,
-        "1": 0.546875
+        "0": 0.2857142984867096,
+        "1": 0.53125
       },
       "group_sizes": {
         "0": 128,
         "1": 256
       },
       "positive_prediction_rate": {
-        "0": 0.4375,
-        "1": 0.62109375
+        "0": 0.4609375,
+        "1": 0.58984375
       },
       "true_positive_rate": {
-        "0": 0.4838709533214569,
-        "1": 0.6458333134651184
+        "0": 0.5268816947937012,
+        "1": 0.609375
       }
     }
   },
   "strict_shot": {
     "classification": {
-      "accuracy": 0.5911458134651184,
-      "balanced_accuracy": 0.5762360446570973,
-      "macro_f1": 0.5477099666154018,
+      "balanced_accuracy": 0.5764486975013291,
+      "macro_f1": 0.5502051735473485,
+      "macro_target_roc_auc": 0.6157363104731526,
+      "overall_accuracy": 0.5963541865348816,
       "per_class": [
         {
+          "accuracy": 0.5353535353535354,
           "class": 0,
-          "f1": 0.4075471698113207,
-          "precision": 0.3253012048192771,
-          "recall": 0.5454545454545454,
+          "f1": 0.4061302681992337,
+          "precision": 0.3271604938271605,
+          "recall": 0.5353535353535354,
+          "roc_auc": 0.6157363104731526,
           "support": 99
         },
         {
+          "accuracy": 0.6175438596491228,
           "class": 1,
-          "f1": 0.687872763419483,
-          "precision": 0.7935779816513762,
-          "recall": 0.6070175438596491,
+          "f1": 0.6942800788954635,
+          "precision": 0.7927927927927928,
+          "recall": 0.6175438596491228,
+          "roc_auc": 0.6157363104731526,
           "support": 285
         }
       ],
-      "roc_auc": 0.6148148148148148
+      "roc_auc": 0.6157363104731526
     },
     "fairness": {
-      "demographic_parity_difference": 0.0546875,
-      "equal_opportunity_difference": 0.08702957630157471,
-      "equalized_odds_difference": 0.08702957630157471,
+      "demographic_parity_difference": 0.0,
+      "equal_opportunity_difference": 0.022849440574645996,
+      "equalized_odds_difference": 0.07678574323654175,
       "false_positive_rate": {
-        "0": 0.48571428656578064,
+        "0": 0.5142857432365417,
         "1": 0.4375
       },
       "group_sizes": {
@@ -185,15 +208,40 @@
         "1": 256
       },
       "positive_prediction_rate": {
-        "0": 0.53125,
-        "1": 0.5859375
+        "0": 0.578125,
+        "1": 0.578125
       },
       "true_positive_rate": {
-        "0": 0.5483871102333069,
-        "1": 0.6354166865348816
+        "0": 0.602150559425354,
+        "1": 0.625
       }
     }
   },
   "target_domain": "germanA_1",
-  "target_labels_and_sensitive_loaded_after_adaptation": true
+  "target_evaluation_storage": "csv_columns",
+  "target_labels_and_sensitive_loaded_after_adaptation": true,
+  "target_node_counts": {
+    "evaluated_labeled": 384,
+    "ignored_unlabeled": 0,
+    "total": 384
+  },
+  "visualization_export": {
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_3/target/feat.npz",
+    "label_encoding": {
+      "0": "predicted_Y=1, sensitive_S=0",
+      "1": "predicted_Y=1, sensitive_S=1",
+      "2": "predicted_Y=0, sensitive_S=0",
+      "3": "predicted_Y=0, sensitive_S=1"
+    },
+    "label_key": "labels",
+    "label_shape": [
+      384
+    ],
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_3/target/labels.npz",
+    "representation_key": "representations",
+    "representation_shape": [
+      384,
+      256
+    ]
+  }
 }

@@ -1,138 +1,141 @@
 {
   "aggregate": {
     "source_only": {
+      "AUC_ROC": {
+        "display": "58.85% +/- 1.65%",
+        "mean": 58.84954811270601,
+        "mean_percent": "58.85%",
+        "std": 1.6538793087705972,
+        "std_percent": "1.65%",
+        "values": [
+          59.47900053163211,
+          56.82792840687577,
+          60.2729044834308,
+          57.34538366117313,
+          60.32252348041822
+        ]
+      },
       "accuracy": {
-        "display": "61.77% +/- 10.08%",
-        "mean": 0.6177083194255829,
-        "mean_percent": "61.77%",
-        "std": 0.10081522073703225,
-        "std_percent": "10.08%",
+        "display": "54.26% +/- 2.52%",
+        "mean": 54.2615629984051,
+        "mean_percent": "54.26%",
+        "std": 2.5212974427761834,
+        "std_percent": "2.52%",
         "values": [
-          0.6302083134651184,
-          0.4713541567325592,
-          0.578125,
-          0.6692708134651184,
-          0.7395833134651184
+          56.204146730462526,
+          53.64167995746942,
+          56.90058479532164,
+          54.0776182881446,
+          50.48378522062732
         ]
       },
-      "equality": {
-        "display": "8.52% +/- 6.74%",
-        "mean": 0.08518145084381104,
-        "mean_percent": "8.52%",
-        "std": 0.06743774134179249,
-        "std_percent": "6.74%",
+      "dp": {
+        "display": "7.81% +/- 6.58%",
+        "mean": 7.8125,
+        "mean_percent": "7.81%",
+        "std": 6.577132125188569,
+        "std_percent": "6.58%",
         "values": [
-          0.132224440574646,
-          0.014616936445236206,
-          0.1619623601436615,
-          0.10147851705551147,
-          0.015625
+          7.03125,
+          2.34375,
+          12.890625,
+          16.015625,
+          0.78125
         ]
       },
-      "parity": {
-        "display": "8.75% +/- 8.22%",
-        "mean": 0.0875,
-        "mean_percent": "8.75%",
-        "std": 0.0822448855030284,
-        "std_percent": "8.22%",
+      "eo": {
+        "display": "6.09% +/- 5.39%",
+        "mean": 6.088710427284241,
+        "mean_percent": "6.09%",
+        "std": 5.385348809912278,
+        "std_percent": "5.39%",
         "values": [
-          0.1484375,
-          0.0,
-          0.18359375,
-          0.09765625,
-          0.0078125
-        ]
-      },
-      "roc_auc": {
-        "display": "58.50% +/- 1.47%",
-        "mean": 0.5849937976253766,
-        "mean_percent": "58.50%",
-        "std": 0.014679970389234314,
-        "std_percent": "1.47%",
-        "values": [
-          0.5866028708133971,
-          0.5750487329434698,
-          0.5838029416976785,
-          0.5708665603402445,
-          0.6086478823320929
+          6.9556474685668945,
+          0.16801059246063232,
+          8.249330520629883,
+          13.508063554763794,
+          1.5625
         ]
       }
     },
     "strict_shot": {
+      "AUC_ROC": {
+        "display": "60.52% +/- 1.84%",
+        "mean": 60.51887293992557,
+        "mean_percent": "60.52%",
+        "std": 1.8390964036776383,
+        "std_percent": "1.84%",
+        "values": [
+          60.9144072301967,
+          57.35956051745526,
+          61.57363104731526,
+          62.01311359206096,
+          60.73365231259969
+        ]
+      },
       "accuracy": {
-        "display": "59.48% +/- 3.60%",
-        "mean": 0.5947916626930236,
-        "mean_percent": "59.48%",
-        "std": 0.03597147163479008,
-        "std_percent": "3.60%",
+        "display": "56.23% +/- 4.24%",
+        "mean": 56.225412014885706,
+        "mean_percent": "56.23%",
+        "std": 4.239061902494239,
+        "std_percent": "4.24%",
         "values": [
-          0.5598958134651184,
-          0.5598958134651184,
-          0.5911458134651184,
-          0.6354166865348816,
-          0.6276041865348816
+          55.73631047315257,
+          49.25571504518873,
+          57.64486975013291,
+          60.43062200956937,
+          58.0595427963849
         ]
       },
-      "equality": {
-        "display": "9.82% +/- 3.30%",
-        "mean": 0.09815189242362976,
-        "mean_percent": "9.82%",
-        "std": 0.03296081323133216,
-        "std_percent": "3.30%",
+      "dp": {
+        "display": "5.00% +/- 5.93%",
+        "mean": 5.0,
+        "mean_percent": "5.00%",
+        "std": 5.926696585946931,
+        "std_percent": "5.93%",
         "values": [
-          0.1255040466785431,
-          0.08114922046661377,
-          0.08702957630157471,
-          0.05863577127456665,
-          0.13844084739685059
+          6.640625,
+          0.390625,
+          0.0,
+          3.515625,
+          14.453125
         ]
       },
-      "parity": {
-        "display": "6.25% +/- 5.28%",
-        "mean": 0.0625,
-        "mean_percent": "6.25%",
-        "std": 0.05277053158635272,
-        "std_percent": "5.28%",
+      "eo": {
+        "display": "8.50% +/- 4.48%",
+        "mean": 8.504704236984253,
+        "mean_percent": "8.50%",
+        "std": 4.480353395579261,
+        "std_percent": "4.48%",
         "values": [
-          0.0859375,
-          0.01171875,
-          0.0546875,
-          0.01953125,
-          0.140625
-        ]
-      },
-      "roc_auc": {
-        "display": "60.51% +/- 1.70%",
-        "mean": 0.6051391104022683,
-        "mean_percent": "60.51%",
-        "std": 0.0170012775617164,
-        "std_percent": "1.70%",
-        "values": [
-          0.6062732589048379,
-          0.5770689349636718,
-          0.6148148148148148,
-          0.6216551479709375,
-          0.6058833953570796
+          10.88709831237793,
+          7.560485601425171,
+          2.2849440574645996,
+          7.459676265716553,
+          14.331316947937012
         ]
       }
     }
   },
   "experiment": "germanA_2_to_germanA_1_strict_shot_gcn_5seeds",
+  "ignored_label_values": [],
   "label_column": "GoodCustomer",
   "label_mapping": {
     "-1": 0,
     "1": 1
   },
   "metric_definitions": {
-    "accuracy": "target node classification accuracy; higher is better",
-    "equality": "absolute equal opportunity difference (TPR gap) across Gender groups; lower is better",
-    "parity": "absolute demographic parity difference across Gender groups; lower is better",
-    "roc_auc": "binary ROC-AUC using P(GoodCustomer=1); higher is better"
+    "AUC_ROC": "macro one-vs-rest target-class ROC-AUC using P(GoodCustomer in ['1']) for the positive class and its complement for the negative class; higher is better",
+    "accuracy": "macro mean of per-target-class accuracies (binary balanced accuracy); higher is better",
+    "dp": "absolute demographic parity difference across Gender groups; lower is better",
+    "eo": "absolute equal opportunity difference (TPR gap) across Gender groups; lower is better"
   },
+  "metric_unit": "percentage points",
   "number_of_runs": 5,
   "runs": [
     {
       "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "ignored_label_values": [],
       "label_column": "GoodCustomer",
       "label_mapping": {
         "-1": 0,
@@ -141,16 +144,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_1/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.6302083134651184,
-          "equality": 0.132224440574646,
-          "parity": 0.1484375,
-          "roc_auc": 0.5866028708133971
+          "AUC_ROC": 59.47900053163211,
+          "accuracy": 56.204146730462526,
+          "dp": 7.03125,
+          "eo": 6.9556474685668945
         },
         "strict_shot": {
-          "accuracy": 0.5598958134651184,
-          "equality": 0.1255040466785431,
-          "parity": 0.0859375,
-          "roc_auc": 0.6062732589048379
+          "AUC_ROC": 60.9144072301967,
+          "accuracy": 55.73631047315257,
+          "dp": 6.640625,
+          "eo": 10.88709831237793
         }
       },
       "seed": 1,
@@ -162,6 +165,7 @@
     },
     {
       "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "ignored_label_values": [],
       "label_column": "GoodCustomer",
       "label_mapping": {
         "-1": 0,
@@ -170,16 +174,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_2/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.4713541567325592,
-          "equality": 0.014616936445236206,
-          "parity": 0.0,
-          "roc_auc": 0.5750487329434698
+          "AUC_ROC": 56.82792840687577,
+          "accuracy": 53.64167995746942,
+          "dp": 2.34375,
+          "eo": 0.16801059246063232
         },
         "strict_shot": {
-          "accuracy": 0.5598958134651184,
-          "equality": 0.08114922046661377,
-          "parity": 0.01171875,
-          "roc_auc": 0.5770689349636718
+          "AUC_ROC": 57.35956051745526,
+          "accuracy": 49.25571504518873,
+          "dp": 0.390625,
+          "eo": 7.560485601425171
         }
       },
       "seed": 2,
@@ -191,6 +195,7 @@
     },
     {
       "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "ignored_label_values": [],
       "label_column": "GoodCustomer",
       "label_mapping": {
         "-1": 0,
@@ -199,16 +204,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_3/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.578125,
-          "equality": 0.1619623601436615,
-          "parity": 0.18359375,
-          "roc_auc": 0.5838029416976785
+          "AUC_ROC": 60.2729044834308,
+          "accuracy": 56.90058479532164,
+          "dp": 12.890625,
+          "eo": 8.249330520629883
         },
         "strict_shot": {
-          "accuracy": 0.5911458134651184,
-          "equality": 0.08702957630157471,
-          "parity": 0.0546875,
-          "roc_auc": 0.6148148148148148
+          "AUC_ROC": 61.57363104731526,
+          "accuracy": 57.64486975013291,
+          "dp": 0.0,
+          "eo": 2.2849440574645996
         }
       },
       "seed": 3,
@@ -220,6 +225,7 @@
     },
     {
       "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "ignored_label_values": [],
       "label_column": "GoodCustomer",
       "label_mapping": {
         "-1": 0,
@@ -228,16 +234,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_4/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.6692708134651184,
-          "equality": 0.10147851705551147,
-          "parity": 0.09765625,
-          "roc_auc": 0.5708665603402445
+          "AUC_ROC": 57.34538366117313,
+          "accuracy": 54.0776182881446,
+          "dp": 16.015625,
+          "eo": 13.508063554763794
         },
         "strict_shot": {
-          "accuracy": 0.6354166865348816,
-          "equality": 0.05863577127456665,
-          "parity": 0.01953125,
-          "roc_auc": 0.6216551479709375
+          "AUC_ROC": 62.01311359206096,
+          "accuracy": 60.43062200956937,
+          "dp": 3.515625,
+          "eo": 7.459676265716553
         }
       },
       "seed": 4,
@@ -249,6 +255,7 @@
     },
     {
       "experiment": "germanA_2_to_germanA_1_strict_shot_gcn",
+      "ignored_label_values": [],
       "label_column": "GoodCustomer",
       "label_mapping": {
         "-1": 0,
@@ -257,16 +264,16 @@
       "path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/germanA_2_to_germanA_1/seed_5/target/results.json",
       "reported_metrics": {
         "source_only": {
-          "accuracy": 0.7395833134651184,
-          "equality": 0.015625,
-          "parity": 0.0078125,
-          "roc_auc": 0.6086478823320929
+          "AUC_ROC": 60.32252348041822,
+          "accuracy": 50.48378522062732,
+          "dp": 0.78125,
+          "eo": 1.5625
         },
         "strict_shot": {
-          "accuracy": 0.6276041865348816,
-          "equality": 0.13844084739685059,
-          "parity": 0.140625,
-          "roc_auc": 0.6058833953570796
+          "AUC_ROC": 60.73365231259969,
+          "accuracy": 58.0595427963849,
+          "dp": 14.453125,
+          "eo": 14.331316947937012
         }
       },
       "seed": 5,

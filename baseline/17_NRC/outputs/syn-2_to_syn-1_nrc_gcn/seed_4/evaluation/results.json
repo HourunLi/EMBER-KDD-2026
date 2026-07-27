@@ -3,35 +3,72 @@
   "evaluated_node_count": 5000,
   "excluded_from_metrics_count": 0,
   "experiment": "syn-2_to_syn-1_strict_original_nrc_gcn",
+  "metric_protocol": {
+    "AUC_ROC": "macro mean of per-target-class one-vs-rest ROC-AUC",
+    "accuracy": "macro mean of the per-target-class accuracies",
+    "diagnostic_rate_scale": "ratio [0, 1]",
+    "dp": "absolute demographic-parity difference",
+    "eo": "absolute equal-opportunity/TPR difference",
+    "prediction_threshold": "P(Y=1) > 0.5",
+    "primary_metric_scale": "percentage [0, 100]",
+    "primary_metrics": [
+      "accuracy",
+      "AUC_ROC",
+      "dp",
+      "eo"
+    ],
+    "reference": "learn(1).py evaluate_per_class",
+    "target_class_metric_scale": "percentage [0, 100]"
+  },
   "nrc": {
-    "accuracy": 0.8402000069618225,
-    "equality": 0.2035042643547058,
-    "parity": 0.2584328353404999,
+    "AUC_ROC": 89.68745313613579,
+    "accuracy": 81.59189814714786,
+    "dp": 30.74556745590501,
+    "eo": 24.35951226394778,
     "positive_prediction_rate": {
-      "0": 0.39601948857307434,
-      "1": 0.6544523239135742
+      "0": 0.3773354995938262,
+      "1": 0.6847911741528763
     },
-    "roc_auc": 0.9217384471021907,
+    "target_class_AUC_ROC": {
+      "0": 89.6865088567802,
+      "1": 89.6883974154914
+    },
+    "target_class_accuracy": {
+      "0": 78.7952787952788,
+      "1": 84.38851749901691
+    },
     "true_positive_rate": {
-      "0": 0.7572347521781921,
-      "1": 0.960739016532898
+      "0": 0.7194533762057878,
+      "1": 0.9630484988452656
     }
   },
   "seed": 4,
   "source_only": {
-    "accuracy": 0.8700000047683716,
-    "equality": 0.12922191619873047,
-    "parity": 0.17572924494743347,
+    "AUC_ROC": 93.61908026870668,
+    "accuracy": 86.0176794702945,
+    "dp": 15.669988394118583,
+    "eo": 9.704657800088611,
     "positive_prediction_rate": {
-      "0": 0.43419983983039856,
-      "1": 0.609929084777832
+      "0": 0.4512591389114541,
+      "1": 0.6079590228526399
     },
-    "roc_auc": 0.9449723606231668,
+    "target_class_AUC_ROC": {
+      "0": 93.61908026870668,
+      "1": 93.61908026870668
+    },
+    "target_class_accuracy": {
+      "0": 83.55718355718355,
+      "1": 88.47817538340543
+    },
     "true_positive_rate": {
-      "0": 0.8207395672798157,
-      "1": 0.9499614834785461
+      "0": 0.8352090032154341,
+      "1": 0.9322555812163202
     }
   },
   "target_label_and_sensitive_attribute_loaded_only_in_final_evaluation": true,
-  "target_node_count": 5000
+  "target_node_count": 5000,
+  "visualization_feature_dim": 256,
+  "visualization_feature_path": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/syn-2_to_syn-1_nrc_gcn/seed_4/evaluation/feat.npz",
+  "visualization_label_path": "/home1/liyutong/sfda/code/baseline/baseline/17_NRC/outputs/syn-2_to_syn-1_nrc_gcn/seed_4/evaluation/labels.npz",
+  "visualization_node_count": 5000
 }

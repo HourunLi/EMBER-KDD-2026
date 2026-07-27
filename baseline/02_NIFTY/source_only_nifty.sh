@@ -1,11 +1,11 @@
 # 完整版
 python source_only_nifty.py run-seeds \
-  --source-domain bailA_2 \
-  --target-domain bailA_1 \
+  --source-domain syn-2 \
+  --target-domain syn-1 \
   --seeds 1 2 3 4 5 \
   --hidden 16 \
   --proj-hidden 16 \
-  --epochs 50 \
+  --epochs 500 \
   --lr 1e-3 \
   --weight-decay 1e-5 \
   --sim-coeff 0.6 \

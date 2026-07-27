@@ -14,4 +14,4 @@ python fairvgnn_domain.py \
   --e_lr=0.001 \
   --ratio=1 \
   --epochs=300 \
-  --gpu=1
+  --gpu=2

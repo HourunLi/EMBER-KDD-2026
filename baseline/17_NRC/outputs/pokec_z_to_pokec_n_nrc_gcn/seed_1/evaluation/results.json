@@ -3,33 +3,66 @@
   "evaluated_node_count": 8797,
   "excluded_from_metrics_count": 57772,
   "experiment": "pokec_z_to_pokec_n_strict_original_nrc_gcn",
+  "metric_protocol": {
+    "AUC_ROC": "macro mean of per-target-class one-vs-rest ROC-AUC",
+    "accuracy": "macro mean of the per-target-class accuracies",
+    "diagnostic_rate_scale": "ratio [0, 1]",
+    "dp": "absolute demographic-parity difference",
+    "eo": "absolute equal-opportunity/TPR difference",
+    "prediction_threshold": "P(Y=1) > 0.5",
+    "primary_metric_scale": "percentage [0, 100]",
+    "primary_metrics": [
+      "accuracy",
+      "AUC_ROC",
+      "dp",
+      "eo"
+    ],
+    "reference": "learn(1).py evaluate_per_class",
+    "target_class_metric_scale": "percentage [0, 100]"
+  },
   "nrc": {
-    "accuracy": 0.5352961421012878,
-    "equality": 0.015798985958099365,
-    "parity": 0.016803234815597534,
+    "AUC_ROC": 54.893465626239696,
+    "accuracy": 53.310575932911185,
+    "dp": 1.6803240527949848,
+    "eo": 1.5798996447276892,
     "positive_prediction_rate": {
-      "0": 0.40736401081085205,
-      "1": 0.4241672456264496
+      "0": 0.40736401673640166,
+      "1": 0.4241672572643515
     },
-    "roc_auc": 0.5489136703187122,
+    "target_class_AUC_ROC": {
+      "0": 54.89556422060817,
+      "1": 54.89136703187122
+    },
+    "target_class_accuracy": {
+      "0": 61.951219512195124,
+      "1": 44.669932353627246
+    },
     "true_positive_rate": {
-      "0": 0.44140350818634033,
-      "1": 0.4572024941444397
+      "0": 0.4414035087719298,
+      "1": 0.4572025052192067
     }
   },
   "seed": 1,
   "source_only": {
-    "accuracy": 0.6545413136482239,
-    "equality": 0.009619414806365967,
-    "parity": 0.019247978925704956,
+    "AUC_ROC": 71.68726728618518,
+    "accuracy": 65.43970400897469,
+    "dp": 1.9247988755415446,
+    "eo": 0.9619455737464699,
     "positive_prediction_rate": {
-      "0": 0.49656903743743896,
-      "1": 0.477321058511734
+      "0": 0.49656903765690374,
+      "1": 0.4773210489014883
     },
-    "roc_auc": 0.7168726728618517,
+    "target_class_AUC_ROC": {
+      "0": 71.68726728618518,
+      "1": 71.68726728618518
+    },
+    "target_class_accuracy": {
+      "0": 66.00886917960088,
+      "1": 64.8705388383485
+    },
     "true_positive_rate": {
-      "0": 0.6519297957420349,
-      "1": 0.642310380935669
+      "0": 0.6519298245614035,
+      "1": 0.6423103688239388
     }
   },
   "target_label_and_sensitive_attribute_loaded_only_in_final_evaluation": true,

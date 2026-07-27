@@ -1,4 +1,14 @@
 {
+  "evaluated_prediction_counts": {
+    "source_only": [
+      5999,
+      1662
+    ],
+    "strict_shot": [
+      3162,
+      4499
+    ]
+  },
   "excluded_feature_columns": [
     "user_id",
     "RECID",
@@ -24,6 +34,13 @@
     "TIME",
     "FILE"
   ],
+  "ignore_index": -1,
+  "ignored_label_values": [],
+  "label_column": "RECID",
+  "label_mapping": {
+    "0": 0,
+    "1": 1
+  },
   "mean_probabilities": {
     "source_only": [
       0.7465210556983948,
@@ -44,53 +61,65 @@
       4499
     ]
   },
+  "reported_metric_unit": "percentage points",
   "reported_metrics": {
     "source_only": {
-      "accuracy": 0.8796501755714417,
-      "equality": 0.0740775465965271,
-      "parity": 0.04657009243965149,
-      "roc_auc": 0.8936835732438637
+      "AUC_ROC": 89.36835536535735,
+      "accuracy": 81.90497392767453,
+      "dp": 4.657009243965149,
+      "eo": 7.40775465965271
     },
     "strict_shot": {
-      "accuracy": 0.5020232200622559,
-      "equality": 0.09972888231277466,
-      "parity": 0.12255865335464478,
-      "roc_auc": 0.5853154788995335
+      "AUC_ROC": 58.64686221537659,
+      "accuracy": 53.85370002595321,
+      "dp": 12.255865335464478,
+      "eo": 9.972888231277466
     }
   },
-  "reported_metrics_percent": {
+  "reported_metrics_display": {
     "source_only": {
-      "accuracy": "87.97%",
-      "equality": "7.41%",
-      "parity": "4.66%",
-      "roc_auc": "89.37%"
+      "AUC_ROC": "89.37%",
+      "accuracy": "81.90%",
+      "dp": "4.66%",
+      "eo": "7.41%"
     },
     "strict_shot": {
-      "accuracy": "50.20%",
-      "equality": "9.97%",
-      "parity": "12.26%",
-      "roc_auc": "58.53%"
+      "AUC_ROC": "58.65%",
+      "accuracy": "53.85%",
+      "dp": "12.26%",
+      "eo": "9.97%"
     }
   },
   "seed": 5,
+  "sensitive_attribute": "WHITE",
+  "sensitive_mapping": {
+    "0": 0,
+    "1": 1
+  },
+  "source_domain": "bailA_2",
   "source_only": {
     "classification": {
-      "accuracy": 0.8796501755714417,
       "balanced_accuracy": 0.8190497392767453,
       "macro_f1": 0.8467178891576891,
+      "macro_target_roc_auc": 0.8936835536535734,
+      "overall_accuracy": 0.8796501755714417,
       "per_class": [
         {
+          "accuracy": 0.9869556877038174,
           "class": 0,
           "f1": 0.9177666785586871,
           "precision": 0.8576429404900817,
           "recall": 0.9869556877038174,
+          "roc_auc": 0.8936835340632833,
           "support": 5213
         },
         {
+          "accuracy": 0.6511437908496732,
           "class": 1,
           "f1": 0.7756690997566911,
           "precision": 0.9590854392298436,
           "recall": 0.6511437908496732,
+          "roc_auc": 0.8936835732438637,
           "support": 2448
         }
       ],
@@ -120,22 +149,27 @@
   },
   "strict_shot": {
     "classification": {
-      "accuracy": 0.5020232200622559,
       "balanced_accuracy": 0.5385370002595321,
       "macro_f1": 0.49765985102556887,
+      "macro_target_roc_auc": 0.5864686221537659,
+      "overall_accuracy": 0.5020232200622559,
       "per_class": [
         {
+          "accuracy": 0.43736811816612314,
           "class": 0,
           "f1": 0.5444776119402984,
           "precision": 0.7210626185958254,
           "recall": 0.43736811816612314,
+          "roc_auc": 0.5876217654079984,
           "support": 5213
         },
         {
+          "accuracy": 0.6397058823529411,
           "class": 1,
           "f1": 0.45084209011083926,
           "precision": 0.3480773505223383,
           "recall": 0.6397058823529411,
+          "roc_auc": 0.5853154788995335,
           "support": 2448
         }
       ],
@@ -163,5 +197,31 @@
       }
     }
   },
-  "target_labels_and_WHITE_loaded_after_adaptation": true
+  "target_domain": "bailA_1",
+  "target_evaluation_storage": "csv_columns",
+  "target_labels_and_sensitive_loaded_after_adaptation": true,
+  "target_node_counts": {
+    "evaluated_labeled": 7661,
+    "ignored_unlabeled": 0,
+    "total": 7661
+  },
+  "visualization_export": {
+    "feat_path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/bailA_2_to_bailA_1/seed_5/target/feat.npz",
+    "label_encoding": {
+      "0": "predicted_Y=1, sensitive_S=0",
+      "1": "predicted_Y=1, sensitive_S=1",
+      "2": "predicted_Y=0, sensitive_S=0",
+      "3": "predicted_Y=0, sensitive_S=1"
+    },
+    "label_key": "labels",
+    "label_shape": [
+      7661
+    ],
+    "labels_path": "/home1/liyutong/sfda/code/baseline/baseline/16_SHOT/outputs/bailA_2_to_bailA_1/seed_5/target/labels.npz",
+    "representation_key": "representations",
+    "representation_shape": [
+      7661,
+      256
+    ]
+  }
 }

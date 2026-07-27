@@ -7,6 +7,6 @@ python fairvgnn_domain.py \
   --target_dataset='pokec_n' \
   --encoder='GCN' \
   --prop='spmm' \
-  --epochs=500 \
-  --gpu=0 \
+  --epochs=100 \
+  --gpu=6 \
   --runs=1

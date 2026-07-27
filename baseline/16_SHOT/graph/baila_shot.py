@@ -240,6 +240,7 @@ def classification_metrics(labels, predictions, positive_scores=None):
             {
                 "class": class_index,
                 "support": int(support),
+                "accuracy": recall,
                 "precision": precision,
                 "recall": recall,
                 "f1": f1,
@@ -247,13 +248,27 @@ def classification_metrics(labels, predictions, positive_scores=None):
         )
 
     results = {
-        "accuracy": accuracy,
+        "overall_accuracy": accuracy,
         "balanced_accuracy": sum(recalls) / CLASS_NUM,
         "macro_f1": sum(f1_scores) / CLASS_NUM,
         "per_class": per_class,
     }
     if positive_scores is not None:
         results["roc_auc"] = binary_roc_auc(labels, positive_scores)
+        per_target_class_auc = []
+        for class_index in range(CLASS_NUM):
+            one_vs_rest_labels = (labels == class_index).long()
+            class_scores = (
+                positive_scores
+                if class_index == 1
+                else 1.0 - positive_scores
+            )
+            class_auc = binary_roc_auc(one_vs_rest_labels, class_scores)
+            per_class[class_index]["roc_auc"] = class_auc
+            per_target_class_auc.append(class_auc)
+        results["macro_target_roc_auc"] = (
+            sum(per_target_class_auc) / CLASS_NUM
+        )
     return results
 
 
@@ -282,7 +297,7 @@ def fairness_metrics(
         positive_label_mask = group_mask & (labels == 1)
         negative_label_mask = group_mask & (labels == 0)
         if torch.sum(positive_label_mask).item() == 0:
-            true_positive_rate = 0.0
+            true_positive_rate = float("nan")
         else:
             true_positive_rate = torch.mean(
                 (predictions[positive_label_mask] == 1).float()
@@ -343,36 +358,45 @@ def evaluate_predictions(
 
 
 def headline_metrics(results):
-    """Metrics requested for repeated graph adaptation experiments.
+    """Return the four ``learn(1).py`` metrics in percentage points.
 
-    parity is demographic parity difference; equality is equal opportunity
-    difference. Both are absolute gaps, so smaller values are better.
+    ``accuracy`` is the macro mean of per-target-class accuracies (balanced
+    accuracy for this binary task). ``AUC_ROC`` is the macro mean of the
+    one-vs-rest target-class AUCs. ``dp`` and ``eo`` are absolute demographic
+    parity and equal-opportunity gaps computed from hard predictions. This
+    matches the reference evaluator, including its multiplication by 100.
     """
 
     return {
-        "accuracy": results["classification"]["accuracy"],
-        "roc_auc": results["classification"]["roc_auc"],
-        "parity": results["fairness"]["demographic_parity_difference"],
-        "equality": results["fairness"]["equal_opportunity_difference"],
+        "accuracy": results["classification"]["balanced_accuracy"] * 100.0,
+        "AUC_ROC": (
+            results["classification"]["macro_target_roc_auc"] * 100.0
+        ),
+        "dp": (
+            results["fairness"]["demographic_parity_difference"] * 100.0
+        ),
+        "eo": (
+            results["fairness"]["equal_opportunity_difference"] * 100.0
+        ),
     }
 
 
-def format_percentage(value):
-    return "{:.2f}%".format(float(value) * 100.0)
+def format_percentage_points(value):
+    return "{:.2f}%".format(float(value))
 
 
 def format_headline_metrics(metrics):
     return {
-        name: format_percentage(value) for name, value in metrics.items()
+        name: format_percentage_points(value) for name, value in metrics.items()
     }
 
 
 def print_headline_metrics(title, metrics):
-    print("\n{}".format(title))
-    for metric_name in ("accuracy", "roc_auc", "parity", "equality"):
+    print("\n{} (%)".format(title))
+    for metric_name in ("accuracy", "AUC_ROC", "dp", "eo"):
         print(
-            "{:<10} {}".format(
-                metric_name, format_percentage(metrics[metric_name])
+            "{:<10} {:.4f}".format(
+                metric_name, metrics[metric_name]
             )
         )
 
@@ -717,7 +741,7 @@ def train_source(args):
                 predictions[validation_mask],
                 positive_scores=probabilities[validation_mask, 1],
             )
-            validation_accuracy = validation_results["accuracy"]
+            validation_accuracy = validation_results["overall_accuracy"]
             print(
                 "Source epoch {:04d}/{:04d} loss={:.6f} val_acc={:.4f} "
                 "val_bal_acc={:.4f}".format(
@@ -1242,6 +1266,7 @@ def train_target(args):
             "source_only": headline_metrics(source_only_results),
             "strict_shot": headline_metrics(adapted_results),
         },
+        "reported_metric_unit": "percentage points",
         "prediction_counts": {
             "source_only": torch.bincount(
                 source_only_predictions, minlength=CLASS_NUM
@@ -1279,7 +1304,7 @@ def train_target(args):
         ),
         "visualization_export": visualization_export,
     }
-    results["reported_metrics_percent"] = {
+    results["reported_metrics_display"] = {
         "source_only": format_headline_metrics(
             results["reported_metrics"]["source_only"]
         ),
@@ -1317,10 +1342,10 @@ def summarize_repeated_values(values):
         "mean": mean,
         "std": std,
         "values": list(values),
-        "mean_percent": format_percentage(mean),
-        "std_percent": format_percentage(std),
+        "mean_percent": format_percentage_points(mean),
+        "std_percent": format_percentage_points(std),
         "display": "{} +/- {}".format(
-            format_percentage(mean), format_percentage(std)
+            format_percentage_points(mean), format_percentage_points(std)
         ),
     }
 
@@ -1403,7 +1428,7 @@ def aggregate_results(args):
         raise ValueError("Label mapping must define at least one positive value")
 
     model_names = ("source_only", "strict_shot")
-    metric_names = ("accuracy", "roc_auc", "parity", "equality")
+    metric_names = ("accuracy", "AUC_ROC", "dp", "eo")
     aggregated = {}
     for model_name in model_names:
         aggregated[model_name] = {}
@@ -1426,18 +1451,24 @@ def aggregate_results(args):
         "ignored_label_values": ignored_label_values,
         "sensitive_mapping": sensitive_mapping,
         "standard_deviation": "sample standard deviation (n-1)",
+        "metric_unit": "percentage points",
         "metric_definitions": {
-            "accuracy": "target node classification accuracy; higher is better",
-            "roc_auc": (
-                "binary ROC-AUC using P({} in {}); higher is better".format(
+            "accuracy": (
+                "macro mean of per-target-class accuracies (binary balanced "
+                "accuracy); higher is better"
+            ),
+            "AUC_ROC": (
+                "macro one-vs-rest target-class ROC-AUC using P({} in {}) "
+                "for the positive class and its complement for the negative "
+                "class; higher is better".format(
                     label_column, sorted(positive_labels)
                 )
             ),
-            "parity": (
+            "dp": (
                 "absolute demographic parity difference across {} groups; "
                 "lower is better".format(sensitive_attribute)
             ),
-            "equality": (
+            "eo": (
                 "absolute equal opportunity difference (TPR gap) across {} "
                 "groups; lower is better".format(sensitive_attribute)
             ),
@@ -1464,7 +1495,7 @@ def aggregate_results(args):
                     )
                 )
 
-    print("\nFive-seed aggregate (percentage mean +/- sample std)")
+    print("\nFive-seed aggregate (percentage-point mean +/- sample std)")
     print("model          metric      mean +/- std")
     for model_name in model_names:
         for metric_name in metric_names:
