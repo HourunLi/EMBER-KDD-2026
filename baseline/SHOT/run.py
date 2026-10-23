@@ -1,12 +1,8 @@
-"""SHOT (object/image_{source,target}.py) on EMBER's four domain pairs.
+"""SHOT-MLP on EMBER's four pairs: edit DEFAULTS, then python run.py.
 
-Run ``python run.py`` after editing DEFAULTS below. Requires the EMBER Python
-environment plus torchvision (imported by SHOT's original network module).
-The image backbone is replaced with a node-feature MLP (SHOT-MLP). The default
-source protocol matches EMBER's all-valid source supervision, using SHOT's native
-full-training/overlapping-selection convention. See README_EMBER.md for the
-train_val alternative and the remaining difference from the graph baselines.
-SHOT's losses and target updates are preserved; graph edges are not model inputs.
+Only final ACC/AUC/DP/EO are reported. The object-branch losses/updates and EMBER
+loaders are reused; only the image backbone is adapted to node vectors.
+See README_EMBER.md for source-label protocols and the Pokec audit.
 """
 
 from __future__ import annotations
@@ -70,8 +66,6 @@ DEFAULTS = {
     "classifier": "bn",
     "layer": "wn",
     "interval": 15,             # 原方法：target 总迭代数 // interval 更新伪标签
-    "save_checkpoints": True,
-    "save_predictions": True,  # 最终保存适配前/后预测，供统一复评与事后诊断
     "output_dir": str(HERE / "results"),  # 每次启动新建时间戳子目录
 }
 # 数据路径直接沿用 EMBER/dataset.py；不在这里另写一套预处理或归一化。
@@ -152,10 +146,14 @@ def prepare_data(dataset, source_seed, target_seed, source_only=False):
     source_id, target_id = PAIRS[dataset]
     seed_all(source_seed)
     source = get_dataset(SimpleNamespace(dataset=dataset), source_id)
+    if not bool(torch.isfinite(source.x).all()):
+        raise ValueError(f"{dataset}: source features contain NaN/Inf; check the raw data")
     if source_only:
         return source, None, None
     seed_all(target_seed)
     target = get_dataset(SimpleNamespace(dataset=dataset), target_id)
+    if not bool(torch.isfinite(target.x).all()):
+        raise ValueError(f"{dataset}: target features contain NaN/Inf; check the raw data")
     if source.x.shape[1] != target.x.shape[1]:
         raise ValueError(f"{dataset}: source/target feature dimensions differ")
     annotations = SimpleNamespace(**{
@@ -239,24 +237,6 @@ def predict(nets, loader, device):
     return torch.cat(features), torch.cat(outputs)
 
 
-def snapshot_logits(nets, x, cfg, device):
-    """Extra inference must not change training RNG streams or module modes."""
-    python_state, numpy_state = random.getstate(), np.random.get_state()
-    cpu_rng = torch.random.get_rng_state()
-    cuda_rng = torch.cuda.get_rng_state_all() if torch.cuda.is_initialized() else None
-    modes = [(module, module.training) for net in nets for module in net.modules()]
-    try:
-        return predict(nets, loader_for(x, cfg), device)[1]
-    finally:
-        random.setstate(python_state)
-        np.random.set_state(numpy_state)
-        torch.random.set_rng_state(cpu_rng)
-        if cuda_rng is not None:
-            torch.cuda.set_rng_state_all(cuda_rng)
-        for module, training in modes:
-            module.training = training
-
-
 def train_source(nets, data, cfg, device):
     """Upstream label smoothing / SGD / best source-subset ACC selection.
 
@@ -296,16 +276,11 @@ def train_source(nets, data, cfg, device):
             accuracy = float((logits.argmax(1) == data.y[val_mask]).float().mean())
             if accuracy >= best_accuracy:
                 best_accuracy, best_state, best_iter = accuracy, cpu_state(nets), iteration
-            print(
-                f"source iter={iteration}/{max_iter} loss={loss.item():.6f} "
-                f"selection_acc={accuracy * 100:.4f}", flush=True
-            )
             set_mode(nets, True)
     # Upstream saves the best source-selection states, then reloads them.
     load_state(nets, best_state)
     return {
-        "protocol": cfg.source_protocol, "criterion": "overall source selection ACC; latest tie",
-        "selection_split": "val_mask & valid_binary", "selection_is_holdout": cfg.source_protocol == "train_val",
+        "selection_is_holdout": cfg.source_protocol == "train_val",
         "training_nodes": int(train_mask.sum()), "selection_nodes": int(val_mask.sum()),
         "training_selection_overlap": int((train_mask & val_mask).sum()),
         "total_iterations": max_iter, "best_iteration": best_iter,
@@ -386,26 +361,16 @@ def adapt_target(nets, target_x, cfg, device):
         classifier_loss.backward()
         optimizer.step()
         if (iter_num + 1) % interval_iter == 0 or iter_num + 1 == max_iter:
-            # Preserve upstream's periodic eval pass (including loader/RNG
-            # cadence), but report only label-free entropy rather than ACC.
-            _, eval_logits = predict(nets, test_loader, device)
-            probabilities = F.softmax(eval_logits, dim=1)
-            mean_entropy = reference.loss.Entropy(probabilities).mean().item()
-            counts = torch.bincount((probabilities[:, 1] > 0.5).long(), minlength=2).tolist()
-            print(
-                f"target iter={iter_num + 1}/{max_iter} "
-                f"loss={classifier_loss.item():.6f} entropy={mean_entropy:.6f} "
-                f"predicted_counts={counts}", flush=True
-            )
+            # Keep this upstream pass: iterating the loader consumes RNG and
+            # therefore affects subsequent shuffled batches, even without logs.
+            predict(nets, test_loader, device)
             net_f.train()
             net_b.train()
     # Upstream SHOT uses the final target iterate, with no best-target selection.
-    return {"total_iterations": max_iter, "nodes": int(target_x.shape[0]),
-            "pseudo_label_interval": interval_iter}
 
 
-def classification_report(logits, labels, sensitive):
-    """EMBER metrics (%) and a confusion matrix: rows=true, columns=predicted."""
+def metrics(logits, labels, sensitive):
+    """Unchanged EMBER class-mean ACC/AUC and DP/EO, in percent."""
     prob = torch.nn.Softmax(dim=1)(logits)[:, 1].numpy()
     pred = (prob > 0.5).astype(int)
     y = labels.cpu().numpy()
@@ -419,11 +384,8 @@ def classification_report(logits, labels, sensitive):
         for cls in classes
     ]) if len(classes) == 2 else float("nan")
     dp, eo = fair_metric(pred, y, sens)
-    metrics = {"ACC": float(acc * 100), "AUC": float(auc * 100),
-               "DP": float(dp * 100), "EO": float(eo * 100)}
-    confusion = [[int(((y == true) & (pred == predicted)).sum()) for predicted in (0, 1)]
-                 for true in (0, 1)]
-    return {"metrics": metrics, "confusion_matrix": confusion}
+    return {"ACC": float(acc * 100), "AUC": float(auc * 100),
+            "DP": float(dp * 100), "EO": float(eo * 100)}
 
 
 def run_one(cfg, dataset, run_idx, gpu):
@@ -436,13 +398,6 @@ def run_one(cfg, dataset, run_idx, gpu):
     device = torch.device(f"cuda:{gpu}" if gpu >= 0 else "cpu")
     source_seed = cfg.seed + run_idx * cfg.seed_step
     target_seed = source_seed + cfg.target_seed_offset
-    source_id, target_id = PAIRS[dataset]
-    print(f"SHOT {dataset}{source_id} -> {dataset}{target_id}, run={run_idx + 1}, "
-          f"source_seed={source_seed}, target_seed={target_seed}, device={device}, "
-          f"source_protocol={cfg.source_protocol}, source_only={cfg.source_only}", flush=True)
-
-    prefix = Path(cfg.output_dir) / dataset / f"run_{run_idx + 1}"
-    prefix.parent.mkdir(parents=True, exist_ok=True)
     # Both raw domain files may be accessed during data preparation (Pokec's
     # shared feature schema). No raw files are loaded in the target stage.
     source, target_x, annotations = prepare_data(dataset, source_seed, target_seed, cfg.source_only)
@@ -450,33 +405,27 @@ def run_one(cfg, dataset, run_idx, gpu):
     seed_all(source_seed)
     nets = build_model(input_dim, cfg, device)
     source_info = train_source(nets, source, cfg, device)
-    _, selection_mask = source_masks(source, cfg)
-    logits = snapshot_logits(nets, source.x[selection_mask], cfg, device)
-    source_info.update(classification_report(logits, source.y[selection_mask], source.sens_labels[selection_mask]))
-    source_head = cpu_state((nets[2],))[0]
-    checkpoint = {"input_dim": input_dim, "source": cpu_state(nets)} if cfg.save_checkpoints else None
     result = {"dataset": dataset, "run": run_idx + 1, "source_seed": source_seed,
               "source_selection": source_info}
     if cfg.source_only:
-        write_json(prefix.with_suffix(".json"), result)
-        if checkpoint is not None:
-            torch.save(checkpoint, prefix.with_suffix(".pt"))
-        print("source held-out selection: " + json.dumps(source_info["metrics"]), flush=True)
+        _, mask = source_masks(source, cfg)
+        _, logits = predict(nets, loader_for(source.x[mask], cfg), device)
+        result["metrics"] = metrics(logits, source.y[mask], source.sens_labels[mask])
         return result
     # Upstream reloads weights into fresh modules. Discard unused source grads
     # and samples, so only model state enters target adaptation.
     for net in nets:
         for parameter in net.parameters():
             parameter.grad = None
-    del source, selection_mask, logits
+    source_head = cpu_state((nets[2],))[0]
+    del source
     gc.collect()
     if device.type == "cuda":
         torch.cuda.empty_cache()
 
     seed_all(target_seed)
-    before_logits = snapshot_logits(nets, target_x, cfg, device)
-    adaptation = adapt_target(nets, target_x, cfg, device)
-    after_logits = snapshot_logits(nets, target_x, cfg, device)
+    adapt_target(nets, target_x, cfg, device)
+    _, logits = predict(nets, loader_for(target_x, cfg), device)
     target_head = cpu_state((nets[2],))[0]
     if any(not torch.equal(source_head[key], target_head[key]) for key in source_head):
         raise RuntimeError("SHOT's frozen classifier changed during adaptation")
@@ -484,23 +433,8 @@ def run_one(cfg, dataset, run_idx, gpu):
     eval_mask = all_valid_mask(annotations)
     if not bool(eval_mask.any()):
         raise ValueError("Target has no valid binary labels for final evaluation")
-    before = classification_report(
-        before_logits[eval_mask], annotations.y[eval_mask], annotations.sens_labels[eval_mask])
-    after = classification_report(
-        after_logits[eval_mask], annotations.y[eval_mask], annotations.sens_labels[eval_mask])
-    if cfg.save_predictions:
-        np.savez_compressed(prefix.with_suffix(".npz"),
-                            logits_before=before_logits.numpy(), logits_after=after_logits.numpy(),
-                            labels=annotations.y.numpy(), sensitive=annotations.sens_labels.numpy(),
-                            eval_mask=eval_mask.numpy())
-    if checkpoint is not None:
-        checkpoint["target"] = cpu_state(nets)
-        torch.save(checkpoint, prefix.with_suffix(".pt"))
-    result.update(target_seed=target_seed, target_before=before, target_after=after,
-                  adaptation=adaptation, classifier_frozen_verified=True)
-    write_json(prefix.with_suffix(".json"), result)
-    print("target before adaptation (post-hoc): " + json.dumps(before["metrics"]), flush=True)
-    print("target after adaptation: " + json.dumps(after["metrics"]), flush=True)
+    result.update(target_seed=target_seed,
+                  metrics=metrics(logits[eval_mask], annotations.y[eval_mask], annotations.sens_labels[eval_mask]))
     return result
 
 
@@ -528,29 +462,23 @@ def metric_summary(values):
 
 
 def aggregate(rows, cfg):
-    """Single summary; per-run JSON files remain the machine-readable records."""
+    """Only the final paper table; retain per-seed values/config in one JSON."""
     lines = [
         f"# SHOT-MLP ({cfg.runs} runs)", "",
-        f"source_protocol={cfg.source_protocol}; source_only={cfg.source_only}.",
-        "full: all valid source labels (EMBER); train_val: source train_mask "
-        "(DANCE/FatraGNN/GraphCTA). Source selection overlaps training in full.",
-        "ACC=class-mean accuracy; AUC=class-mean probability AUC; DP/EO=EMBER fair_metric.",
-        "Percentages, mean +/- population std (ddof=0); undefined runs propagate NaN.",
+        ("Source held-out validation only. " if cfg.source_only else "Final target all(valid). ") +
+        f"source_protocol={cfg.source_protocol}; %, mean +/- std (ddof=0).", "",
+        "|Dataset|ACC|AUC|DP|EO|", "|---|---|---|---|---|",
     ]
-    sections = [("Source held-out selection", "source_selection")] if cfg.source_only else [
-        ("After adaptation: primary result, final iterate on target all(valid)", "target_after"),
-        ("Before adaptation: post-hoc diagnostic, never used for selection", "target_before"),
-    ]
-    for title, key in sections:
-        lines.extend(["", f"## {title}", "", "|Dataset|ACC|AUC|DP|EO|", "|---|---|---|---|---|"])
-        for dataset in cfg.datasets:
-            cells = []
-            for metric in ("ACC", "AUC", "DP", "EO"):
-                values = [row[key]["metrics"][metric] for row in rows if row["dataset"] == dataset]
-                statistics = metric_summary(values)
-                cells.append(f"{statistics['mean']:.2f}+/-{statistics['std']:.2f}")
-            lines.append("|" + "|".join([dataset, *cells]) + "|")
+    summary = {}
+    for dataset in cfg.datasets:
+        summary[dataset] = {
+            key: metric_summary([row["metrics"][key] for row in rows if row["dataset"] == dataset])
+            for key in ("ACC", "AUC", "DP", "EO")
+        }
+        cells = [f"{stat['mean']:.2f}+/-{stat['std']:.2f}" for stat in summary[dataset].values()]
+        lines.append("|" + "|".join([dataset, *cells]) + "|")
     output = Path(cfg.output_dir)
+    write_json(output / "results.json", {"config": vars(cfg), "summary": summary, "runs": rows})
     (output / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines), flush=True)
     print(f"Results: {output / 'summary.md'}", flush=True)
@@ -563,8 +491,8 @@ def launch(cfg):
     output = Path(cfg.output_dir).resolve() / f"{stamp}_{cfg.source_protocol}"
     output.mkdir(parents=True, exist_ok=False)
     cfg.output_dir = str(output)
-    config_path = output / "config.json"
-    write_json(config_path, vars(cfg))
+    config_path = output / "results.json"
+    write_json(config_path, {"config": vars(cfg), "runs": [], "summary": None})
     slots = Queue()
     for gpu in cfg.gpus:
         slots.put(gpu)
@@ -572,23 +500,24 @@ def launch(cfg):
     def task(dataset, run_idx):
         gpu = slots.get()
         try:
-            prefix = output / dataset / f"run_{run_idx + 1}"
-            prefix.parent.mkdir(parents=True, exist_ok=True)
-            log_path = prefix.with_suffix(".log")
             command = [sys.executable, str(Path(__file__).resolve()),
                        "--worker-config", str(config_path), "--worker-dataset", dataset,
                        "--worker-run", str(run_idx), "--worker-gpu", str(gpu)]
             environment = os.environ.copy()
             environment["PYTHONHASHSEED"] = str(cfg.seed + run_idx * cfg.seed_step)
-            print(f"Start {dataset} run={run_idx + 1}, gpu={gpu}, log={log_path}", flush=True)
-            with log_path.open("w", encoding="utf-8") as stream:
-                process = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT,
-                                         cwd=str(HERE), env=environment, check=False)
-            if process.returncode:
-                raise RuntimeError(f"{dataset} run={run_idx + 1} failed; see {log_path}")
-            result = json.loads(prefix.with_suffix(".json").read_text(encoding="utf-8"))
-            metric = result["source_selection" if cfg.source_only else "target_after"]["metrics"]
-            print(f"Done {dataset} run={run_idx + 1}: {metric}", flush=True)
+            environment["PYTHONIOENCODING"] = "utf-8"
+            print(f"Start {dataset} run={run_idx + 1}, gpu={gpu}", flush=True)
+            process = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                                     cwd=str(HERE), env=environment, check=False)
+            try:
+                if process.returncode:
+                    raise RuntimeError(f"worker exited with {process.returncode}")
+                result = json.loads(process.stdout.rsplit("SHOT_RESULT=", 1)[1])
+            except (RuntimeError, ValueError, IndexError) as error:
+                log_path = output / f"{dataset}_run_{run_idx + 1}.log"
+                log_path.write_text(process.stdout + "\n" + process.stderr, encoding="utf-8")
+                raise RuntimeError(f"{dataset} run={run_idx + 1} failed; see {log_path}") from error
+            print(f"Done {dataset} run={run_idx + 1}: {result['metrics']}", flush=True)
             return result
         finally:
             slots.put(gpu)
@@ -660,8 +589,9 @@ def parse_args(argv=None):
 def main():
     cfg = parse_args()
     if getattr(cfg, "worker_config", None):
-        worker_cfg = SimpleNamespace(**json.loads(Path(cfg.worker_config).read_text(encoding="utf-8")))
-        run_one(worker_cfg, cfg.worker_dataset, cfg.worker_run, cfg.worker_gpu)
+        settings = json.loads(Path(cfg.worker_config).read_text(encoding="utf-8"))["config"]
+        result = run_one(SimpleNamespace(**settings), cfg.worker_dataset, cfg.worker_run, cfg.worker_gpu)
+        print("SHOT_RESULT=" + json.dumps(json_safe(result), allow_nan=False), flush=True)
     else:
         launch(cfg)
 
