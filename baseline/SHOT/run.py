@@ -2,9 +2,11 @@
 
 Run ``python run.py`` after editing DEFAULTS below. Requires the EMBER Python
 environment plus torchvision (imported by SHOT's original network module).
-Only the image input backbone is replaced with a node-feature MLP. SHOT's
-losses, optimizer, scheduler, bottleneck, classifier and prototype updates are
-unchanged. Edges are loaded by EMBER but are not inputs to this non-graph method.
+The image backbone is replaced with a node-feature MLP (SHOT-MLP). The default
+source protocol matches EMBER's all-valid source supervision, using SHOT's native
+full-training/overlapping-selection convention. See README_EMBER.md for the
+train_val alternative and the remaining difference from the graph baselines.
+SHOT's losses and target updates are preserved; graph edges are not model inputs.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ import random
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 from queue import Queue
 from types import SimpleNamespace
@@ -33,7 +36,6 @@ PAIRS = {
     "pokec": ("_z", "_n"),
     "syn": ("-2", "-1"),
 }
-
 # ===================== 可直接修改的默认参数 =====================
 DEFAULTS = {
     "datasets": ["bailA", "germanA", "pokec", "syn"],
@@ -42,6 +44,8 @@ DEFAULTS = {
     "seed": 1111,               # source: 1111, 2222, 3333, ...，与当前 EMBER 一致
     "seed_step": 1111,
     "target_seed_offset": 100000,  # target: 101111, 102222, ...
+    "source_protocol": "full",  # full: 对齐 EMBER；train_val: 对齐三个有效 baseline
+    "source_only": False,      # True 须配合 train_val；仅源验证，不执行/评分目标域
     "source_epochs": 20,        # SHOT object/image_source.py 的默认值
     "target_epochs": 15,        # SHOT object/image_target.py 的默认值
     "batch_size": 64,
@@ -51,6 +55,7 @@ DEFAULTS = {
     "hidden_dim": 256,          # 节点特征 MLP 的宽度（图像 backbone 的输入适配）
     "bottleneck": 256,
     "source_lr": 0.01,
+    "source_lr_decay": 0.1,    # 保留 object/ 的源骨干倍率；不根据目标测试分数改成 1
     "target_lr": 0.01,
     "lr_decay1": 0.1,
     "lr_decay2": 1.0,
@@ -66,7 +71,8 @@ DEFAULTS = {
     "layer": "wn",
     "interval": 15,             # 原方法：target 总迭代数 // interval 更新伪标签
     "save_checkpoints": True,
-    "output_dir": str(HERE / "results"),
+    "save_predictions": True,  # 最终保存适配前/后预测，供统一复评与事后诊断
+    "output_dir": str(HERE / "results"),  # 每次启动新建时间戳子目录
 }
 # 数据路径直接沿用 EMBER/dataset.py；不在这里另写一套预处理或归一化。
 # ==============================================================
@@ -123,6 +129,40 @@ def all_valid_mask(data):
     return (data.train_mask | data.val_mask | data.test_mask) & (
         (data.y == 0) | (data.y == 1)
     )
+
+
+def source_masks(data, cfg):
+    """Native full or held-out source selection, with EMBER's fixed splits."""
+    valid = (data.y == 0) | (data.y == 1)
+    train = valid if cfg.source_protocol == "full" else data.train_mask.bool() & valid
+    selection = data.val_mask.bool() & valid
+    if int(train.sum()) < 2 or not bool(selection.any()):
+        raise ValueError("Source training needs >=2 valid nodes and a nonempty selection split")
+    return train, selection
+
+
+def prepare_data(dataset, source_seed, target_seed, source_only=False):
+    """Finish shared preprocessing BEFORE either learning stage.
+
+    In particular EMBER's Pokec loader opens both domain CSVs for their common
+    columns. Keeping that access in offline preparation avoids accessing source
+    files during target adaptation, without rewriting any EMBER preprocessing.
+    Target annotations are held separately and only scored after adaptation.
+    """
+    source_id, target_id = PAIRS[dataset]
+    seed_all(source_seed)
+    source = get_dataset(SimpleNamespace(dataset=dataset), source_id)
+    if source_only:
+        return source, None, None
+    seed_all(target_seed)
+    target = get_dataset(SimpleNamespace(dataset=dataset), target_id)
+    if source.x.shape[1] != target.x.shape[1]:
+        raise ValueError(f"{dataset}: source/target feature dimensions differ")
+    annotations = SimpleNamespace(**{
+        name: getattr(target, name)
+        for name in ("y", "sens_labels", "train_mask", "val_mask", "test_mask")
+    })
+    return source, target.x, annotations
 
 
 def build_model(input_dim, cfg, device):
@@ -199,16 +239,35 @@ def predict(nets, loader, device):
     return torch.cat(features), torch.cat(outputs)
 
 
+def snapshot_logits(nets, x, cfg, device):
+    """Extra inference must not change training RNG streams or module modes."""
+    python_state, numpy_state = random.getstate(), np.random.get_state()
+    cpu_rng = torch.random.get_rng_state()
+    cuda_rng = torch.cuda.get_rng_state_all() if torch.cuda.is_initialized() else None
+    modes = [(module, module.training) for net in nets for module in net.modules()]
+    try:
+        return predict(nets, loader_for(x, cfg), device)[1]
+    finally:
+        random.setstate(python_state)
+        np.random.set_state(numpy_state)
+        torch.random.set_rng_state(cpu_rng)
+        if cuda_rng is not None:
+            torch.cuda.set_rng_state_all(cuda_rng)
+        for module, training in modes:
+            module.training = training
+
+
 def train_source(nets, data, cfg, device):
-    """Upstream source label smoothing / SGD / source-val ACC selection."""
-    valid = (data.y == 0) | (data.y == 1)
-    train_mask, val_mask = data.train_mask & valid, data.val_mask & valid
-    if not bool(train_mask.any()) or not bool(val_mask.any()):
-        raise ValueError("Source train/validation split has no valid binary labels")
+    """Upstream label smoothing / SGD / best source-subset ACC selection.
+
+    full is SHOT's native --trte full convention: the selection subset overlaps
+    training. train_val retains an independent EMBER source validation split.
+    """
+    train_mask, val_mask = source_masks(data, cfg)
     train_loader = loader_for(data.x[train_mask], cfg, data.y[train_mask], shuffle=True)
     val_loader = loader_for(data.x[val_mask], cfg, data.y[val_mask])
     param_groups = [
-        {"params": parameter, "lr": cfg.source_lr * (0.1 if index == 0 else 1.0)}
+        {"params": parameter, "lr": cfg.source_lr * (cfg.source_lr_decay if index == 0 else 1.0)}
         for index, net in enumerate(nets)
         for parameter in net.parameters()
     ]
@@ -232,18 +291,26 @@ def train_source(nets, data, cfg, device):
         optimizer.step()
         if iteration % interval_iter == 0 or iteration == max_iter:
             _, logits = predict(nets, val_loader, device)
-            # Keep SHOT's own source checkpoint criterion (overall val ACC).
+            # Keep SHOT's criterion, including its >= tie rule. In full mode
+            # this is an in-training selection score, NOT held-out validation.
             accuracy = float((logits.argmax(1) == data.y[val_mask]).float().mean())
             if accuracy >= best_accuracy:
                 best_accuracy, best_state, best_iter = accuracy, cpu_state(nets), iteration
             print(
                 f"source iter={iteration}/{max_iter} loss={loss.item():.6f} "
-                f"val_acc={accuracy * 100:.4f}", flush=True
+                f"selection_acc={accuracy * 100:.4f}", flush=True
             )
             set_mode(nets, True)
-    # Upstream saves the best source-val states and reloads them for adaptation.
+    # Upstream saves the best source-selection states, then reloads them.
     load_state(nets, best_state)
-    return {"best_iteration": best_iter, "val_ACC": best_accuracy * 100}
+    return {
+        "protocol": cfg.source_protocol, "criterion": "overall source selection ACC; latest tie",
+        "selection_split": "val_mask & valid_binary", "selection_is_holdout": cfg.source_protocol == "train_val",
+        "training_nodes": int(train_mask.sum()), "selection_nodes": int(val_mask.sum()),
+        "training_selection_overlap": int((train_mask & val_mask).sum()),
+        "total_iterations": max_iter, "best_iteration": best_iter,
+        "selection_ACC": best_accuracy * 100,
+    }
 
 
 def obtain_label(nets, loader, cfg, device):
@@ -322,26 +389,29 @@ def adapt_target(nets, target_x, cfg, device):
             # Preserve upstream's periodic eval pass (including loader/RNG
             # cadence), but report only label-free entropy rather than ACC.
             _, eval_logits = predict(nets, test_loader, device)
-            mean_entropy = reference.loss.Entropy(F.softmax(eval_logits, dim=1)).mean().item()
+            probabilities = F.softmax(eval_logits, dim=1)
+            mean_entropy = reference.loss.Entropy(probabilities).mean().item()
+            counts = torch.bincount((probabilities[:, 1] > 0.5).long(), minlength=2).tolist()
             print(
                 f"target iter={iter_num + 1}/{max_iter} "
-                f"loss={classifier_loss.item():.6f} entropy={mean_entropy:.6f}", flush=True
+                f"loss={classifier_loss.item():.6f} entropy={mean_entropy:.6f} "
+                f"predicted_counts={counts}", flush=True
             )
             net_f.train()
             net_b.train()
     # Upstream SHOT uses the final target iterate, with no best-target selection.
+    return {"total_iterations": max_iter, "nodes": int(target_x.shape[0]),
+            "pseudo_label_interval": interval_iter}
 
 
-def evaluate(nets, target, cfg, device):
-    """Current EMBER learn.py: all(valid), per-class ACC/AUC, shared DP/EO."""
-    mask = all_valid_mask(target)
-    if not bool(mask.any()):
-        raise ValueError("Target has no valid binary labels for final evaluation")
-    _, logits = predict(nets, loader_for(target.x[mask], cfg), device)
+def classification_report(logits, labels, sensitive):
+    """EMBER metrics (%) and a confusion matrix: rows=true, columns=predicted."""
     prob = torch.nn.Softmax(dim=1)(logits)[:, 1].numpy()
     pred = (prob > 0.5).astype(int)
-    y = target.y[mask].cpu().numpy()
-    sens = target.sens_labels[mask].cpu().numpy()
+    y = labels.cpu().numpy()
+    sens = sensitive.cpu().numpy()
+    if not len(y) or not np.isin(y, [0, 1]).all():
+        raise ValueError("Evaluation requires a nonempty valid-binary label subset")
     classes = np.unique(y)
     acc = np.mean([accuracy_score(y[y == cls], pred[y == cls]) for cls in classes])
     auc = np.mean([
@@ -349,8 +419,11 @@ def evaluate(nets, target, cfg, device):
         for cls in classes
     ]) if len(classes) == 2 else float("nan")
     dp, eo = fair_metric(pred, y, sens)
-    return {"ACC": float(acc * 100), "AUC": float(auc * 100),
-            "DP": float(dp * 100), "EO": float(eo * 100)}
+    metrics = {"ACC": float(acc * 100), "AUC": float(auc * 100),
+               "DP": float(dp * 100), "EO": float(eo * 100)}
+    confusion = [[int(((y == true) & (pred == predicted)).sum()) for predicted in (0, 1)]
+                 for true in (0, 1)]
+    return {"metrics": metrics, "confusion_matrix": confusion}
 
 
 def run_one(cfg, dataset, run_idx, gpu):
@@ -365,45 +438,70 @@ def run_one(cfg, dataset, run_idx, gpu):
     target_seed = source_seed + cfg.target_seed_offset
     source_id, target_id = PAIRS[dataset]
     print(f"SHOT {dataset}{source_id} -> {dataset}{target_id}, run={run_idx + 1}, "
-          f"source_seed={source_seed}, target_seed={target_seed}, device={device}", flush=True)
+          f"source_seed={source_seed}, target_seed={target_seed}, device={device}, "
+          f"source_protocol={cfg.source_protocol}, source_only={cfg.source_only}", flush=True)
 
-    seed_all(source_seed)
-    source = get_dataset(SimpleNamespace(dataset=dataset), source_id)
+    prefix = Path(cfg.output_dir) / dataset / f"run_{run_idx + 1}"
+    prefix.parent.mkdir(parents=True, exist_ok=True)
+    # Both raw domain files may be accessed during data preparation (Pokec's
+    # shared feature schema). No raw files are loaded in the target stage.
+    source, target_x, annotations = prepare_data(dataset, source_seed, target_seed, cfg.source_only)
     input_dim = source.x.shape[1]
     seed_all(source_seed)
     nets = build_model(input_dim, cfg, device)
     source_info = train_source(nets, source, cfg, device)
-    run_dir = Path(cfg.output_dir) / dataset / f"run_{run_idx + 1}"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    if cfg.save_checkpoints:
-        torch.save({"states": cpu_state(nets), "input_dim": input_dim,
-                    "source_seed": source_seed, "config": vars(cfg)}, run_dir / "source.pt")
-    # Only learned parameters cross the stage boundary. No source data/replay,
-    # source features, source prototypes, or source label statistics are used.
-    del source
+    _, selection_mask = source_masks(source, cfg)
+    logits = snapshot_logits(nets, source.x[selection_mask], cfg, device)
+    source_info.update(classification_report(logits, source.y[selection_mask], source.sens_labels[selection_mask]))
+    source_head = cpu_state((nets[2],))[0]
+    checkpoint = {"input_dim": input_dim, "source": cpu_state(nets)} if cfg.save_checkpoints else None
+    result = {"dataset": dataset, "run": run_idx + 1, "source_seed": source_seed,
+              "source_selection": source_info}
+    if cfg.source_only:
+        write_json(prefix.with_suffix(".json"), result)
+        if checkpoint is not None:
+            torch.save(checkpoint, prefix.with_suffix(".pt"))
+        print("source held-out selection: " + json.dumps(source_info["metrics"]), flush=True)
+        return result
+    # Upstream reloads weights into fresh modules. Discard unused source grads
+    # and samples, so only model state enters target adaptation.
+    for net in nets:
+        for parameter in net.parameters():
+            parameter.grad = None
+    del source, selection_mask, logits
     gc.collect()
     if device.type == "cuda":
         torch.cuda.empty_cache()
 
     seed_all(target_seed)
-    target = get_dataset(SimpleNamespace(dataset=dataset), target_id)
-    if target.x.shape[1] != input_dim:
-        raise ValueError(f"{dataset}: source/target feature dimensions differ")
-    seed_all(target_seed)
-    # Includes unlabeled Pokec nodes. Labels and sensitive attributes remain
-    # outside the adaptation interface and are accessed only by evaluate().
-    adapt_target(nets, target.x, cfg, device)
-    metrics = evaluate(nets, target, cfg, device)
-    if cfg.save_checkpoints:
-        torch.save({"states": cpu_state(nets), "input_dim": input_dim,
-                    "target_seed": target_seed, "config": vars(cfg)}, run_dir / "target.pt")
-    result = {"dataset": dataset, "source_id": source_id, "target_id": target_id,
-              "run": run_idx + 1, "source_seed": source_seed, "target_seed": target_seed,
-              "source_selection": source_info, "metrics": metrics,
-              "evaluation": "target all(valid), per-class ACC/AUC, EMBER fair_metric",
-              "target_checkpoint": "final iteration", "config": vars(cfg)}
-    write_json(run_dir / "metrics.json", result)
-    print(json.dumps(metrics, sort_keys=True), flush=True)
+    before_logits = snapshot_logits(nets, target_x, cfg, device)
+    adaptation = adapt_target(nets, target_x, cfg, device)
+    after_logits = snapshot_logits(nets, target_x, cfg, device)
+    target_head = cpu_state((nets[2],))[0]
+    if any(not torch.equal(source_head[key], target_head[key]) for key in source_head):
+        raise RuntimeError("SHOT's frozen classifier changed during adaptation")
+    # No target label is scored until all adaptation updates have completed.
+    eval_mask = all_valid_mask(annotations)
+    if not bool(eval_mask.any()):
+        raise ValueError("Target has no valid binary labels for final evaluation")
+    before = classification_report(
+        before_logits[eval_mask], annotations.y[eval_mask], annotations.sens_labels[eval_mask])
+    after = classification_report(
+        after_logits[eval_mask], annotations.y[eval_mask], annotations.sens_labels[eval_mask])
+    if cfg.save_predictions:
+        np.savez_compressed(prefix.with_suffix(".npz"),
+                            logits_before=before_logits.numpy(), logits_after=after_logits.numpy(),
+                            labels=annotations.y.numpy(), sensitive=annotations.sens_labels.numpy(),
+                            eval_mask=eval_mask.numpy())
+    if checkpoint is not None:
+        checkpoint["target"] = cpu_state(nets)
+        torch.save(checkpoint, prefix.with_suffix(".pt"))
+    result.update(target_seed=target_seed, target_before=before, target_after=after,
+                  adaptation=adaptation, classifier_frozen_verified=True)
+    write_json(prefix.with_suffix(".json"), result)
+    print("target before adaptation (post-hoc): " + json.dumps(before["metrics"]), flush=True)
+    print("target after adaptation: " + json.dumps(after["metrics"]), flush=True)
+    return result
 
 
 def json_safe(value):
@@ -418,50 +516,52 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(json_safe(value), indent=2, allow_nan=False), encoding="utf-8")
 
 
+def metric_summary(values):
+    # EMBER's population statistics: undefined runs propagate, never get dropped.
+    if any(value is None or not math.isfinite(value) for value in values):
+        mean = variance = std = float("nan")
+    else:
+        mean = sum(values) / len(values)
+        variance = sum((value - mean) ** 2 for value in values) / len(values)
+        std = math.sqrt(variance)
+    return {"mean": mean, "variance": variance, "std": std, "runs": len(values)}
+
+
 def aggregate(rows, cfg):
-    """Aggregate only results returned by this invocation; population std."""
+    """Single summary; per-run JSON files remain the machine-readable records."""
     lines = [
-        f"# SHOT ({cfg.runs} runs, mean +/- std, final target iteration)", "",
-        "Target all(valid); ACC is the mean of per-class accuracies. "
-        "AUC uses class probabilities; DP/EO use EMBER.utils.fair_metric. "
-        "All metrics are percentages; variance/std use ddof=0.", "",
-        "|Dataset|ACC|AUC|DP|EO|", "|---|---|---|---|---|",
+        f"# SHOT-MLP ({cfg.runs} runs)", "",
+        f"source_protocol={cfg.source_protocol}; source_only={cfg.source_only}.",
+        "full: all valid source labels (EMBER); train_val: source train_mask "
+        "(DANCE/FatraGNN/GraphCTA). Source selection overlaps training in full.",
+        "ACC=class-mean accuracy; AUC=class-mean probability AUC; DP/EO=EMBER fair_metric.",
+        "Percentages, mean +/- population std (ddof=0); undefined runs propagate NaN.",
     ]
-    summary = {}
-    for dataset in cfg.datasets:
-        summary[dataset] = {}
-        cells = []
-        for metric in ("ACC", "AUC", "DP", "EO"):
-            values = [row["metrics"][metric] for row in rows if row["dataset"] == dataset]
-            # As in EMBER main.py, undefined per-run metrics propagate to the
-            # summary instead of silently dropping runs or filling with zero.
-            if any(value is None for value in values):
-                mean = variance = std = float("nan")
-            else:
-                mean = sum(values) / len(values)
-                variance = sum((value - mean) ** 2 for value in values) / len(values)
-                std = math.sqrt(variance)
-            summary[dataset][metric] = {"mean": mean, "variance": variance,
-                                        "std": std, "runs": len(values)}
-            cells.append(f"{mean:.2f}+/-{std:.2f}")
-        lines.append("|" + "|".join([dataset, *cells]) + "|")
-    lines.extend(["", "|Dataset|Run|Source seed|Target seed|ACC|AUC|DP|EO|",
-                  "|---|---|---|---|---|---|---|---|"])
-    for row in rows:
-        cells = ["nan" if row["metrics"][key] is None else f"{row['metrics'][key]:.4f}"
-                 for key in ("ACC", "AUC", "DP", "EO")]
-        lines.append("|" + "|".join(map(str, [row["dataset"], row["run"],
-                     row["source_seed"], row["target_seed"], *cells])) + "|")
+    sections = [("Source held-out selection", "source_selection")] if cfg.source_only else [
+        ("After adaptation: primary result, final iterate on target all(valid)", "target_after"),
+        ("Before adaptation: post-hoc diagnostic, never used for selection", "target_before"),
+    ]
+    for title, key in sections:
+        lines.extend(["", f"## {title}", "", "|Dataset|ACC|AUC|DP|EO|", "|---|---|---|---|---|"])
+        for dataset in cfg.datasets:
+            cells = []
+            for metric in ("ACC", "AUC", "DP", "EO"):
+                values = [row[key]["metrics"][metric] for row in rows if row["dataset"] == dataset]
+                statistics = metric_summary(values)
+                cells.append(f"{statistics['mean']:.2f}+/-{statistics['std']:.2f}")
+            lines.append("|" + "|".join([dataset, *cells]) + "|")
     output = Path(cfg.output_dir)
-    write_json(output / "summary.json", {"config": vars(cfg), "summary": summary, "runs": rows})
     (output / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("\n".join(lines[:len(cfg.datasets) + 6]), flush=True)
+    print("\n".join(lines), flush=True)
     print(f"Results: {output / 'summary.md'}", flush=True)
 
 
 def launch(cfg):
-    output = Path(cfg.output_dir).resolve()
-    output.mkdir(parents=True, exist_ok=True)
+    # Every invocation gets a fresh directory. Never overwrite downloaded
+    # results/checkpoints, or mix full and train_val experiments in one summary.
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+    output = Path(cfg.output_dir).resolve() / f"{stamp}_{cfg.source_protocol}"
+    output.mkdir(parents=True, exist_ok=False)
     cfg.output_dir = str(output)
     config_path = output / "config.json"
     write_json(config_path, vars(cfg))
@@ -472,9 +572,9 @@ def launch(cfg):
     def task(dataset, run_idx):
         gpu = slots.get()
         try:
-            run_dir = output / dataset / f"run_{run_idx + 1}"
-            run_dir.mkdir(parents=True, exist_ok=True)
-            log_path = run_dir / "run.log"
+            prefix = output / dataset / f"run_{run_idx + 1}"
+            prefix.parent.mkdir(parents=True, exist_ok=True)
+            log_path = prefix.with_suffix(".log")
             command = [sys.executable, str(Path(__file__).resolve()),
                        "--worker-config", str(config_path), "--worker-dataset", dataset,
                        "--worker-run", str(run_idx), "--worker-gpu", str(gpu)]
@@ -486,8 +586,9 @@ def launch(cfg):
                                          cwd=str(HERE), env=environment, check=False)
             if process.returncode:
                 raise RuntimeError(f"{dataset} run={run_idx + 1} failed; see {log_path}")
-            result = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
-            print(f"Done {dataset} run={run_idx + 1}: {result['metrics']}", flush=True)
+            result = json.loads(prefix.with_suffix(".json").read_text(encoding="utf-8"))
+            metric = result["source_selection" if cfg.source_only else "target_after"]["metrics"]
+            print(f"Done {dataset} run={run_idx + 1}: {metric}", flush=True)
             return result
         finally:
             slots.put(gpu)
@@ -529,6 +630,12 @@ def parse_args(argv=None):
             parser.error(f"{key} must be positive")
     if cfg.batch_size < 2 or cfg.workers < 0:
         parser.error("batch_size must be >= 2 and workers must be >= 0")
+    if cfg.source_protocol not in ("full", "train_val"):
+        parser.error("source_protocol must be full or train_val")
+    if cfg.source_only and cfg.source_protocol != "train_val":
+        parser.error("source_only requires source_protocol=train_val for independent source validation")
+    if cfg.source_lr_decay <= 0:
+        parser.error("source_lr_decay must be positive")
     if cfg.lr_decay1 <= 0 and cfg.lr_decay2 <= 0:
         parser.error("at least one target learning-rate multiplier must be positive")
     if cfg.cls_par < 0 or cfg.ent_par < 0 or cfg.threshold < 0:
@@ -539,6 +646,14 @@ def parse_args(argv=None):
         parser.error("invalid distance, classifier or layer")
     if not 0 <= cfg.smooth <= 1 or cfg.epsilon <= 0 or min(cfg.source_lr, cfg.target_lr) <= 0:
         parser.error("require smooth in [0,1], epsilon > 0, and positive learning rates")
+    for key in ("source_lr", "source_lr_decay", "target_lr", "lr_decay1", "lr_decay2",
+                "smooth", "cls_par", "ent_par", "epsilon"):
+        if not math.isfinite(getattr(cfg, key)):
+            parser.error(f"{key} must be finite")
+    if cfg.seed < 0 or cfg.seed + (cfg.runs - 1) * cfg.seed_step + cfg.target_seed_offset >= 2**32:
+        parser.error("source/target seeds must fit NumPy's [0, 2**32) range")
+    if cfg.target_seed_offset < 0:
+        parser.error("target_seed_offset must be nonnegative")
     return cfg
 
 
