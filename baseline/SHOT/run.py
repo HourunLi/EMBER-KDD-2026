@@ -1,4 +1,4 @@
-"""SHOT-MLP on EMBER's four pairs: edit DEFAULTS, then python run.py.
+"""SHOT-MLP on EMBER's four pairs: edit DEFAULTS / DATASET_PARAMS, then python run.py.
 
 Only final ACC/AUC/DP/EO are reported. The object-branch losses/updates and EMBER
 loaders are reused; only the image backbone is adapted to node vectors.
@@ -32,7 +32,7 @@ PAIRS = {
     "pokec": ("_z", "_n"),
     "syn": ("-2", "-1"),
 }
-# ===================== 可直接修改的默认参数 =====================
+# ===================== 共用运行设置 =====================
 DEFAULTS = {
     "datasets": ["bailA", "germanA", "pokec", "syn"],
     "runs": 5,
@@ -42,31 +42,110 @@ DEFAULTS = {
     "target_seed_offset": 100000,  # target: 101111, 102222, ...
     "source_protocol": "full",  # full: 对齐 EMBER；train_val: 对齐三个有效 baseline
     "source_only": False,      # True 须配合 train_val；仅源验证，不执行/评分目标域
-    "source_epochs": 20,        # SHOT object/image_source.py 的默认值
-    "target_epochs": 15,        # SHOT object/image_target.py 的默认值
-    "batch_size": 64,
     "eval_batch_size": 192,
     "workers": 0,
     "cpu_threads": 4,
-    "hidden_dim": 256,          # 节点特征 MLP 的宽度（图像 backbone 的输入适配）
-    "bottleneck": 256,
-    "source_lr": 0.01,
-    "source_lr_decay": 0.1,    # 保留 object/ 的源骨干倍率；不根据目标测试分数改成 1
-    "target_lr": 0.01,
-    "lr_decay1": 0.1,
-    "lr_decay2": 1.0,
-    "smooth": 0.1,
-    "cls_par": 0.3,             # SHOT；设为 0 即原方法的 SHOT-IM
-    "ent_par": 1.0,
-    "ent": True,
-    "gent": True,
-    "epsilon": 1e-5,
-    "threshold": 0,
-    "distance": "cosine",
-    "classifier": "bn",
-    "layer": "wn",
-    "interval": 15,             # 原方法：target 总迭代数 // interval 更新伪标签
     "output_dir": str(HERE / "results"),  # 每次启动新建时间戳子目录
+}
+# ===================== 各数据集独立超参数 =====================
+# 四份均初始化为 object/image_source.py、image_target.py 的原始默认值。
+# source_lr_decay=0.1 对应原源训练代码中固定的 F 倍率。
+# hidden_dim=256 是 MLP 适配参数，原 CNN 没有此参数。
+# interval 控制 target 总迭代数 // interval 的伪标签刷新间隔。
+# 命令行显式传入的方法参数会覆盖本次所有所选数据集的相应值。
+DATASET_PARAMS = {
+    "bailA": {
+        "source_epochs": 20,
+        "target_epochs": 15,
+        "batch_size": 64,
+        "hidden_dim": 256,
+        "bottleneck": 256,
+        "source_lr": 0.01,
+        "source_lr_decay": 0.1,
+        "target_lr": 0.01,
+        "lr_decay1": 0.1,
+        "lr_decay2": 1.0,
+        "smooth": 0.1,
+        "cls_par": 0.3,
+        "ent_par": 1.0,
+        "ent": True,
+        "gent": True,
+        "epsilon": 1e-5,
+        "threshold": 0,
+        "distance": "cosine",
+        "classifier": "bn",
+        "layer": "wn",
+        "interval": 15,
+    },
+    "germanA": {
+        "source_epochs": 20,
+        "target_epochs": 15,
+        "batch_size": 64,
+        "hidden_dim": 256,
+        "bottleneck": 256,
+        "source_lr": 0.01,
+        "source_lr_decay": 0.1,
+        "target_lr": 0.01,
+        "lr_decay1": 0.1,
+        "lr_decay2": 1.0,
+        "smooth": 0.1,
+        "cls_par": 0.3,
+        "ent_par": 1.0,
+        "ent": True,
+        "gent": True,
+        "epsilon": 1e-5,
+        "threshold": 0,
+        "distance": "cosine",
+        "classifier": "bn",
+        "layer": "wn",
+        "interval": 15,
+    },
+    "pokec": {
+        "source_epochs": 20,
+        "target_epochs": 15,
+        "batch_size": 64,
+        "hidden_dim": 256,
+        "bottleneck": 256,
+        "source_lr": 0.01,
+        "source_lr_decay": 0.1,
+        "target_lr": 0.01,
+        "lr_decay1": 0.1,
+        "lr_decay2": 1.0,
+        "smooth": 0.1,
+        "cls_par": 0.3,
+        "ent_par": 1.0,
+        "ent": True,
+        "gent": True,
+        "epsilon": 1e-5,
+        "threshold": 0,
+        "distance": "cosine",
+        "classifier": "bn",
+        "layer": "wn",
+        "interval": 15,
+    },
+    "syn": {
+        "source_epochs": 20,
+        "target_epochs": 15,
+        "batch_size": 64,
+        "hidden_dim": 256,
+        "bottleneck": 256,
+        "source_lr": 0.01,
+        "source_lr_decay": 0.1,
+        "target_lr": 0.01,
+        "lr_decay1": 0.1,
+        "lr_decay2": 1.0,
+        "smooth": 0.1,
+        "cls_par": 0.3,
+        "ent_par": 1.0,
+        "ent": True,
+        "gent": True,
+        "epsilon": 1e-5,
+        "threshold": 0,
+        "distance": "cosine",
+        "classifier": "bn",
+        "layer": "wn",
+        "interval": 15,
+    },
 }
 # 数据路径直接沿用 EMBER/dataset.py；不在这里另写一套预处理或归一化。
 # ==============================================================
@@ -529,16 +608,26 @@ def launch(cfg):
     aggregate(rows, cfg)
 
 
+def dataset_config(cfg, dataset):
+    """Resolve one dataset's saved parameters for validation and its worker."""
+    settings = vars(cfg).copy()
+    dataset_params = settings.pop("dataset_params")
+    return SimpleNamespace(**{**settings, **dataset_params[dataset]})
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    for key, default in DEFAULTS.items():
+    method_defaults = DATASET_PARAMS["bailA"]
+    for key, default in {**DEFAULTS, **method_defaults}.items():
         option = "--" + key.replace("_", "-")
+        # Absent CLI options must not overwrite a dataset's own parameters.
+        argument_default = default if key in DEFAULTS else argparse.SUPPRESS
         if isinstance(default, bool):
-            parser.add_argument(option, default=default, action=argparse.BooleanOptionalAction)
+            parser.add_argument(option, default=argument_default, action=argparse.BooleanOptionalAction)
         elif isinstance(default, list):
-            parser.add_argument(option, nargs="+", type=type(default[0]), default=default)
+            parser.add_argument(option, nargs="+", type=type(default[0]), default=argument_default)
         else:
-            parser.add_argument(option, type=type(default), default=default)
+            parser.add_argument(option, type=type(default), default=argument_default)
     parser.add_argument("--worker-config", help=argparse.SUPPRESS)
     parser.add_argument("--worker-dataset", choices=PAIRS, help=argparse.SUPPRESS)
     parser.add_argument("--worker-run", type=int, help=argparse.SUPPRESS)
@@ -549,6 +638,18 @@ def parse_args(argv=None):
     cfg = SimpleNamespace(**{key: getattr(args, key) for key in DEFAULTS})
     if not cfg.datasets or len(set(cfg.datasets)) != len(cfg.datasets) or set(cfg.datasets) - PAIRS.keys():
         parser.error(f"datasets must be a nonempty unique selection from {list(PAIRS)}")
+    overrides = {key: getattr(args, key) for key in method_defaults if hasattr(args, key)}
+    cfg.dataset_params = {}
+    for dataset in cfg.datasets:
+        if set(DATASET_PARAMS[dataset]) != set(method_defaults):
+            parser.error(f"{dataset}: parameter names must match bailA's parameter names")
+        cfg.dataset_params[dataset] = {**DATASET_PARAMS[dataset], **overrides}
+        validate_config(dataset_config(cfg, dataset), parser)
+    return cfg
+
+
+def validate_config(cfg, parser):
+    """Apply the original configuration checks to each resolved dataset."""
     if not cfg.gpus or len(set(cfg.gpus)) != len(cfg.gpus) or any(gpu < -1 for gpu in cfg.gpus):
         parser.error("gpus must contain unique nonnegative GPU IDs, or [-1] for CPU")
     if -1 in cfg.gpus and cfg.gpus != [-1]:
@@ -583,14 +684,14 @@ def parse_args(argv=None):
         parser.error("source/target seeds must fit NumPy's [0, 2**32) range")
     if cfg.target_seed_offset < 0:
         parser.error("target_seed_offset must be nonnegative")
-    return cfg
 
 
 def main():
     cfg = parse_args()
     if getattr(cfg, "worker_config", None):
         settings = json.loads(Path(cfg.worker_config).read_text(encoding="utf-8"))["config"]
-        result = run_one(SimpleNamespace(**settings), cfg.worker_dataset, cfg.worker_run, cfg.worker_gpu)
+        worker_cfg = dataset_config(SimpleNamespace(**settings), cfg.worker_dataset)
+        result = run_one(worker_cfg, cfg.worker_dataset, cfg.worker_run, cfg.worker_gpu)
         print("SHOT_RESULT=" + json.dumps(json_safe(result), allow_nan=False), flush=True)
     else:
         launch(cfg)

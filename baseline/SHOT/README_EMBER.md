@@ -1,6 +1,18 @@
 # SHOT-MLP：EMBER 四数据集复现
 
-修改 `run.py` 顶部 `DEFAULTS`，在本目录执行 `python run.py`。
+修改 `run.py` 顶部的配置，在本目录执行 `python run.py`：
+
+- `DEFAULTS`：共用的运行设置，如数据集列表、运行次数、GPU、种子和源监督协议。
+- `DATASET_PARAMS`：`bailA`、`germanA`、`pokec`、`syn` 各自独立的完整方法参数。
+  只修改某个数据集的字典，即只影响该数据集。
+
+四份方法参数均初始化为 SHOT object 分支原始默认值：源/目标 lr=0.01、
+源 F 倍率=0.1、目标 F/B 倍率=0.1/1.0、源/目标 epoch=20/15、
+batch_size=64、bottleneck=256、smooth=0.1、cls_par=0.3、ent_par=1.0、
+ent/gent=True、epsilon=1e-5、threshold=0、distance=cosine、classifier=bn、
+layer=wn、interval=15。MLP 的 hidden_dim=256 是当前向量输入适配设置，
+原 CNN 没有这个参数。种子、源监督协议及计算资源设置继续沿用当前复现约定。
+
 默认四个数据集各 5 次；`gpus=[0,2]` 表示每张 GPU 同时运行一个实验，
 `gpus=[-1]` 为 CPU。需要 EMBER 环境及 torchvision，数据路径沿用
 `EMBER/dataset.py`。命令行也可覆盖配置：
@@ -9,10 +21,15 @@
 python run.py --datasets bailA germanA pokec syn --runs 5 --gpus 0 2
 ```
 
+显式传入的方法参数会覆盖本次所有所选数据集的对应值。例如
+`--datasets pokec --target-lr 0.001` 只覆盖本次 Pokec 的目标学习率；
+未传入的方法参数使用其 `DATASET_PARAMS` 中的值。
+
 每次启动在 `results/<UTC时间戳>_<source_protocol>/` 中只生成：
 
 - `summary.md`：最终目标模型的 ACC/AUC/DP/EO，mean +/- std 主表。
-- `results.json`：一次保存配置、逐种子最终指标、源选模信息和统计结果。
+- `results.json`：一次保存共用配置、`config.dataset_params` 中各数据集实际使用的
+  超参数、逐种子最终指标、源选模信息和统计结果。
 
 不再输出适配前指标、混淆矩阵、模型权重、预测数组或成功运行的训练日志。
 只有失败时保存对应 `.log`，失败运行不会被跳过后生成不完整主表。
