@@ -1,7 +1,7 @@
-"""SHOT-MLP on EMBER's four pairs: edit DEFAULTS / DATASET_PARAMS, then python run.py.
+"""SHOT-GCN on EMBER's four pairs: edit DEFAULTS / DATASET_PARAMS, then python run.py.
 
 Only final ACC/AUC/DP/EO are reported. The object-branch losses/updates and EMBER
-loaders are reused; only the image backbone is adapted to node vectors.
+loaders are reused; the backbone is a two-layer GCN with exact graph neighborhoods.
 See README_EMBER.md for source-label protocols and the Pokec audit.
 """
 
@@ -50,7 +50,7 @@ DEFAULTS = {
 # ===================== 各数据集独立超参数 =====================
 # 四份均初始化为 object/image_source.py、image_target.py 的原始默认值。
 # source_lr_decay=0.1 对应原源训练代码中固定的 F 倍率。
-# hidden_dim=256 是 MLP 适配参数，原 CNN 没有此参数。
+# hidden_dim=256 是两层 GCN 的宽度，原 CNN 没有此适配参数。
 # interval 控制 target 总迭代数 // interval 的伪标签刷新间隔。
 # 命令行显式传入的方法参数会覆盖本次所有所选数据集的相应值。
 DATASET_PARAMS = {
@@ -68,13 +68,9 @@ DATASET_PARAMS = {
         "smooth": 0.1,
         "cls_par": 0.3,
         "ent_par": 1.0,
-        "ent": True,
-        "gent": True,
-        "epsilon": 1e-5,
-        "threshold": 0,
-        "distance": "cosine",
-        "classifier": "bn",
-        "layer": "wn",
+        "ent": True, "gent": True,
+        "epsilon": 1e-5, "threshold": 0,
+        "distance": "cosine", "classifier": "bn", "layer": "wn",
         "interval": 15,
     },
     "germanA": {
@@ -91,13 +87,9 @@ DATASET_PARAMS = {
         "smooth": 0.1,
         "cls_par": 0.3,
         "ent_par": 1.0,
-        "ent": True,
-        "gent": True,
-        "epsilon": 1e-5,
-        "threshold": 0,
-        "distance": "cosine",
-        "classifier": "bn",
-        "layer": "wn",
+        "ent": True, "gent": True,
+        "epsilon": 1e-5, "threshold": 0,
+        "distance": "cosine", "classifier": "bn", "layer": "wn",
         "interval": 15,
     },
     "pokec": {
@@ -114,13 +106,9 @@ DATASET_PARAMS = {
         "smooth": 0.1,
         "cls_par": 0.3,
         "ent_par": 1.0,
-        "ent": True,
-        "gent": True,
-        "epsilon": 1e-5,
-        "threshold": 0,
-        "distance": "cosine",
-        "classifier": "bn",
-        "layer": "wn",
+        "ent": True, "gent": True,
+        "epsilon": 1e-5, "threshold": 0,
+        "distance": "cosine", "classifier": "bn", "layer": "wn",
         "interval": 15,
     },
     "syn": {
@@ -137,13 +125,9 @@ DATASET_PARAMS = {
         "smooth": 0.1,
         "cls_par": 0.3,
         "ent_par": 1.0,
-        "ent": True,
-        "gent": True,
-        "epsilon": 1e-5,
-        "threshold": 0,
-        "distance": "cosine",
-        "classifier": "bn",
-        "layer": "wn",
+        "ent": True, "gent": True,
+        "epsilon": 1e-5, "threshold": 0,
+        "distance": "cosine", "classifier": "bn", "layer": "wn",
         "interval": 15,
     },
 }
@@ -154,28 +138,28 @@ DATASET_PARAMS = {
 def runtime():
     """Keep the launcher / --help usable without importing the ML stack."""
     global np, torch, F, reference, get_dataset, fair_metric, accuracy_score, roc_auc_score, cdist
+    global csr_matrix, gcn_norm
     if "reference" in globals():
         return
     import numpy as np
     import torch
     import torch.nn.functional as F
     from scipy.spatial.distance import cdist
+    from scipy.sparse import csr_matrix
     from sklearn.metrics import accuracy_score, roc_auc_score
+    from torch_geometric.nn.conv.gcn_conv import gcn_norm
 
     sys.path.insert(0, str(ROOT))
     from EMBER.dataset import get_dataset
     from EMBER.utils import fair_metric
 
-    # Import the original network/loss under private names. Importing the whole
-    # image_target module would also require its unused OpenCV image reader.
+    # Reuse upstream networks/losses/helpers without importing image-only IO.
     modules = {}
     for name in ("network", "loss"):
         spec = importlib.util.spec_from_file_location(f"_shot_{name}", HERE / "object" / f"{name}.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         modules[name] = module
-    # Compile just the two self-contained upstream helper definitions, without
-    # changing their bodies or importing image-only data loading dependencies.
     helper_names = {"op_copy", "lr_scheduler"}
     path = HERE / "object" / "image_target.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -215,13 +199,7 @@ def source_masks(data, cfg):
 
 
 def prepare_data(dataset, source_seed, target_seed, source_only=False):
-    """Finish shared preprocessing BEFORE either learning stage.
-
-    In particular EMBER's Pokec loader opens both domain CSVs for their common
-    columns. Keeping that access in offline preparation avoids accessing source
-    files during target adaptation, without rewriting any EMBER preprocessing.
-    Target annotations are held separately and only scored after adaptation.
-    """
+    """Prepare both domains offline; keep target annotations outside its graph."""
     source_id, target_id = PAIRS[dataset]
     seed_all(source_seed)
     source = get_dataset(SimpleNamespace(dataset=dataset), source_id)
@@ -239,19 +217,48 @@ def prepare_data(dataset, source_seed, target_seed, source_only=False):
         name: getattr(target, name)
         for name in ("y", "sens_labels", "train_mask", "val_mask", "test_mask")
     })
-    return source, target.x, annotations
+    return source, Graph(target.x, target.edge_index), annotations
+
+
+class Graph:
+    """Label-free graph with global GCN normalization and fixed A_norm @ X.
+
+    Each minibatch retains all neighbors. Caching only the first linear graph
+    aggregation is exact: A_norm @ (X @ W) == (A_norm @ X) @ W.
+    """
+
+    def __init__(self, x, edge_index):
+        edges, weights = gcn_norm(edge_index.cpu(), num_nodes=len(x), dtype=x.dtype)
+        self.adj = csr_matrix(
+            (weights.numpy(), (edges[1].numpy(), edges[0].numpy())),
+            shape=(len(x), len(x)),
+        )
+        self.ax = torch.from_numpy(self.adj @ x.cpu().numpy())
+
+    def batch(self, row_ids, device):
+        rows = self.adj[row_ids.numpy()]
+        neighbors, columns = np.unique(rows.indices, return_inverse=True)
+        indices = np.stack((np.repeat(np.arange(len(row_ids)), np.diff(rows.indptr)), columns))
+        adj = torch.sparse_coo_tensor(
+            torch.from_numpy(indices), torch.from_numpy(rows.data),
+            size=(len(row_ids), len(neighbors)), device=device,
+        ).coalesce()
+        return self.ax[neighbors].to(device), adj
 
 
 def build_model(input_dim, cfg, device):
-    # Node vectors cannot enter ResNet/VGG. This is the only backbone adapter;
-    # no graph propagation, feature renormalization or augmentation is added.
-    net_f = torch.nn.Sequential(
-        torch.nn.Linear(input_dim, cfg.hidden_dim),
-        torch.nn.ReLU(),
-        torch.nn.Linear(cfg.hidden_dim, cfg.hidden_dim),
-        torch.nn.ReLU(),
-    )
-    net_f.in_features = cfg.hidden_dim  # SHOT backbone API: output feature width
+    class GCN(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = torch.nn.Linear(input_dim, cfg.hidden_dim)
+            self.conv2 = torch.nn.Linear(cfg.hidden_dim, cfg.hidden_dim)
+
+        def forward(self, batch):
+            ax, adj = batch
+            hidden = F.relu(self.conv1(ax))
+            return F.relu(self.conv2(torch.sparse.mm(adj, hidden)))
+
+    net_f = GCN()
     net_f.apply(reference.network.init_weights)
     net_b = reference.network.feat_bottleneck(
         feature_dim=cfg.hidden_dim, bottleneck_dim=cfg.bottleneck, type=cfg.classifier
@@ -262,14 +269,11 @@ def build_model(input_dim, cfg, device):
     return tuple(net.to(device) for net in (net_f, net_b, net_c))
 
 
-def loader_for(x, cfg, y=None, shuffle=False):
-    # Target datasets contain features and row IDs only, never true labels,
-    # sensitive attributes, or masks derived from target labels.
-    row_ids = torch.arange(x.shape[0])
-    tensors = (x, row_ids) if y is None else (x, y)
-    dataset = torch.utils.data.TensorDataset(*tensors)
+def loader_for(graph, cfg, row_ids=None, shuffle=False):
+    # Batches contain node IDs only; graph context never contains annotations.
+    row_ids = torch.arange(len(graph.ax)) if row_ids is None else row_ids
     return torch.utils.data.DataLoader(
-        dataset,
+        row_ids,
         batch_size=cfg.batch_size if shuffle else cfg.eval_batch_size,
         shuffle=shuffle,
         num_workers=cfg.workers,
@@ -283,7 +287,7 @@ def training_batches(loader):
         raise ValueError("SHOT training requires at least two examples")
     while True:
         for batch in loader:
-            if batch[0].shape[0] > 1:
+            if len(batch) > 1:
                 yield batch
 
 
@@ -294,43 +298,39 @@ def cpu_state(nets):
     ]
 
 
-def load_state(nets, states):
-    for net, state in zip(nets, states):
-        net.load_state_dict(state)
-
-
 def set_mode(nets, train):
     for net in nets:
         net.train(train)
 
 
-def predict(nets, loader, device):
+def predict(nets, graph, loader, device):
     net_f, net_b, net_c = nets
     set_mode(nets, False)
     features, outputs = [], []
     with torch.no_grad():
-        for x, _ in loader:
-            feature = net_b(net_f(x.to(device)))
+        for row_ids in loader:
+            feature = net_b(net_f(graph.batch(row_ids, device)))
             features.append(feature.float().cpu())
             outputs.append(net_c(feature).float().cpu())
     return torch.cat(features), torch.cat(outputs)
 
 
-def train_source(nets, data, cfg, device):
-    """Upstream label smoothing / SGD / best source-subset ACC selection.
+def optimizer_for(nets, learning_rate, scales):
+    groups = []
+    for net, scale in zip(nets, scales):
+        for parameter in net.parameters():
+            parameter.requires_grad_(scale > 0)
+            if scale > 0:
+                groups.append({"params": parameter, "lr": learning_rate * scale})
+    return reference.op_copy(torch.optim.SGD(groups))
 
-    full is SHOT's native --trte full convention: the selection subset overlaps
-    training. train_val retains an independent EMBER source validation split.
-    """
+
+def train_source(nets, data, graph, cfg, device):
+    """SHOT source training; loss only on selected nodes, context on source graph."""
     train_mask, val_mask = source_masks(data, cfg)
-    train_loader = loader_for(data.x[train_mask], cfg, data.y[train_mask], shuffle=True)
-    val_loader = loader_for(data.x[val_mask], cfg, data.y[val_mask])
-    param_groups = [
-        {"params": parameter, "lr": cfg.source_lr * (cfg.source_lr_decay if index == 0 else 1.0)}
-        for index, net in enumerate(nets)
-        for parameter in net.parameters()
-    ]
-    optimizer = reference.op_copy(torch.optim.SGD(param_groups))
+    train_loader = loader_for(graph, cfg, train_mask.nonzero().flatten(), shuffle=True)
+    val_loader = loader_for(graph, cfg, val_mask.nonzero().flatten())
+    optimizer = optimizer_for(nets, cfg.source_lr, (cfg.source_lr_decay, 1.0, 1.0))
     criterion = reference.loss.CrossEntropyLabelSmooth(
         num_classes=2, epsilon=cfg.smooth, use_gpu=device.type == "cuda"
     )
@@ -341,23 +341,22 @@ def train_source(nets, data, cfg, device):
     set_mode(nets, True)
     net_f, net_b, net_c = nets
     for iteration in range(1, max_iter + 1):
-        x, y = next(batches)
+        row_ids = next(batches)
         reference.lr_scheduler(optimizer, iteration, max_iter)
-        outputs = net_c(net_b(net_f(x.to(device))))
-        loss = criterion(outputs, y.to(device))
+        outputs = net_c(net_b(net_f(graph.batch(row_ids, device))))
+        loss = criterion(outputs, data.y[row_ids].to(device))
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         if iteration % interval_iter == 0 or iteration == max_iter:
-            _, logits = predict(nets, val_loader, device)
-            # Keep SHOT's criterion, including its >= tie rule. In full mode
-            # this is an in-training selection score, NOT held-out validation.
+            _, logits = predict(nets, graph, val_loader, device)
             accuracy = float((logits.argmax(1) == data.y[val_mask]).float().mean())
             if accuracy >= best_accuracy:
                 best_accuracy, best_state, best_iter = accuracy, cpu_state(nets), iteration
             set_mode(nets, True)
     # Upstream saves the best source-selection states, then reloads them.
-    load_state(nets, best_state)
+    for net, state in zip(nets, best_state):
+        net.load_state_dict(state)
     return {
         "selection_is_holdout": cfg.source_protocol == "train_val",
         "training_nodes": int(train_mask.sum()), "selection_nodes": int(val_mask.sum()),
@@ -367,13 +366,9 @@ def train_source(nets, data, cfg, device):
     }
 
 
-def obtain_label(nets, loader, cfg, device):
-    """Exact two-pass clustering from object/image_target.py:obtain_label.
-
-    The upstream label-dependent accuracy printout is omitted. No true target
-    labels are provided to this function; clustering uses predictions only.
-    """
-    all_fea, logits = predict(nets, loader, device)
+def obtain_label(nets, graph, loader, cfg, device):
+    """Original two-pass prototype clustering, without true target labels."""
+    all_fea, logits = predict(nets, graph, loader, device)
     all_output = torch.nn.Softmax(dim=1)(logits)
     _, predict_label = torch.max(all_output, 1)
     if cfg.distance == "cosine":
@@ -396,35 +391,27 @@ def obtain_label(nets, loader, cfg, device):
     return torch.from_numpy(predict_label.astype("int")).to(device)
 
 
-def adapt_target(nets, target_x, cfg, device):
-    """SHOT target stage: accepts only target X, never a labeled Data object."""
+def adapt_target(nets, graph, cfg, device):
+    """SHOT adaptation receives only the target graph, never its annotations."""
     net_f, net_b, net_c = nets
     net_c.eval()
     for parameter in net_c.parameters():
         parameter.requires_grad_(False)
-    param_groups = []
-    for net, decay in ((net_f, cfg.lr_decay1), (net_b, cfg.lr_decay2)):
-        for parameter in net.parameters():
-            parameter.requires_grad_(decay > 0)
-            if decay > 0:
-                param_groups.append({"params": parameter, "lr": cfg.target_lr * decay})
-    optimizer = reference.op_copy(torch.optim.SGD(param_groups))
-    train_loader = loader_for(target_x, cfg, shuffle=True)
-    test_loader = loader_for(target_x, cfg)
+    optimizer = optimizer_for((net_f, net_b), cfg.target_lr, (cfg.lr_decay1, cfg.lr_decay2))
+    train_loader = loader_for(graph, cfg, shuffle=True)
+    test_loader = loader_for(graph, cfg)
     max_iter = cfg.target_epochs * len(train_loader)
     interval_iter = max(1, max_iter // cfg.interval)
     batches = training_batches(train_loader)
-    net_f.train()
-    net_b.train()
+    set_mode((net_f, net_b), True)
     for iter_num in range(max_iter):
         # Fetch the batch before refreshing pseudo-labels, as in upstream SHOT.
-        x, row_ids = next(batches)
+        row_ids = next(batches)
         if iter_num % interval_iter == 0 and cfg.cls_par > 0:
-            mem_label = obtain_label(nets, test_loader, cfg, device)
-            net_f.train()
-            net_b.train()
+            mem_label = obtain_label(nets, graph, test_loader, cfg, device)
+            set_mode((net_f, net_b), True)
         reference.lr_scheduler(optimizer, iter_num + 1, max_iter)
-        outputs = net_c(net_b(net_f(x.to(device))))
+        outputs = net_c(net_b(net_f(graph.batch(row_ids, device))))
         if cfg.cls_par > 0:
             classifier_loss = F.cross_entropy(outputs, mem_label[row_ids.to(device)]) * cfg.cls_par
         else:
@@ -442,9 +429,8 @@ def adapt_target(nets, target_x, cfg, device):
         if (iter_num + 1) % interval_iter == 0 or iter_num + 1 == max_iter:
             # Keep this upstream pass: iterating the loader consumes RNG and
             # therefore affects subsequent shuffled batches, even without logs.
-            predict(nets, test_loader, device)
-            net_f.train()
-            net_b.train()
+            predict(nets, graph, test_loader, device)
+            set_mode((net_f, net_b), True)
     # Upstream SHOT uses the final target iterate, with no best-target selection.
 
 
@@ -477,34 +463,32 @@ def run_one(cfg, dataset, run_idx, gpu):
     device = torch.device(f"cuda:{gpu}" if gpu >= 0 else "cpu")
     source_seed = cfg.seed + run_idx * cfg.seed_step
     target_seed = source_seed + cfg.target_seed_offset
-    # Both raw domain files may be accessed during data preparation (Pokec's
-    # shared feature schema). No raw files are loaded in the target stage.
-    source, target_x, annotations = prepare_data(dataset, source_seed, target_seed, cfg.source_only)
+    source, target_graph, annotations = prepare_data(dataset, source_seed, target_seed, cfg.source_only)
+    source_graph = Graph(source.x, source.edge_index)
     input_dim = source.x.shape[1]
     seed_all(source_seed)
     nets = build_model(input_dim, cfg, device)
-    source_info = train_source(nets, source, cfg, device)
+    source_info = train_source(nets, source, source_graph, cfg, device)
     result = {"dataset": dataset, "run": run_idx + 1, "source_seed": source_seed,
               "source_selection": source_info}
     if cfg.source_only:
         _, mask = source_masks(source, cfg)
-        _, logits = predict(nets, loader_for(source.x[mask], cfg), device)
+        _, logits = predict(nets, source_graph, loader_for(source_graph, cfg, mask.nonzero().flatten()), device)
         result["metrics"] = metrics(logits, source.y[mask], source.sens_labels[mask])
         return result
-    # Upstream reloads weights into fresh modules. Discard unused source grads
-    # and samples, so only model state enters target adaptation.
+    # Only learned model state crosses into target adaptation.
     for net in nets:
         for parameter in net.parameters():
             parameter.grad = None
     source_head = cpu_state((nets[2],))[0]
-    del source
+    del source, source_graph
     gc.collect()
     if device.type == "cuda":
         torch.cuda.empty_cache()
 
     seed_all(target_seed)
-    adapt_target(nets, target_x, cfg, device)
-    _, logits = predict(nets, loader_for(target_x, cfg), device)
+    adapt_target(nets, target_graph, cfg, device)
+    _, logits = predict(nets, target_graph, loader_for(target_graph, cfg), device)
     target_head = cpu_state((nets[2],))[0]
     if any(not torch.equal(source_head[key], target_head[key]) for key in source_head):
         raise RuntimeError("SHOT's frozen classifier changed during adaptation")
@@ -543,7 +527,7 @@ def metric_summary(values):
 def aggregate(rows, cfg):
     """Only the final paper table; retain per-seed values/config in one JSON."""
     lines = [
-        f"# SHOT-MLP ({cfg.runs} runs)", "",
+        f"# SHOT-GCN ({cfg.runs} runs)", "",
         ("Source held-out validation only. " if cfg.source_only else "Final target all(valid). ") +
         f"source_protocol={cfg.source_protocol}; %, mean +/- std (ddof=0).", "",
         "|Dataset|ACC|AUC|DP|EO|", "|---|---|---|---|---|",
