@@ -9,7 +9,7 @@ matplotlib.rcParams['axes.labelsize'] = 14
 matplotlib.rcParams['xtick.labelsize'] = 14
 matplotlib.rcParams['ytick.labelsize'] = 14
 
-# 示例数据
+
 beta = np.array([0.2, 0.4, 0.6, 0.8, 1])
 
 c1_acc = np.array([1.21, 1.07, 0.74, 0.66, 0.89])
@@ -36,12 +36,12 @@ font2 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 20} # Times Ne
 # plt.xlabel("The trade off parameter $\delta$ of Mixup", font2)
 
 
-# # 绘制折线
+
 plt.plot(beta, c1_acc, marker='v', linestyle='-', color='lightgreen', label='C1', markersize=20, markeredgecolor='black', markeredgewidth=0.05) 
 plt.plot(beta, c2_acc, marker='o', linestyle='-', color='peachpuff', label='C2', markersize=20, markeredgecolor='black', markeredgewidth=0.05)
 plt.plot(beta, c3_acc, marker='s', linestyle='-', color='lightblue', label='C3', markersize=20, markeredgecolor='black', markeredgewidth=0.05)
 plt.plot(beta, c4_acc, marker='*', linestyle='-', color='gold', label='C4', markersize=25, markeredgecolor='black', markeredgewidth=0.05)
-# 添加标题和轴标签
+
 # plt.xlabel(r'The ratio of synthesized nodes $\it{r}$', fontsize = 40, labelpad = 20)
 plt.xlabel(r'The ratio of synthesized nodes $\gamma$', font1)
 # plt.ylabel('Demographic Parity', fontsize = 40)

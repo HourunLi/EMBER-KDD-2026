@@ -222,7 +222,7 @@ class StandGCN(nn.Module):
 
     # def initialize_weights(self, m):
     #     if isinstance(m, GCNConv):
-    #         nn.init.xavier_uniform_(m.weight)  # GCNConv 内部有线性层
+
     #         if m.bias is not None:
     #             nn.init.zeros_(m.bias)
     #     elif isinstance(m, nn.BatchNorm1d):

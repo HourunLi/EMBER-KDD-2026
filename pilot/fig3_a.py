@@ -18,7 +18,7 @@ fig, axis = plt.subplots()
 axis.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
 # axis.grid(color='darkgrey',linestyle='-', axis='y')
 plt.grid(color='darkgrey',linestyle='-', axis='y', alpha=0.3) 
-# plt.grid(zorder=0) # 让网格线置于底层，同时需要让线置于上层（zorder=100）
+
 
 # AMAP
 # & M1 & 67.07±3.93 & 62.57±1.89 & 48.56±3.35 & 59.39±5.35
@@ -45,9 +45,9 @@ height5 = np.array([2.74, 2.54, 2.01, 1.52])
 
 plt.xlim((-0.15, 3.85))
 plt.ylim((0, 4))
-# 设置宽度值（偏移量）
+
 width = 0.12
-# 绘制不同数据时，x 轴依次增加一个偏移量
+
 epsilon = 0.02
 plt.bar(x,                           height1, width, color= '#8491B4CC',    label="$\delta$=0.1", edgecolor="none")
 plt.bar(x + width + epsilon,         height2, width, color='#91D1C2CC', label="$\delta$=0.3", edgecolor="none")
@@ -57,7 +57,7 @@ plt.bar(x + width * 3 + epsilon * 3, height4, width, color='#00A087CC',    label
 plt.bar(x + width * 4 + epsilon * 4, height5, width, color=  '#4DBBD5CC',  label="$\delta$=0.9", edgecolor="none") 
 # plt.bar(x + width * 5 + epsilon * 5, height6, width, color='darkseagreen',    label="K=15", edgecolor="none") 
 
-# 设置 x 轴刻度的标签
+
 plt.xticks(x + width*2, ['C1', 'C2','C3','C4'])
 
 font1 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 26} # Times New Roman
@@ -66,7 +66,7 @@ plt.ylabel("Demographic Parity", font1)
 font2 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 26} # Times New Roman
 plt.xlabel("The trade off parameter $\delta$ of Mixup", font2)
 
-#设置坐标刻度值的大小以及刻度值的字体
+
 plt.tick_params(labelsize=25)
 labels = axis.get_xticklabels() + axis.get_yticklabels()
 [label.set_fontname('Times New Roman') for label in labels]
@@ -74,19 +74,19 @@ labels = axis.get_xticklabels() + axis.get_yticklabels()
 
 font2 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 18} # Times New Roman
 # plt.legend(prop=font2, loc='upper left')
-plt.legend(prop=font2, ncol=2, loc=1, frameon=True) # 横着放
+plt.legend(prop=font2, ncol=2, loc=1, frameon=True)
 # plt.legend(prop=font2, bbox_to_anchor=(0.5, 1.0), ncol=3, borderaxespad=0)
 
 # index=np.arange(len(x))
 # # for h in [height1, height2, height3, height4, height5]:
-# for a, b in zip(index+0.1, height1):   #柱子上的数字显示
-#     plt.text(a, b,'%.1f'%b,ha='center',va='bottom', fontsize=10)
-# for a, b in zip(index+(width+epsilon)+0.1, height2):   #柱子上的数字显示
+
 #     plt.text(a, b,'%.1f'%b,ha='center',va='bottom', fontsize=10)
 
-ax = plt.gca() # 获取边框
+#     plt.text(a, b,'%.1f'%b,ha='center',va='bottom', fontsize=10)
+
+ax = plt.gca()
 # ax.spines['top'].set_visible(False)
-# ax.spines['right'].set_visible(False) #去掉右边框
+
 # axis.spines['top'].set_color("none")
 ax.spines['left'].set_linewidth(0.5)
 axis.spines['right'].set_linewidth(0.5)

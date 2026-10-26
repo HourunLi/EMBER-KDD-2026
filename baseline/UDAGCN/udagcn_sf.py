@@ -1,12 +1,4 @@
 # coding=utf-8
-"""
-UDAGCN 的 source-free domain adaptation 版本。
-
-默认入口会把 4 个数据集、每个数据集 RUN 次实验拆成独立 worker 进程，
-按可用 GPU 队列并行运行。单个 worker 内部保持 UDAGCN_SF 的两阶段逻辑：
-1. 源域监督预训练；
-2. 删除源域数据和源图缓存后，只用目标域熵损失做 source-free 迁移。
-"""
 
 import argparse
 import json
@@ -29,7 +21,7 @@ RUN = 5
 DEFAULT_GPUS = "0,1,2,4,5,6,7"
 DEFAULT_DATASETS = ("bailA", "germanA", "pokec", "syn")
 
-# 源/目标 id 与 SFFGNN/config.py 中注释的默认迁移方向保持一致。
+
 DATASET_PAIRS = {
     "bailA": ("_2", "_1"),
     "germanA": ("_2", "_1"),
@@ -50,7 +42,7 @@ def parse_args():
     parser.add_argument("--result_dir", type=str, default=str(RESULT_DIR))
     parser.add_argument("--base_seed", type=int, default=200)
 
-    # UDAGCN 原始超参数，阶段一和阶段二共用。
+
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=3e-3)
     parser.add_argument("--lambda_prior", type=float, default=0.4)
@@ -58,7 +50,7 @@ def parse_args():
     parser.add_argument("--use_udagcn", action="store_true", default=True)
     parser.add_argument("--no_udagcn", dest="use_udagcn", action="store_false")
 
-    # worker 参数由 launcher 自动填充，手工调试单个 run 时也可直接传入。
+
     parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument("--source_id", type=str, default=None)
     parser.add_argument("--target_id", type=str, default=None)
@@ -72,7 +64,7 @@ def parse_args():
 def parse_gpu_list(gpus):
     gpu_list = [gpu.strip() for gpu in gpus.split(",") if gpu.strip()]
     if not gpu_list:
-        raise ValueError("GPU 列表为空；如需 CPU 调试，请显式传入 --gpus cpu 并关闭 --use_udagcn。")
+        raise ValueError("GPU list is empty; for CPU debugging, pass --gpus cpu and disable --use_udagcn.")
     return gpu_list
 
 
@@ -181,11 +173,11 @@ def launch_all(args):
     datasets = list(args.datasets)
     for dataset in datasets:
         if dataset not in DATASET_PAIRS:
-            raise ValueError(f"未知数据集 {dataset}，可选：{list(DATASET_PAIRS)}")
+            raise ValueError(f"Unknown dataset {dataset}; choices: {list(DATASET_PAIRS)}")
 
     gpus = parse_gpu_list(args.gpus)
     jobs = []
-    # 按 run 维度交错数据集，避免启动时同一数据集占满全部 GPU。
+
     for run_idx in range(args.runs):
         for dataset in datasets:
             source_id, target_id = DATASET_PAIRS[dataset]
@@ -197,7 +189,7 @@ def launch_all(args):
                 "seed": args.base_seed + run_idx,
             })
 
-    # 固定文件名复跑时先清理本次会生成的结果，避免旧 run JSON 被误汇总。
+
     for job in jobs:
         path = result_json_path(result_dir, job["dataset"], job["run_idx"])
         if path.exists():
@@ -341,13 +333,13 @@ def run_worker(args):
     import torch.nn.functional as F
     from sklearn.metrics import accuracy_score, roc_auc_score
 
-    # 确保 dataset.py 中的相对 import 指向 SFFGNN/utils.py。
+
     sys.path.insert(0, str(SFFGNN_DIR))
     from dataset import get_dataset
     from utils import fair_metric
     from visualization.export_utils import save_visualization_embeddings
 
-    # dual_gnn 仍使用 UDAGCN 原始实现。
+
     from dual_gnn.cached_gcn_conv import CachedGCNConv
     from dual_gnn.ppmi_conv import PPMIConv
 
@@ -362,7 +354,7 @@ def run_worker(args):
         torch.backends.cudnn.benchmark = False
 
     def mask_valid_binary_labels(data):
-        # pokec 的标签为 {-1, 0, 1}；与 SFFGNN 对齐，监督和评估只使用 mask 中的 0/1 节点。
+
         valid = data.y >= 0
         data.train_mask = data.train_mask & valid
         data.val_mask = data.val_mask & valid
@@ -371,15 +363,15 @@ def run_worker(args):
         return data
 
     def all_valid_mask(data):
-        # 训练和评估统一使用 all split，即 train/val/test 的并集，并排除 pokec 中 y=-1 的节点。
+
         return (data.train_mask | data.val_mask | data.test_mask) & (data.y >= 0)
 
     def compute_source_prior(data, num_classes=2):
-        # 阶段二只保存源域类别先验，不保留或访问源域样本，满足 source-free 设定。
+
         mask = all_valid_mask(data)
         labels = data.y[mask].long()
         if int(labels.numel()) == 0:
-            raise ValueError(f"{args.dataset} source all split 中没有可用于统计先验的标签")
+            raise ValueError(f"{args.dataset} source all split has no labels for estimating the class prior")
         counts = torch.bincount(labels, minlength=num_classes)[:num_classes].float()
         prior = counts / counts.sum().clamp_min(1.0)
         prior = torch.clamp(prior, min=1e-6)
@@ -454,7 +446,7 @@ def run_worker(args):
             return self.cls_model(self.encode(data, cache_name, mask))
 
         def clear_cache(self):
-            # 清理 CachedGCNConv/PPMIConv 的源图缓存，目标迁移阶段不再保留源图传播矩阵。
+
             for module in self.modules():
                 if hasattr(module, "cache_dict"):
                     module.cache_dict.clear()
@@ -465,16 +457,16 @@ def run_worker(args):
         else:
             params = list(model.parameters())
         if not params:
-            raise ValueError("optimizer 没有可训练参数")
+            raise ValueError("optimizer has no trainable parameters")
         return torch.optim.Adam(params, lr=args.lr)
 
     def freeze_classifier(model):
-        # 阶段二冻结源域预训练得到的分类边界，只更新 encoder/PPMI/attention，降低熵最小化单类坍缩风险。
+
         for param in model.cls_model.parameters():
             param.requires_grad_(False)
 
     def add_original_weight_regularization(model, loss):
-        # 沿用 UDAGCN_demo.py 的权重正则实现，而不是改成新的 weight decay。
+
         for name, param in model.named_parameters():
             if "weight" in name:
                 loss = loss + param.mean() * 3e-3
@@ -485,7 +477,7 @@ def run_worker(args):
         loss_func = nn.CrossEntropyLoss().to(device)
         train_mask = all_valid_mask(source_data)
         if int(train_mask.sum().item()) == 0:
-            raise ValueError(f"{args.dataset} source all split 中没有有效 0/1 标签节点")
+            raise ValueError(f"{args.dataset} source all split has no valid 0/1-labeled nodes")
 
         for epoch in range(1, epochs + 1):
             model.train()
@@ -508,7 +500,7 @@ def run_worker(args):
             target_probs = torch.clamp(F.softmax(target_logits, dim=-1), min=1e-9, max=1.0)
             loss_entropy = torch.mean(torch.sum(-target_probs * torch.log(target_probs), dim=-1))
 
-            # 源域类别先验约束目标平均预测分布，排除熵最小化的单类坍缩解。
+
             target_mean_prob = torch.clamp(target_probs.mean(dim=0), min=1e-9, max=1.0)
             target_mean_prob = target_mean_prob / target_mean_prob.sum()
             loss_prior = torch.sum(source_prior * (torch.log(source_prior) - torch.log(target_mean_prob)))
@@ -526,7 +518,7 @@ def run_worker(args):
         model.eval()
         mask = all_valid_mask(target_data)
         if int(mask.sum().item()) == 0:
-            raise ValueError(f"{args.dataset} target all split 中没有有效 0/1 标签节点")
+            raise ValueError(f"{args.dataset} target all split has no valid 0/1-labeled nodes")
 
         with torch.no_grad():
             logits = model.predict(target_data, "target")
@@ -561,7 +553,7 @@ def run_worker(args):
     seed_everything(seed)
 
     if args.dataset is None:
-        raise ValueError("worker 模式必须指定 --dataset")
+        raise ValueError("worker mode requires --dataset")
     source_id = args.source_id or DATASET_PAIRS[args.dataset][0]
     target_id = args.target_id or DATASET_PAIRS[args.dataset][1]
 
@@ -577,7 +569,7 @@ def run_worker(args):
 
     if source_data.x.shape[1] != target_data.x.shape[1]:
         raise ValueError(
-            f"{args.dataset} 源/目标特征维度不一致：{source_data.x.shape[1]} vs {target_data.x.shape[1]}"
+            f"{args.dataset} source/target feature dimensions differ: {source_data.x.shape[1]} vs {target_data.x.shape[1]}"
         )
 
     model = UDAGCNSF(
@@ -597,7 +589,7 @@ def run_worker(args):
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    # 目标迁移阶段冻结分类器并重新构造优化器，沿用原始学习率，避免携带源域 Adam 动量状态。
+
     target_before_metrics = evaluate_target(model, target_data)
     freeze_classifier(model)
     target_optimizer = build_optimizer(model, trainable_only=True)
@@ -622,7 +614,7 @@ def run_worker(args):
         print(f"[saved] {feat_path}")
         print(f"[saved] {labels_path}")
 
-    # final-epoch checkpoint 策略：不使用 target 指标选最佳轮次，直接评估最终模型。
+
     target_metrics = evaluate_target(model, target_data)
     result = {
         "dataset": args.dataset,

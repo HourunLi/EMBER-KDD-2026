@@ -35,10 +35,10 @@ class MLP(torch.nn.Module):
     def reset_parameters(self):
         for layer in self.lin:
             if hasattr(layer, 'weight') and layer.weight is not None:
-                init.xavier_uniform_(layer.weight)  # Xavier 初始化权重
+                init.xavier_uniform_(layer.weight)
 
             if hasattr(layer, 'bias') and layer.bias is not None:
-                init.zeros_(layer.bias)  # 偏置设置为 0
+                init.zeros_(layer.bias)
         
         
     def clip_parameters(self, channel_weights):

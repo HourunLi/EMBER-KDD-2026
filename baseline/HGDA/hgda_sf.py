@@ -1,13 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-HGDA-SF 在 SFFGNN 四个数据集上的运行入口。
-
-实验流程：
-1. 阶段一只加载源域图，用 HGDA 原始分类损失训练到 final epoch。
-2. 保存 final-epoch 模型参数和三个滤波分支的源域类条件原型。
-3. 阶段二释放源域图，只加载目标域图、final checkpoint 和源域原型做无源适配。
-4. 每个数据集默认运行 3 次，输出 Acc/AUC/DP/EO 的 mean±std。
-"""
 
 import argparse
 import json
@@ -60,7 +51,6 @@ SUMMARY_FILE = RESULT_DIR / "HGDA-SF_summary.md"
 
 
 def seed_everything(seed):
-    """固定随机种子，保证不同 run 只由 run seed 区分。"""
     import random
 
     random.seed(seed)
@@ -80,13 +70,11 @@ def get_device(cuda_id):
 
 
 def load_graph(dataset, domain_id, device):
-    """复用 SFFGNN.dataset.get_dataset，保持数据路径、特征归一化和 mask 构造完全一致。"""
     data = get_dataset(SimpleNamespace(dataset=dataset), domain_id)
     return data.to(device)
 
 
 def valid_label_mask(data):
-    """pokec 含 y=-1 的未标注节点，训练和评估均按 SFFGNN mask 排除。"""
     return data.y >= 0
 
 
@@ -114,7 +102,6 @@ def infer_num_classes(data):
 
 
 def compute_normalized_adjacency(edge_index, num_nodes):
-    """计算归一化邻接矩阵 Â = D^(-1/2) A D^(-1/2)。"""
     edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)
     row, col = edge_index
     deg = degree(col, num_nodes, dtype=torch.float).to(edge_index.device)
@@ -130,7 +117,6 @@ def compute_normalized_adjacency(edge_index, num_nodes):
 
 
 def compute_normalized_laplacian(edge_index, num_nodes):
-    """计算归一化拉普拉斯矩阵 L̃ = I - Â。"""
     adj = compute_normalized_adjacency(edge_index, num_nodes)
     diag = torch.arange(num_nodes, device=edge_index.device)
     identity_index = torch.stack([diag, diag], dim=0)
@@ -148,7 +134,6 @@ def compute_normalized_laplacian(edge_index, num_nodes):
 
 
 class SpectralFilter(nn.Module):
-    """图谱滤波器基类。"""
     def __init__(self, input_dim, hidden_dim):
         super().__init__()
         self.weight = nn.Linear(input_dim, hidden_dim, bias=False)
@@ -161,13 +146,11 @@ class SpectralFilter(nn.Module):
 
 
 class HomophilicFilter(SpectralFilter):
-    """同质性低通滤波器。"""
     def forward(self, x, adj_normalized):
         return super().forward(x, adj_normalized)
 
 
 class FullPassFilter(SpectralFilter):
-    """全通滤波器，只保留属性变换。"""
     def forward(self, x, num_nodes):
         del num_nodes
         transformed = self.weight(x)
@@ -175,13 +158,11 @@ class FullPassFilter(SpectralFilter):
 
 
 class HeterophilicFilter(SpectralFilter):
-    """异质性高通滤波器。"""
     def forward(self, x, laplacian_normalized):
         return super().forward(x, laplacian_normalized)
 
 
 class DomainAlignmentModel(nn.Module):
-    """保留 HGDA 原始三滤波分支和可学习组合权重。"""
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers=2):
         super().__init__()
         self.input_dim = input_dim
@@ -233,13 +214,11 @@ def build_model(data, args, device):
 
 
 def entropy_minimization_loss(logits):
-    """目标域熵最小化损失 L_T。"""
     probs = F.softmax(logits, dim=1).clamp(min=1e-8)
     return -(probs * probs.log()).sum(dim=1).mean()
 
 
 def compute_class_conditional_prototypes(h_homo, h_full, h_hetero, labels, mask, num_classes):
-    """按源域训练节点标签计算三个滤波分支的类条件原型。"""
     prototypes = {"homo": [], "full": [], "hetero": []}
     for class_id in range(num_classes):
         class_mask = mask & (labels == class_id)
@@ -257,7 +236,6 @@ def compute_class_conditional_prototypes(h_homo, h_full, h_hetero, labels, mask,
 
 
 def prototype_kl_loss(target_mean, source_prototype):
-    """沿用 HGDA 原始 KL 写法，在隐藏维 softmax 分布上比较 target 均值和 source 原型。"""
     return F.kl_div(
         F.log_softmax(target_mean.unsqueeze(0), dim=1),
         F.softmax(source_prototype.unsqueeze(0), dim=1),
@@ -266,7 +244,6 @@ def prototype_kl_loss(target_mean, source_prototype):
 
 
 def source_free_alignment_loss(tgt_homo, tgt_full, tgt_hetero, tgt_logits, prototypes):
-    """用目标伪标签和源域原型计算 L_H^SF。"""
     with torch.no_grad():
         pseudo_labels = tgt_logits.argmax(dim=1)
 
@@ -307,7 +284,6 @@ def dataset_result_path(dataset):
 
 
 def save_checkpoint(path, model, prototypes, dataset, source_id, run_idx, seed, args):
-    """保存 final-epoch checkpoint 和源域原型，不保存源域原始数据。"""
     torch.save(
         {
             "model_state": {k: v.detach().cpu() for k, v in model.state_dict().items()},
@@ -349,7 +325,6 @@ def load_checkpoint(path, device):
 
 
 def stage1_pretrain_source(dataset, source_id, run_idx, args, device):
-    """阶段一：仅访问源域图，使用源域训练 mask 上的交叉熵。"""
     source_data = load_graph(dataset, source_id, device)
     model = build_model(source_data, args, device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.source_lr)
@@ -365,7 +340,7 @@ def stage1_pretrain_source(dataset, source_id, run_idx, args, device):
         optimizer.step()
 
         if args.verbose and (epoch + 1) % args.print_every == 0:
-            print(f"[{dataset} run{run_idx}] 阶段一 epoch={epoch + 1} L_source={loss.item():.6f}")
+            print(f"[{dataset} run{run_idx}] phase 1 epoch={epoch + 1} L_source={loss.item():.6f}")
 
     model.eval()
     with torch.no_grad():
@@ -392,11 +367,10 @@ def stage1_pretrain_source(dataset, source_id, run_idx, args, device):
 
 
 def stage2_adapt_target(dataset, target_id, run_idx, ckpt_path, args, device):
-    """阶段二：只加载目标域图、final checkpoint 和源域原型。"""
     target_data = load_graph(dataset, target_id, device)
     model, prototypes = load_checkpoint(ckpt_path, device)
 
-    # source-free 阶段没有目标真标签，冻结源域学到的分类头，避免熵最小化把分类边界推向单类塌缩。
+
     for param in model.classifier.parameters():
         param.requires_grad_(False)
 
@@ -420,7 +394,7 @@ def stage2_adapt_target(dataset, target_id, run_idx, ckpt_path, args, device):
 
         if args.verbose and (epoch + 1) % args.print_every == 0:
             print(
-                f"[{dataset} run{run_idx}] 阶段二 epoch={epoch + 1} "
+                f"[{dataset} run{run_idx}] phase 2 epoch={epoch + 1} "
                 f"L_align_SF={align_loss.item():.6f} L_target={entropy_loss.item():.6f}"
             )
 
@@ -453,7 +427,6 @@ def safe_mean(values):
 
 
 def fair_metric(pred, labels, sens):
-    """按 SFFGNN 口径计算 DP/EO，并输出百分制结果。"""
     pred = np.asarray(pred)
     labels = np.asarray(labels)
     sens = np.asarray(sens).astype(int)
@@ -470,7 +443,6 @@ def fair_metric(pred, labels, sens):
 
 @torch.no_grad()
 def evaluate_target(model, target_data, split):
-    """目标域评估；pokec 的 y=-1 节点按 SFFGNN mask 排除。"""
     model.eval()
     mask = eval_mask(target_data, split)
     combined, _, _, _ = model(target_data.x, target_data.edge_index, target_data.x.size(0))
@@ -597,7 +569,6 @@ def parse_gpu_ids(gpus):
 
 
 def launch_parallel(args):
-    """父进程：把不同数据集和不同 run 分配到可用 GPU 上并行执行。"""
     if args.save_visualization_embeddings and not 0 <= args.visualization_run_idx < args.runs:
         raise ValueError(f"visualization_run_idx must be in [0, {args.runs - 1}]")
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
@@ -716,10 +687,10 @@ def get_args():
     parser.add_argument("--cuda", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1111)
 
-    # 沿用原始 HGDA_MAG.py 的源域预训练学习率；目标域适配单独使用更小学习率。
+
     parser.add_argument("--source_lr", type=float, default=0.01)
     parser.add_argument("--target_lr", type=float, default=0.001)
-    parser.add_argument("--lr", type=float, default=None, help="兼容旧参数：同时覆盖 source_lr 和 target_lr")
+    parser.add_argument("--lr", type=float, default=None, help="legacy argument: override source_lr and target_lr together")
     parser.add_argument("--hidden_dim", type=int, default=64)
     parser.add_argument("--num_layers", type=int, default=2)
     parser.add_argument("--source_epochs", type=int, default=50)

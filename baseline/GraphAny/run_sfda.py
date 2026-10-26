@@ -1,12 +1,4 @@
 # -*- coding: utf-8 -*-
-"""GraphAny-SF 在四个公平迁移数据集上的运行入口。
-
-协议：
-1. 在 source 图上训练 GraphAny。
-2. 保存模型参数和 source 上拟合得到的各 channel LinearGNN 权重。
-3. target 阶段只加载这些 source-derived artifact，并用 target 无标签传播
-   特征做测试；target 标签只用于最终指标计算，不参与输入构造。
-"""
 
 import argparse
 import json
@@ -48,7 +40,6 @@ SUMMARY_FILE = RESULT_DIR / "graphany_sf_summary.md"
 
 
 def set_seed(seed):
-    """固定随机性，保证 5 次运行只由 run seed 区分。"""
     import random
 
     random.seed(seed)
@@ -61,7 +52,6 @@ def set_seed(seed):
 
 
 def build_cfg(args):
-    """构造 GraphAny 原实验需要的数据配置。"""
     feat_channels = args.feat_chn.split("+")
     pred_channels = args.pred_chn.split("+")
     return argparse.Namespace(
@@ -78,7 +68,6 @@ def build_cfg(args):
 
 
 def resolve_run_path(path):
-    """相对路径统一解释为 GraphAny 目录下的路径。"""
     path = Path(path)
     return path if path.is_absolute() else SCRIPT_DIR / path
 
@@ -102,7 +91,6 @@ def get_device(cuda_id):
 
 
 def sample_visible_nodes(train_indices, batch_nodes):
-    """当前 batch 节点不可见，沿用 GraphAny 原训练协议。"""
     return train_indices[~torch.isin(train_indices, batch_nodes)]
 
 
@@ -149,7 +137,6 @@ def safe_mean(values):
 
 
 def fair_metric(pred, labels, sens):
-    """计算 DP/EO，返回百分制数值。"""
     pred = np.asarray(pred)
     labels = np.asarray(labels)
     sens = np.asarray(sens)
@@ -172,15 +159,14 @@ def eval_indices(ds, split):
     if split == "test":
         return ds.test_mask.nonzero().view(-1)
     if split == "all":
-        # 与 SFFGNN 对齐：all 指所有有监督划分覆盖的节点。
-        # Pokec 中 label=-1 的节点不会进入 train/val/test，因此这里会被排除。
+
+
         return (ds.train_mask | ds.val_mask | ds.test_mask).nonzero().view(-1)
     raise ValueError(f"Unknown eval split: {split}")
 
 
 @torch.no_grad()
 def evaluate_target(model, ds, channel_weights, cfg, args, device):
-    """用 source-derived channel 权重评估 target，不使用 target 训练标签。"""
     model.eval()
     idx = eval_indices(ds, args.eval_split)
 
@@ -350,7 +336,7 @@ def run_single(args):
                 flush=True,
             )
 
-    # 只保存 source 训练得到的参数和 source-derived channel 权重。
+
     channel_weights = source_ds.fit_channel_weights(
         source_ds.features,
         source_ds.train_indices,
@@ -458,7 +444,6 @@ def parse_gpu_ids(gpus):
 
 
 def launch_parallel(args):
-    """父进程调度所有数据集和 run，尽量填满可用 GPU。"""
     if args.save_visualization_embeddings and not 0 <= args.visualization_run_idx < N_RUNS:
         raise ValueError(f"visualization_run_idx must be in [0, {N_RUNS - 1}]")
     RESULT_DIR.mkdir(parents=True, exist_ok=True)

@@ -118,8 +118,7 @@ def build_models(num_features: int, args, device: torch.device):
     encoder = GCN_encoder_scatter(model_args).to(device)
     classifier = MLP_classifier(model_args).to(device)
     discriminator = MLP_discriminator(model_args).to(device)
-    # GCN_encoder_scatter owns a raw bias Parameter and, like the original
-    # fatragnn.py run loop, must be reset explicitly before first use.
+    # GCN_encoder_scatter owns a raw bias Parameter, so reset it explicitly before use.
     encoder.reset_parameters()
     classifier.reset_parameters()
     discriminator.reset_parameters()

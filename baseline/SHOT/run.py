@@ -2,7 +2,7 @@
 
 Only final ACC/AUC/DP/EO are reported. The object-branch losses/updates and EMBER
 loaders are reused; the backbone is a two-layer GCN with exact graph neighborhoods.
-See README_EMBER.md for source-label protocols and the Pokec audit.
+The source-label protocols and Pokec handling are configured in this file.
 """
 
 from __future__ import annotations
@@ -32,27 +32,27 @@ PAIRS = {
     "pokec": ("_z", "_n"),
     "syn": ("-2", "-1"),
 }
-# ===================== 共用运行设置 =====================
+
 DEFAULTS = {
     "datasets": ["bailA", "germanA", "pokec", "syn"],
     "runs": 5,
-    "gpus": [0],                 # 可用 GPU 的逻辑编号，例如 [0, 2, 3]；[-1] 为 CPU
-    "seed": 1111,               # source: 1111, 2222, 3333, ...，与当前 EMBER 一致
+    "gpus": [0],
+    "seed": 1111,
     "seed_step": 1111,
     "target_seed_offset": 100000,  # target: 101111, 102222, ...
-    "source_protocol": "full",  # full: 对齐 EMBER；train_val: 对齐三个有效 baseline
-    "source_only": False,      # True 须配合 train_val；仅源验证，不执行/评分目标域
+    "source_protocol": "full",
+    "source_only": False,
     "eval_batch_size": 192,
     "workers": 0,
     "cpu_threads": 4,
-    "output_dir": str(HERE / "results"),  # 每次启动新建时间戳子目录
+    "output_dir": str(HERE / "results"),
 }
-# ===================== 各数据集独立超参数 =====================
-# 四份均初始化为 object/image_source.py、image_target.py 的原始默认值。
-# source_lr_decay=0.1 对应原源训练代码中固定的 F 倍率。
-# hidden_dim=256 是两层 GCN 的宽度，原 CNN 没有此适配参数。
-# interval 控制 target 总迭代数 // interval 的伪标签刷新间隔。
-# 命令行显式传入的方法参数会覆盖本次所有所选数据集的相应值。
+
+
+
+
+
+
 DATASET_PARAMS = {
     "bailA": {
         "source_epochs": 20,
@@ -61,7 +61,7 @@ DATASET_PARAMS = {
         "hidden_dim": 256,
         "bottleneck": 256,
         "source_lr": 0.01,
-        "source_lr_decay": 0.1,
+        "source_lr_decay": 0.3,
         "target_lr": 0.01,
         "lr_decay1": 0.1,
         "lr_decay2": 1.0,
@@ -99,7 +99,7 @@ DATASET_PARAMS = {
         "hidden_dim": 256,
         "bottleneck": 256,
         "source_lr": 0.01,
-        "source_lr_decay": 0.1,
+        "source_lr_decay": 1.0,
         "target_lr": 0.01,
         "lr_decay1": 0.1,
         "lr_decay2": 1.0,
@@ -131,7 +131,7 @@ DATASET_PARAMS = {
         "interval": 15,
     },
 }
-# 数据路径直接沿用 EMBER/dataset.py；不在这里另写一套预处理或归一化。
+
 # ==============================================================
 
 

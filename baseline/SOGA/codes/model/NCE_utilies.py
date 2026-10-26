@@ -201,7 +201,7 @@ class Negative_Sampler():
         self.bi_table = np.zeros(self.num, dtype = np.int32)
         p = 1.0 / self.num
         L, H= [], []
-        # 按照是否大于平均水平进行区分
+
         for i in range(self.num):
             if probs[i] < p:
                 L.append(i)
@@ -209,7 +209,7 @@ class Negative_Sampler():
                 H.append(i)
 
         while len(L) > 0 and len(H) > 0:
-            # 把一个序列排清楚
+
             l = L.pop()
             h = H.pop()
             self.probs_table[l] = probs[l] / p

@@ -1,6 +1,6 @@
 # Cross-Method t-SNE Visualization
 
-这个目录放论文可视化部分的跨方法 t-SNE 代码、输入 embedding 和生成结果。
+This directory contains the cross-method t-SNE code, input embeddings, and generated figures used for the paper.
 
 ## Directory Layout
 
@@ -26,7 +26,7 @@ visualization/
   README.md
 ```
 
-当前只考虑四个数据集：
+The current configuration covers four datasets:
 
 ```text
 bailA
@@ -37,44 +37,22 @@ syn
 
 ## Input Format
 
-每个方法、每个数据集对应一个目录：
+Each method/dataset pair has one directory:
 
 ```text
 visualization/embeddings/<method>/<dataset>/
 ```
 
-里面固定放两个文件：
+Place these two files in the directory:
 
 ```text
 feat.npz
 labels.npz
 ```
 
-`feat.npz` 默认 key：
+The default key in `feat.npz` is `representations`, with shape `[num_nodes, embedding_dim]`. The default key in `labels.npz` is `labels`, with shape `[num_nodes]`.
 
-```text
-representations
-```
-
-shape：
-
-```text
-[num_nodes, embedding_dim]
-```
-
-`labels.npz` 默认 key：
-
-```text
-labels
-```
-
-shape：
-
-```text
-[num_nodes]
-```
-
-`labels` 默认编码：
+The default four-class encoding is:
 
 ```text
 0 -> Y=1, S=0
@@ -83,9 +61,7 @@ shape：
 3 -> Y=0, S=1
 ```
 
-如果某个方法更方便直接导出 `y` 和 `sens`，也可以把 `y` 和 `sens` 放在 `labels.npz` 或 `feat.npz` 中；读取器会自动编码为上述四类。
-
-支持的默认 key：
+If a method exports `y` and `sens` separately, place them in either archive. The reader automatically encodes the pair into the four groups above. Supported key aliases are:
 
 ```text
 y / labels_y / target / targets
@@ -94,13 +70,13 @@ sens / s / sensitive / sens_labels
 
 ## Output Format
 
-每个 `{method}_{dataset}` 单独一个结果目录：
+Each `{method}_{dataset}` pair receives its own directory:
 
 ```text
 visualization/results/<method>_<dataset>/
 ```
 
-生成文件：
+The regular mode writes:
 
 ```text
 coordinates.csv
@@ -108,7 +84,7 @@ coordinates.csv
 <method>.pdf
 ```
 
-例如：
+For example:
 
 ```text
 visualization/results/SFFGNN_pokec/coordinates.csv
@@ -116,79 +92,79 @@ visualization/results/SFFGNN_pokec/SFFGNN.png
 visualization/results/SFFGNN_pokec/SFFGNN.pdf
 ```
 
-图形采用与 CELL/Pilot 参考图一致的论文样式：使用 `6.4 x 4.35` 英寸画布，坐标归一化到 0.0-1.0，显示 0.0-1.0、间隔 0.2 的刻度以及完整灰色边框。刻度字号为 18 pt，底部方法/数据集标签为 20 pt；散点大小为 20 pt²。放大的四组单行图例紧贴图片框上方，并限制在图片框宽度内。输出使用 `bbox_inches="tight"` 和 0.1 英寸 padding 裁剪白边。
+Figures use the paper style shared with the CELL/Pilot reference: a `6.4 x 4.35` inch canvas, coordinates normalized to 0.0--1.0, ticks from 0.0 to 1.0 at 0.2 intervals, and a complete gray frame. Tick labels use 18 pt and the bottom method/dataset label uses 20 pt. Scatter points use 20 pt². Four enlarged single-row legends sit immediately above the frame and are constrained to its width. Output uses `bbox_inches="tight"` with 0.1 inch padding.
 
-底部标签格式为：
+The bottom label has this form:
 
 ```text
 <method> t-SNE result on <dataset>
 ```
 
-其中 `<dataset>` 使用 `config.yaml` 中的数据集 `name` 字段，与输入路径和结果目录保持一致。
+`<dataset>` comes from the `name` field in `config.yaml` and is also used in input and output paths.
 
 ## Usage
 
-检查依赖：
+Check dependencies:
 
 ```bash
 python visualization/run_tsne.py --check-deps
 ```
 
-列出配置中的方法和数据集：
+List configured methods and datasets:
 
 ```bash
 python visualization/run_tsne.py --list
 ```
 
-使用 `config.yaml` 中 `enabled: true` 的方法和数据集：
+Run enabled methods and datasets from `config.yaml`:
 
 ```bash
 python visualization/run_tsne.py
 ```
 
-指定方法和数据集：
+Select methods and datasets explicitly:
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods SFFGNN,DGSDA,HGDA
 ```
 
-同时生成多个数据集：
+Generate several datasets at once:
 
 ```bash
 python visualization/run_tsne.py --datasets bailA,germanA,pokec,syn --methods SFFGNN
 ```
 
-调整采样点数：
+Set the maximum number of sampled points:
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods SFFGNN --max-points 3000
 ```
 
-针对固定的 embedding 尝试多个节点抽样 seed：
+Try several node-sampling seeds for a fixed embedding:
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods EMBER --sample-seeds 10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29 --tsne-seeds 0 --strict
 ```
 
-传入多个 `--sample-seeds` 或 `--tsne-seeds` 时进入批量候选模式。该模式只生成 PNG，不生成 PDF 或 `coordinates.csv`；所有候选图平铺在同一个目录中：
+Passing multiple `--sample-seeds` or `--tsne-seeds` enables batch candidate mode. This mode writes PNG files only, without PDF files or `coordinates.csv`; all candidates are placed in one directory:
 
 ```text
 visualization/results/EMBER_pokec/candidates/EMBER_sample_seed_<sample_seed>_tsne_seed_<tsne_seed>.png
 ```
 
-批量模式会忽略 `--formats` 和配置中的 `plot.formats`。`sample_seed` 只控制从 embedding 中抽取哪些节点；`tsne_seed` 只控制 t-SNE 的随机状态。抽样采用分层、无放回方式。只传一个 seed 时不会进入批量模式，而是生成正式的 `coordinates.csv`、PNG 和 PDF。例如选定 `sample_seed=17` 后可以运行：
+Batch mode ignores `--formats` and `plot.formats` in the configuration. `sample_seed` controls which embedding rows are sampled, while `tsne_seed` controls the t-SNE random state. Sampling is stratified and without replacement. With one seed, regular mode writes `coordinates.csv`, PNG, and PDF. For example, after selecting `sample_seed=17`:
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods EMBER --sample-seeds 17 --tsne-seeds 0 --strict
 ```
 
-论文中比较多个方法时，应对所有方法使用相同的抽样 seed，并检查各方法 `coordinates.csv` 的 `source_index` 是否一致：
+When comparing methods, use the same sampling seed for all methods and verify that their `coordinates.csv` files contain the same `source_index` values:
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods DANCE,GraphCTA,EMBER --sample-seeds 17 --tsne-seeds 0 --strict
 ```
 
-缺文件时直接失败：
+Use `--strict` to fail immediately when an input file is missing:
 
 ```bash
 python visualization/run_tsne.py --datasets pokec --methods SFFGNN,DGSDA --strict
@@ -196,7 +172,7 @@ python visualization/run_tsne.py --datasets pokec --methods SFFGNN,DGSDA --stric
 
 ## Export Helper
 
-SFFGNN 或 baseline 可以复用 `export_utils.py`：
+SFFGNN or a baseline can reuse `export_utils.py`:
 
 ```python
 from visualization.export_utils import save_visualization_embeddings
@@ -215,11 +191,11 @@ save_visualization_embeddings(
 )
 ```
 
-target 节点范围统一为 train、validation 和 test 的并集，并排除 Pokec 中标签为 `-1` 的节点。模型应先在完整 target 图上计算表示，再使用同一个 `all_mask` 截取 feature、`y` 和 `sens`。
+The target-node range is the union of train, validation, and test splits, excluding nodes with label `-1` in Pokec. Compute representations on the complete target graph first, then apply the same `all_mask` to `feature`, `y`, and `sens`.
 
 ### Export From Baselines
 
-五个 SFDA runner 均支持直接导出。以下命令运行正常的多次实验，但只有 `run_idx=0` 会写入可视化目录：
+The five SFDA runners support direct export. The commands below run the regular multi-run experiments, but only `run_idx=0` writes to the visualization directory:
 
 ```bash
 python baseline/DGSDA/dgsda_sf.py --save_visualization_embeddings --visualization_run_idx 0
@@ -229,49 +205,49 @@ python baseline/UDAGCN/udagcn_sf.py --save_visualization_embeddings --visualizat
 python baseline/GraphAny/run_sfda.py --save_visualization_embeddings --visualization_run_idx 0
 ```
 
-各方法导出的最终 target 表示为：
+The final target representations exported by the methods are:
 
 ```text
-DGSDA    -> target Bern filter 隐藏表示
-GRADE    -> 最后一层 GCN 隐藏表示（分类器之前）
-HGDA     -> 三个谱分支的加权 combined 表示
-UDAGCN   -> GCN/PPMI attention 融合编码
-GraphAny -> attention 加权后、通道求和前的预测表示
+DGSDA    -> hidden representation from the target Bern filter
+GRADE    -> final-layer GCN representation before the classifier
+HGDA     -> weighted combination of the three spectral branches
+UDAGCN   -> fused GCN/PPMI attention representation
+GraphAny -> attention-weighted representation before channel summation
 ```
 
-输出统一写入：
+All outputs use:
 
 ```text
 visualization/embeddings/<method>/<dataset>/feat.npz
 visualization/embeddings/<method>/<dataset>/labels.npz
 ```
 
-这会写出：
+For example:
 
 ```text
 visualization/embeddings/SFFGNN/<dataset>/feat.npz
 visualization/embeddings/SFFGNN/<dataset>/labels.npz
 ```
 
-当前约定不区分 `source_trained` 和 `adapted`。如果要画哪一种表示，请手动保证 `feat.npz` 和 `labels.npz` 中放的是对应阶段的数据。
+The current convention does not distinguish `source_trained` from `adapted`. If a different representation is required, ensure manually that `feat.npz` and `labels.npz` contain the corresponding stage.
 
-## Adding A Baseline
+## Adding a Baseline
 
-新增 baseline 时，只需要准备标准 embedding 目录：
+Prepare the standard embedding directory:
 
 ```text
 visualization/embeddings/<NewMethod>/<dataset>/feat.npz
 visualization/embeddings/<NewMethod>/<dataset>/labels.npz
 ```
 
-然后在 `config.yaml` 中加入：
+Then add the method to `config.yaml`:
 
 ```yaml
   - name: NewMethod
     enabled: true
 ```
 
-如果文件 key 不叫 `representations` 和 `labels`，可以为该方法单独配置：
+If the archive keys are not `representations` and `labels`, configure them for that method:
 
 ```yaml
   - name: NewMethod
@@ -280,7 +256,7 @@ visualization/embeddings/<NewMethod>/<dataset>/labels.npz
     label_key: group
 ```
 
-如果路径不遵守标准目录，也可以覆盖路径：
+Custom paths are also supported:
 
 ```yaml
   - name: NewMethod
@@ -291,7 +267,7 @@ visualization/embeddings/<NewMethod>/<dataset>/labels.npz
       - "{project_root}/somewhere/{method}/{dataset}/label.npz"
 ```
 
-可用占位符：
+Available placeholders:
 
 ```text
 {project_root}

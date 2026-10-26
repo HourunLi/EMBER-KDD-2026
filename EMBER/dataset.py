@@ -164,7 +164,7 @@ def load_pokec(dataset, id, sens_attr="region", predict_attr="I_am_working_in_fi
     adj = adj + sp.eye(adj.shape[0])
     edge_index, _ = from_scipy_sparse_matrix(adj)
 
-    label_idx = np.where(labels >= 0)[0]  # 找到label有效的集合
+    label_idx = np.where(labels >= 0)[0]
     random.shuffle(label_idx)
     label_idx_0 = np.where(labels == 0)[0]
     label_idx_1 = np.where(labels == 1)[0]

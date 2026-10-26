@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""GraphAny 在四个公平迁移数据集上的轻量包装。
-
-数据读取直接复用 SFFGNN/dataset.py，保证原始路径、特征列、标签、
-敏感属性、边构造和归一化逻辑与主方法一致。这里额外提供 GraphAny
-需要的传播特征和 source-derived LinearGNN 权重工具；target 阶段不会
-使用 target 标签来构造输入 logits。
-"""
 
 import os
 import os.path as osp
@@ -36,7 +29,6 @@ DATASET_ALIASES = {
 
 
 def load_sffgnn_get_dataset():
-    """按 SFFGNN 的原始导入环境加载 get_dataset。"""
     for path in (str(REPO_ROOT), str(SFFGNN_DIR)):
         if path not in sys.path:
             sys.path.insert(0, path)
@@ -46,7 +38,6 @@ def load_sffgnn_get_dataset():
 
 
 def sample_k_nodes_per_label(label, visible_nodes, k, num_class):
-    """从每个类别采样少量可见节点，保持 GraphAny 原训练协议。"""
     ref_node_idx = [
         (label[visible_nodes] == lbl).nonzero().view(-1)
         for lbl in range(num_class)
@@ -62,7 +53,6 @@ def sample_k_nodes_per_label(label, visible_nodes, k, num_class):
 
 
 class FairGraphDataset:
-    """GraphAny 可直接使用的公平数据集包装器。"""
 
     def __init__(
         self,
@@ -123,7 +113,6 @@ class FairGraphDataset:
         return get_dataset(SimpleNamespace(dataset=sffgnn_dataset), domain_id)
 
     def to(self, device):
-        """将训练和评估会用到的张量移动到目标设备。"""
 
         def move(x):
             if isinstance(x, dict):
@@ -145,7 +134,6 @@ class FairGraphDataset:
                 setattr(self, attr, move(getattr(self, attr)))
 
     def prepare_prop_features(self, g, input_feats, n_hops):
-        """计算 GraphAny 原始的 X/L/H 多通道传播特征。"""
         if osp.exists(self.cache_f_name):
             return torch.load(self.cache_f_name, map_location="cpu")
 
@@ -164,10 +152,10 @@ class FairGraphDataset:
         g.ndata["HP"] = input_feats
 
         for hop_idx in range(n_hops):
-            # 低通道：邻居均值聚合。
+
             g.update_all(fn.copy_u("LP", "temp"), fn.mean("temp", "LP"))
 
-            # 高通道：当前表示减去邻居均值。
+
             g.update_all(fn.copy_u("HP", "temp"), fn.mean("temp", "HP_out"))
             g.ndata["HP"] = g.ndata["HP"] - g.ndata["HP_out"]
 
@@ -181,7 +169,6 @@ class FairGraphDataset:
         return features
 
     def fit_channel_weights(self, features, visible_nodes, bootstrap=False):
-        """只在 source 上拟合每个 LinearGNN channel 的线性权重。"""
         weights = {}
         label = self.label.detach().cpu()
         visible_nodes = visible_nodes.detach().cpu()
@@ -210,7 +197,6 @@ class FairGraphDataset:
         return weights
 
     def compute_channel_logits(self, features, visible_nodes, sample, device):
-        """GraphAny 训练阶段的动态 source logits。"""
         weights = self.fit_channel_weights(
             features,
             visible_nodes,
@@ -219,7 +205,6 @@ class FairGraphDataset:
         return self.apply_channel_weights(features, weights, device)
 
     def apply_channel_weights(self, features, weights, device):
-        """用 source-derived 权重生成 logits；target 阶段不需要标签。"""
         logits = {}
         channels = set(self.cfg.feat_channels + self.cfg.pred_channels)
         for channel in channels:

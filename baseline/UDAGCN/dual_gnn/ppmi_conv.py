@@ -85,8 +85,8 @@ class PPMIConv(CachedGCNConv):
 
         for a, normed_walk_counter in normed_walk_counters.items():
             for b, prob in normed_walk_counter.items():
-                # PPMI 是 Positive PMI。原始实现直接保留负 PMI，可能导致后续 degree 为负，
-                # 进而在 deg.pow(-0.5) 中产生 NaN。这里过滤非有限值和非正值。
+
+
                 denominator = max(prob_sums[b], 1e-12)
                 pmi_input = prob / denominator * len(prob_sums) / self.path_len
                 if pmi_input <= 0:

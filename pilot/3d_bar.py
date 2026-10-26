@@ -42,11 +42,11 @@ def set_ax(ax, result, x_lable, y_label, z_label):
     dz = zpos
     # zmin = np.min(result) - 1
     # zmax = np.max(result)+ 0.3
-    # zlabels = np.arange(zmin, zmax, 0.7)  # 设置 z 轴刻度从 zmin 到 zmax，步长为 1
+
 
     zmin = np.min(result) - 0.5
     zmax = np.max(result)+ 0.5
-    zlabels = np.arange(zmin, zmax, 0.5)  # 设置 z 轴刻度从 zmin 到 zmax，步长为 1
+    zlabels = np.arange(zmin, zmax, 0.5)
     bottom = np.ones_like(dz) * zmin
 
     dz = dz - bottom
@@ -83,7 +83,7 @@ def plot_3d_bar(ndcg, fig_name):
     plt.savefig(fig_name, bbox_inches = 'tight')
 
 if __name__ == '__main__':
-    # 每一行是第一个维度变化的取值 # 每一列是第二个维度变化的取值
+
     # game
     game_ndcg = np.array([[4.58, 4.76, 4.60, 4.26, 4.60],
                        [4.35, 4.47, 5.04, 4.25, 4.66],

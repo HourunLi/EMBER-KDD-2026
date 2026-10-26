@@ -41,10 +41,10 @@ class MLP_discriminator(torch.nn.Module):
     def reset_parameters(self):
         for layer in self.lin:
             if hasattr(layer, 'weight') and layer.weight is not None:
-                init.xavier_uniform_(layer.weight)  # Xavier 初始化权重
+                init.xavier_uniform_(layer.weight)
 
             if hasattr(layer, 'bias') and layer.bias is not None:
-                init.zeros_(layer.bias)  # 偏置设置为 0
+                init.zeros_(layer.bias)
         
     def forward(self, h):
         h = self.lin(h)
@@ -97,10 +97,10 @@ class MLP_classifier(torch.nn.Module):
     def reset_parameters(self):
         for layer in self.lin:
             if hasattr(layer, 'weight') and layer.weight is not None:
-                init.xavier_uniform_(layer.weight)  # Xavier 初始化权重
+                init.xavier_uniform_(layer.weight)
 
             if hasattr(layer, 'bias') and layer.bias is not None:
-                init.zeros_(layer.bias)  # 偏置设置为 0
+                init.zeros_(layer.bias)
                 
     def forward(self, feat, edge_index=None):
         h = self.lin(feat)
@@ -123,10 +123,10 @@ class MLP_projector(torch.nn.Module):
     def reset_parameters(self):
         for layer in self.head:
             if hasattr(layer, 'weight') and layer.weight is not None:
-                init.xavier_uniform_(layer.weight)  # Xavier 初始化权重
+                init.xavier_uniform_(layer.weight)
 
             if hasattr(layer, 'bias') and layer.bias is not None:
-                init.zeros_(layer.bias)  # 偏置设置为 0
+                init.zeros_(layer.bias)
         
     def forward(self, h):
         feat = F.normalize(self.head(h), dim=1)
@@ -158,10 +158,10 @@ class MLP_encoder(torch.nn.Module):
     def reset_parameters(self):
         for layer in self.lin:
             if hasattr(layer, 'weight') and layer.weight is not None:
-                init.xavier_uniform_(layer.weight)  # Xavier 初始化权重
+                init.xavier_uniform_(layer.weight)
 
             if hasattr(layer, 'bias') and layer.bias is not None:
-                init.zeros_(layer.bias)  # 偏置设置为 0
+                init.zeros_(layer.bias)
         
         
     def clip_parameters(self, channel_weights):
@@ -363,7 +363,7 @@ class Graph_Editer(nn.Module):
         # in_hom = edge_homophily(edge_index, sens, ignore_negative=False)
         src_node, targ_node = edge_index[0], edge_index[1]
         matching = sens[src_node] == sens[targ_node]
-        # 去掉异配边
+
         yipei = torch.where(matching == False)[0]
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
         yipei_drop = torch.index_select(yipei, 0, drop_index)
@@ -412,7 +412,7 @@ class Graph_Editer(nn.Module):
         # print("node_hom:{}".format(node_hom))
         # print("class_hom:{}".format(class_hom))
         # print("agg_hom:{}".format(agg_hom))
-        # 去掉异配边
+
         yipei = torch.where(matching == False)[0]
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
         yipei_drop = torch.index_select(yipei, 0, drop_index)
@@ -420,7 +420,7 @@ class Graph_Editer(nn.Module):
         keep_indices[yipei_drop] = False
         n_src_node = src_node[keep_indices]
         n_targ_node = targ_node[keep_indices]
-        # 加同配
+
         src_node2, targ_node2 = A2.indices()[0], A2.indices()[1]
         matching2 = sens[src_node2] == sens[targ_node2]
         matching3 = src_node2 == targ_node2
@@ -488,7 +488,7 @@ class Graph_Editer(nn.Module):
         # # print("node_hom_abs:{}".format(node_hom_abs))
         # print("class_hom:{}".format(class_hom))
         # print("agg_hom:{}".format(agg_hom))
-        # 去掉同配边
+
         yipei = torch.where(matching == True)[0]
         random.shuffle(yipei)
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
@@ -497,7 +497,7 @@ class Graph_Editer(nn.Module):
         keep_indices[yipei_drop] = False
         n_src_node = src_node[keep_indices]
         n_targ_node = targ_node[keep_indices]
-        # 加异配
+
         src_node2, targ_node2 = A2.indices()[0], A2.indices()[1]
         matching2 = sens[src_node2] != sens[targ_node2]
         matching3 = src_node2 == targ_node2
@@ -582,7 +582,7 @@ class Graph_Editer2(nn.Module):
         print("node_hom:{}".format(node_hom))
         print("class_hom:{}".format(class_hom))
         print("agg_hom:{}".format(agg_hom))
-        # 去掉异配边
+
         yipei = torch.where(matching == False)[0]
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
         yipei_drop = torch.index_select(yipei, 0, drop_index)
@@ -590,7 +590,7 @@ class Graph_Editer2(nn.Module):
         keep_indices[yipei_drop] = False
         n_src_node = src_node[keep_indices]
         n_targ_node = targ_node[keep_indices]
-        # 加同配
+
         src_node2, targ_node2 = A2.indices()[0], A2.indices()[1]
         matching2 = sens[src_node2] == sens[targ_node2]
         matching3 = src_node2 == targ_node2
@@ -658,7 +658,7 @@ class Graph_Editer2(nn.Module):
         # print("node_hom_abs:{}".format(node_hom_abs))
         print("class_hom:{}".format(class_hom))
         print("agg_hom:{}".format(agg_hom))
-        # 去掉同配边
+
         yipei = torch.where(matching == True)[0]
         random.shuffle(yipei)
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
@@ -667,7 +667,7 @@ class Graph_Editer2(nn.Module):
         keep_indices[yipei_drop] = False
         n_src_node = src_node[keep_indices]
         n_targ_node = targ_node[keep_indices]
-        # 加异配
+
         src_node2, targ_node2 = A2.indices()[0], A2.indices()[1]
         matching2 = sens[src_node2] != sens[targ_node2]
         matching3 = src_node2 == targ_node2

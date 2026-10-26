@@ -69,7 +69,7 @@ def plot_3d_bar(result, name):
     ax1.tick_params(axis = 'y', labelsize = 10)
     ax1.tick_params(axis = 'z', labelsize = 10)
 
-    ax1.view_init(35, -30) # 旋转
+    ax1.view_init(35, -30)
 
     fig.set_size_inches(5, 3)
 
@@ -79,7 +79,7 @@ def plot_3d_bar(result, name):
     plt.show()
 
 if __name__ == '__main__':
-    # 每一行是第一个维度变化的取值 # 每一列是第二个维度变化的取值
+
     # cora
     result = np.array([[54.76, 78.66, 79.06, 79.09, 79.17, 79.23, 79.25],
                        [52.74, 73.82, 76.59, 76.95, 76.46, 76.78, 76.41],

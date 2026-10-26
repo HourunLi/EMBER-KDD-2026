@@ -1,13 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-DGSDA-SF: 将标准 UGDA 方法 DGSDA 改造成 source-free domain adaptation 对比基线。
-
-改造原则：
-1. 阶段一只在源域图上用 L_source 预训练，并保存 final-epoch checkpoint。
-2. 阶段二只加载目标域图，删除需要源/目标同时前向的 L_mmd。
-3. 阶段二冻结除目标域 BernNet 系数 theta^T 外的所有参数，只优化
-   L_SFDA = alpha * L_align_SF + gamma * L_target。
-"""
 
 import argparse
 import json
@@ -26,7 +17,7 @@ from models import BernNet
 
 try:
     from sklearn.metrics import accuracy_score, roc_auc_score
-except ImportError:  # 服务器若缺少 sklearn，AUC 会被置为 NaN，Acc/DP/EO 仍可运行。
+except ImportError:
     accuracy_score = None
     roc_auc_score = None
 
@@ -51,7 +42,6 @@ DATASET_ID_MAP = {
 
 
 def load_sffgnn_dataset_api():
-    """按 SFFGNN/dataset.py 的原始路径与逻辑加载数据接口。"""
     if str(SFFGNN_DIR) not in sys.path:
         sys.path.insert(0, str(SFFGNN_DIR))
     from EMBER.dataset import get_dataset
@@ -59,7 +49,6 @@ def load_sffgnn_dataset_api():
 
 
 def seed_everything(seed):
-    """固定随机种子，保证 3 次运行只由 run seed 控制。"""
     import random
 
     random.seed(seed)
@@ -72,7 +61,6 @@ def seed_everything(seed):
 
 
 def entropy_minimization_loss(output):
-    """沿用原始 DGSDA 的目标域熵最小化损失。"""
     probs = F.softmax(output, dim=1)
     log_probs = F.log_softmax(output, dim=1)
     class_mass = torch.sum(probs, dim=0)
@@ -80,7 +68,6 @@ def entropy_minimization_loss(output):
 
 
 def align_sf_loss(theta_s_fixed, theta_t):
-    """只用预存 theta^S 与当前 theta^T 计算 source-free 对齐损失。"""
     return (
         torch.sum(torch.abs(theta_s_fixed - theta_t))
         + torch.sum(torch.abs(theta_s_fixed))
@@ -96,7 +83,6 @@ def get_device(cuda_id):
 
 
 def load_graph(dataset, domain_id, device=None):
-    """复用 SFFGNN 的 get_dataset，确保数据路径与处理逻辑完全一致。"""
     get_dataset = load_sffgnn_dataset_api()
     data_args = SimpleNamespace(dataset=dataset)
     data = get_dataset(data_args, domain_id)
@@ -104,9 +90,8 @@ def load_graph(dataset, domain_id, device=None):
 
 
 def build_model(data, args, device):
-    """DGSDA 原始 BernNet：属性编码器 h_X=lin1，分类器=lin2，prop1/prop2 为源/目标 BernNet。"""
     num_features = data.x.shape[1]
-    # pokec 中存在 y=-1 的未标注节点；类别数只由有效标签 {0, 1} 决定。
+
     valid_labels = data.y[data.y >= 0]
     num_classes = int(valid_labels.max().item()) + 1
     return BernNet(
@@ -140,7 +125,6 @@ def summary_path():
 
 
 def save_checkpoint(path, model, theta_s_fixed, dataset, source_id, run_idx, seed, args):
-    """保存阶段二所需的完整模型参数和固定源域 Bernstein 系数。"""
     torch.save(
         {
             "model_state": {k: v.detach().cpu() for k, v in model.state_dict().items()},
@@ -161,7 +145,6 @@ def save_checkpoint(path, model, theta_s_fixed, dataset, source_id, run_idx, see
 
 
 def stage1_pretrain_source(dataset, source_id, run_idx, args, device):
-    """阶段一：仅访问源域图，使用 L_source 单独预训练。"""
     source_data = load_graph(dataset, source_id, device)
     model = build_model(source_data, args, device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
@@ -181,7 +164,7 @@ def stage1_pretrain_source(dataset, source_id, run_idx, args, device):
     theta_s_fixed = model.prop1.temp.detach().clone()
     save_checkpoint(ckpt_path, model, theta_s_fixed, dataset, source_id, run_idx, args.seed + run_idx, args)
 
-    # 阶段一结束后显式释放源域图；阶段二函数不会接收 source_data。
+
     del source_data
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -189,7 +172,6 @@ def stage1_pretrain_source(dataset, source_id, run_idx, args, device):
 
 
 def stage2_adapt_target(dataset, target_id, run_idx, ckpt_path, args, device):
-    """阶段二：只加载目标域图，冻结除 theta^T 外的所有参数。"""
     target_data = load_graph(dataset, target_id, device)
     model = build_model(target_data, args, device)
     ckpt = torch.load(ckpt_path, map_location=device)
@@ -200,7 +182,7 @@ def stage2_adapt_target(dataset, target_id, run_idx, ckpt_path, args, device):
         param.requires_grad_(False)
     model.prop2.temp.requires_grad_(True)
 
-    # 阶段二严格只优化 L_SFDA，不额外引入 optimizer weight_decay 正则。
+
     optimizer = torch.optim.Adam([model.prop2.temp], lr=args.lr)
 
     for epoch in range(args.target_epochs):
@@ -250,7 +232,6 @@ def safe_mean(values):
 
 
 def fair_metric(pred, labels, sens):
-    """按 SFFGNN 口径计算 DP/EO，并转为百分制。"""
     pred = np.asarray(pred)
     labels = np.asarray(labels)
     sens = np.asarray(sens)
@@ -266,12 +247,11 @@ def fair_metric(pred, labels, sens):
 
 
 def evaluate_target(model, target_data):
-    """评估目标域结果；按 SFFGNN 的 all split 口径排除 pokec 的 y=-1 节点。"""
     model.eval()
     with torch.no_grad():
         output = model(target_data, False)
-        # SFFGNN 的 all split 是 train/val/test 三个 mask 的并集。
-        # 对 pokec，y=-1 节点没有进入这些 mask，因此不会参与 Acc/AUC/DP/EO。
+
+
         eval_mask = target_data.train_mask | target_data.val_mask | target_data.test_mask
         eval_mask = eval_mask & (target_data.y >= 0)
         prob = F.softmax(output, dim=1)[:, 1][eval_mask].detach().cpu().numpy()
@@ -387,7 +367,6 @@ def parse_gpu_ids(gpus):
 
 
 def launch_parallel(args):
-    """父进程：将 4 个数据集 x 3 次运行分配到可用 GPU 上并行执行。"""
     if args.save_visualization_embeddings and not 0 <= args.visualization_run_idx < N_RUNS:
         raise ValueError(f"visualization_run_idx must be in [0, {N_RUNS - 1}]")
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
@@ -495,7 +474,7 @@ def get_args():
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--seed", type=int, default=1111)
 
-    # DGSDA 原始超参数；alpha/gamma 沿用 main.py 默认设置。
+
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--wd", type=float, default=0.01)
     parser.add_argument("--hidden", type=int, default=128)

@@ -24,7 +24,6 @@ matplotlib.rcParams['axes.edgecolor'] = 'Grey'
 # matplotlib.rcParams['axes.titlesize'] = 10
 # matplotlib.rcParams['figure.titleweight'] = 'bold'
 
-# font = matplotlib.font_manager.FontProperties(fname='/home/wyf/SimHei.ttf')
 matplotlib.rcParams['axes.labelsize'] = 18
 matplotlib.rcParams['xtick.labelsize'] = 18
 matplotlib.rcParams['ytick.labelsize'] = 18
@@ -57,8 +56,8 @@ std = [2.20, 1.63, 1.39, 1.31, 0.70, 0.97, 0.90]
 
 
 def draw_line(avg, std):
-    r1 = list(map(lambda x: x[0]-x[1], zip(avg, std)))#上方差
-    r2 = list(map(lambda x: x[0]+x[1], zip(avg, std)))#下方差
+    r1 = list(map(lambda x: x[0]-x[1], zip(avg, std)))
+    r2 = list(map(lambda x: x[0]+x[1], zip(avg, std)))
     plt.plot(iters, avg, "-o", linewidth = 2, markersize=8, color=colors[0], label='Mean')
     plt.fill_between(iters, r1, r2, color=colors[1], alpha=0.6, label='STD')
     # plt.scatter(iters, avg, marker='>', edgecolors=colors[1], s=150, linewidth = 2)

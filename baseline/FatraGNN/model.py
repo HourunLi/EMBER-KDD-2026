@@ -281,7 +281,7 @@ class Graph_Editer(nn.Module):
         # in_hom = edge_homophily(edge_index, sens, ignore_negative=False)
         src_node, targ_node = edge_index[0], edge_index[1]
         matching = sens[src_node] == sens[targ_node]
-        # 去掉异配边
+
         yipei = torch.where(matching == False)[0]
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
         yipei_drop = torch.index_select(yipei, 0, drop_index)
@@ -330,7 +330,7 @@ class Graph_Editer(nn.Module):
         # print("node_hom:{}".format(node_hom))
         # print("class_hom:{}".format(class_hom))
         # print("agg_hom:{}".format(agg_hom))
-        # 去掉异配边
+
         yipei = torch.where(matching == False)[0]
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
         yipei_drop = torch.index_select(yipei, 0, drop_index)
@@ -338,7 +338,7 @@ class Graph_Editer(nn.Module):
         keep_indices[yipei_drop] = False
         n_src_node = src_node[keep_indices]
         n_targ_node = targ_node[keep_indices]
-        # 加同配
+
         src_node2, targ_node2 = A2.indices()[0], A2.indices()[1]
         matching2 = sens[src_node2] == sens[targ_node2]
         matching3 = src_node2 == targ_node2
@@ -406,7 +406,7 @@ class Graph_Editer(nn.Module):
         # # print("node_hom_abs:{}".format(node_hom_abs))
         # print("class_hom:{}".format(class_hom))
         # print("agg_hom:{}".format(agg_hom))
-        # 去掉同配边
+
         yipei = torch.where(matching == True)[0]
         random.shuffle(yipei)
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
@@ -415,7 +415,7 @@ class Graph_Editer(nn.Module):
         keep_indices[yipei_drop] = False
         n_src_node = src_node[keep_indices]
         n_targ_node = targ_node[keep_indices]
-        # 加异配
+
         src_node2, targ_node2 = A2.indices()[0], A2.indices()[1]
         matching2 = sens[src_node2] != sens[targ_node2]
         matching3 = src_node2 == targ_node2
@@ -500,7 +500,7 @@ class Graph_Editer2(nn.Module):
         print("node_hom:{}".format(node_hom))
         print("class_hom:{}".format(class_hom))
         print("agg_hom:{}".format(agg_hom))
-        # 去掉异配边
+
         yipei = torch.where(matching == False)[0]
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
         yipei_drop = torch.index_select(yipei, 0, drop_index)
@@ -508,7 +508,7 @@ class Graph_Editer2(nn.Module):
         keep_indices[yipei_drop] = False
         n_src_node = src_node[keep_indices]
         n_targ_node = targ_node[keep_indices]
-        # 加同配
+
         src_node2, targ_node2 = A2.indices()[0], A2.indices()[1]
         matching2 = sens[src_node2] == sens[targ_node2]
         matching3 = src_node2 == targ_node2
@@ -576,7 +576,7 @@ class Graph_Editer2(nn.Module):
         # print("node_hom_abs:{}".format(node_hom_abs))
         print("class_hom:{}".format(class_hom))
         print("agg_hom:{}".format(agg_hom))
-        # 去掉同配边
+
         yipei = torch.where(matching == True)[0]
         random.shuffle(yipei)
         drop_index = torch.LongTensor(random.sample(range(yipei.shape[0]), int(yipei.shape[0] * drop))).to(edge_index.device)
@@ -585,7 +585,7 @@ class Graph_Editer2(nn.Module):
         keep_indices[yipei_drop] = False
         n_src_node = src_node[keep_indices]
         n_targ_node = targ_node[keep_indices]
-        # 加异配
+
         src_node2, targ_node2 = A2.indices()[0], A2.indices()[1]
         matching2 = sens[src_node2] != sens[targ_node2]
         matching3 = src_node2 == targ_node2

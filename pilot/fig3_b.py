@@ -24,7 +24,6 @@ matplotlib.rcParams['axes.edgecolor'] = 'Grey'
 # matplotlib.rcParams['axes.titlesize'] = 10
 # matplotlib.rcParams['figure.titleweight'] = 'bold'
 
-# font = matplotlib.font_manager.FontProperties(fname='/home/wyf/SimHei.ttf')
 matplotlib.rcParams['axes.labelsize'] = 18
 matplotlib.rcParams['xtick.labelsize'] = 18
 matplotlib.rcParams['ytick.labelsize'] = 18
